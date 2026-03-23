@@ -35,10 +35,9 @@ build-backend = "setuptools.build_meta"
 
 [tool.ruff.lint]
 select = ["I", "F", "E", "W", "N", "D", "ANN", "B", "A", "T20", "PYI", "Q", "RET", "ARG", "PTH", "PL", "PT"]
-ignore = ["D203", "D213", "PLR2004"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["ANN", "S101"]
+"tests/*" = ["ANN", "S101", "PLR2004"]
 "notebooks/*" = ["T20"]
 
 
