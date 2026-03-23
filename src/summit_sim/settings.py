@@ -8,7 +8,8 @@ class Settings(BaseSettings):
 
     mlflow_tracking_uri: str = "http://localhost:5000"
     openrouter_api_key: str = ""
-    default_model: str = "nvidia/nemotron-3-super-120b-a12b:free"
+    default_model: str = "google/gemini-3.1-flash-lite-preview"
+    mlflow_experiment_name: str = "summit-sim"
 
     model_config = SettingsConfigDict(
         env_file=".env",
