@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import interrupt
@@ -19,6 +20,8 @@ from summit_sim.agents.simulation import process_choice
 from summit_sim.graphs.state import AppState, TranscriptEntry
 
 if TYPE_CHECKING:
+    from langgraph.checkpoint.base import BaseCheckpointSaver
+
     from summit_sim.schemas import ChoiceOption
 
 
@@ -27,28 +30,28 @@ def initialize_state(state: AppState) -> AppState:
 
     Validates that the starting turn ID exists in the scenario.
     """
-    scenario = state.scenario_draft
-    starting_turn = scenario.get_turn(state.current_turn_id)
+    scenario = state["scenario_draft"]
+    starting_turn = scenario.get_turn(state["current_turn_id"])
 
     if starting_turn is None:
-        msg = f"Starting turn {state.current_turn_id} not found in scenario"
+        msg = f"Starting turn {state['current_turn_id']} not found in scenario"
         raise ValueError(msg)
 
     return state
 
 
-def present_turn(state: AppState) -> AppState:
+def present_turn(state: AppState) -> dict:
     """Present current turn to student and wait for choice selection.
 
     Uses LangGraph's interrupt() for human-in-the-loop interaction.
     Displays the narrative and available choices, then pauses execution
     until the student provides their choice.
     """
-    scenario = state.scenario_draft
-    current_turn = scenario.get_turn(state.current_turn_id)
+    scenario = state["scenario_draft"]
+    current_turn = scenario.get_turn(state["current_turn_id"])
 
     if current_turn is None:
-        msg = f"Turn {state.current_turn_id} not found in scenario"
+        msg = f"Turn {state['current_turn_id']} not found in scenario"
         raise ValueError(msg)
 
     choice_options = [
@@ -78,7 +81,7 @@ def present_turn(state: AppState) -> AppState:
         msg = f"Invalid choice_id: {selected_choice_id}"
         raise ValueError(msg)
 
-    return state.model_copy(update={"last_selected_choice": selected_choice})
+    return {"last_selected_choice": selected_choice}
 
 
 def _find_choice_by_id(choices: list[ChoiceOption], choice_id: str) -> ChoiceOption:
@@ -90,52 +93,50 @@ def _find_choice_by_id(choices: list[ChoiceOption], choice_id: str) -> ChoiceOpt
     raise ValueError(msg)
 
 
-async def process_turn(state: AppState) -> AppState:
+async def process_turn(state: AppState) -> dict:
     """Process student's choice and generate feedback.
 
     Calls the Simulation Feedback Agent to generate personalized
     feedback for the student's choice.
     """
-    scenario = state.scenario_draft
-    current_turn = scenario.get_turn(state.current_turn_id)
-    selected_choice = state.last_selected_choice
+    scenario = state["scenario_draft"]
+    current_turn = scenario.get_turn(state["current_turn_id"])
+    selected_choice = state["last_selected_choice"]
 
     if current_turn is None:
-        msg = f"Turn {state.current_turn_id} not found in scenario"
+        msg = f"Turn {state['current_turn_id']} not found in scenario"
         raise ValueError(msg)
 
     result = await process_choice(scenario, current_turn, selected_choice)
 
-    return state.model_copy(update={"simulation_result": result})
+    return {"simulation_result": result}
 
 
-def update_state(state: AppState) -> AppState:
+def update_state(state: AppState) -> dict:
     """Update simulation state after processing choice.
 
     Appends transcript entry, updates learning moments, and advances
     to the next turn based on the selected choice.
     """
-    scenario = state.scenario_draft
-    current_turn = scenario.get_turn(state.current_turn_id)
-    result = state.simulation_result
+    scenario = state["scenario_draft"]
+    current_turn = scenario.get_turn(state["current_turn_id"])
+    result = state["simulation_result"]
     selected_choice = result.selected_choice
 
     if current_turn is None:
-        msg = f"Turn {state.current_turn_id} not found in scenario"
+        msg = f"Turn {state['current_turn_id']} not found in scenario"
         raise ValueError(msg)
 
-    transcript_entry = TranscriptEntry(
-        turn_id=current_turn.turn_id,
-        turn_narrative=current_turn.narrative_text,
-        choice_id=selected_choice.choice_id,
-        choice_description=selected_choice.description,
-        feedback=result.feedback,
-        learning_moments=result.learning_moments,
-        next_turn_id=selected_choice.next_turn_id,
-    )
+    transcript_entry: TranscriptEntry = {
+        "turn_id": current_turn.turn_id,
+        "turn_narrative": current_turn.narrative_text,
+        "choice_id": selected_choice.choice_id,
+        "choice_description": selected_choice.description,
+        "feedback": result.feedback,
+        "learning_moments": result.learning_moments,
+        "next_turn_id": selected_choice.next_turn_id,
+    }
 
-    new_transcript = state.transcript + [transcript_entry]
-    new_learning_moments = state.key_learning_moments + result.learning_moments
     is_complete = selected_choice.next_turn_id is None
     next_turn_id = selected_choice.next_turn_id
 
@@ -145,16 +146,14 @@ def update_state(state: AppState) -> AppState:
             msg = f"Next turn {next_turn_id} not found in scenario"
             raise ValueError(msg)
 
-    return state.model_copy(
-        update={
-            "transcript": new_transcript,
-            "key_learning_moments": new_learning_moments,
-            "current_turn_id": (
-                next_turn_id if next_turn_id is not None else state.current_turn_id
-            ),
-            "is_complete": is_complete,
-        }
-    )
+    return {
+        "transcript": [transcript_entry],
+        "key_learning_moments": result.learning_moments,
+        "current_turn_id": (
+            next_turn_id if next_turn_id is not None else state["current_turn_id"]
+        ),
+        "is_complete": is_complete,
+    }
 
 
 def check_completion(state: AppState) -> str:
@@ -163,12 +162,14 @@ def check_completion(state: AppState) -> str:
     Routes the graph to either continue presenting turns or end
     based on the is_complete flag.
     """
-    if state.is_complete:
+    if state["is_complete"]:
         return "__end__"
     return "present_turn"
 
 
-def create_simulation_graph() -> CompiledStateGraph:
+def create_simulation_graph(
+    checkpointer: BaseCheckpointSaver | None = None,
+) -> CompiledStateGraph:
     """Create and configure the simulation LangGraph."""
     workflow = StateGraph(AppState)
 
@@ -191,4 +192,7 @@ def create_simulation_graph() -> CompiledStateGraph:
         },
     )
 
-    return workflow.compile()
+    if checkpointer is None:
+        checkpointer = InMemorySaver()
+
+    return workflow.compile(checkpointer=checkpointer)

@@ -1,60 +1,43 @@
 """LangGraph state definitions for simulation workflow."""
 
-from typing import Any
+from typing import Annotated, Any
 
-from pydantic import BaseModel, Field
+from typing_extensions import TypedDict
 
 from summit_sim.schemas import ScenarioDraft
 
 
-class TranscriptEntry(BaseModel):
+def _add(left: list, right: list) -> list:
+    """Reducer that appends right to left."""
+    return left + right
+
+
+class TranscriptEntry(TypedDict):
     """Single entry in simulation transcript with full context.
 
     Captures complete information about a turn for debrief analysis.
     """
 
-    turn_id: int = Field(..., description="ID of the turn")
-    turn_narrative: str = Field(..., description="Narrative text shown to student")
-    choice_id: str = Field(..., description="ID of the choice selected")
-    choice_description: str = Field(..., description="Description of selected choice")
-    feedback: str = Field(..., description="AI feedback on the choice")
-    learning_moments: list[str] = Field(
-        default_factory=list, description="Educational insights from this turn"
-    )
-    next_turn_id: int | None = Field(
-        default=None, description="Next turn ID (null if scenario ends)"
-    )
+    turn_id: int
+    turn_narrative: str
+    choice_id: str
+    choice_description: str
+    feedback: str
+    learning_moments: list[str]
+    next_turn_id: int | None
 
 
-class AppState(BaseModel):
+class AppState(TypedDict):
     """LangGraph state for simulation workflow.
 
     Maintains all state needed for the cyclic simulation graph,
     including the scenario, current position, and accumulated history.
     """
 
-    scenario_draft: ScenarioDraft = Field(
-        ..., description="Complete generated scenario with all turns"
-    )
-    current_turn_id: int = Field(..., description="Current turn the student is on")
-    transcript: list[TranscriptEntry] = Field(
-        default_factory=list, description="History of all turns and choices"
-    )
-    is_complete: bool = Field(
-        default=False, description="Whether simulation has reached conclusion"
-    )
-    key_learning_moments: list[str] = Field(
-        default_factory=list, description="Accumulated learning moments from all turns"
-    )
-    last_selected_choice: Any = Field(
-        default=None,
-        description="The choice selected by the student in the current turn",
-    )
-    simulation_result: Any = Field(
-        default=None, description="Result from the simulation agent"
-    )
-
-    class Config:
-        """Pydantic config."""
-
-        arbitrary_types_allowed = True
+    scenario_draft: ScenarioDraft
+    current_turn_id: int
+    transcript: Annotated[list[TranscriptEntry], _add]
+    is_complete: bool
+    key_learning_moments: Annotated[list[str], _add]
+    last_selected_choice: Any
+    simulation_result: Any
