@@ -125,13 +125,69 @@ SimulationResult:
     is_complete: bool
 ```
 
-### 4. Scenario Generator Agent
+### 4. Agent Configuration & Shared Factory
+
+**File**: `src/summit_sim/agents/config.py`
+
+Centralized agent configuration with shared provider and factory pattern:
+
+**Shared Provider** (singleton via `lru_cache`):
+```python
+@lru_cache(maxsize=1)
+def get_provider() -> OpenRouterProvider:
+    """Get singleton OpenRouter provider instance."""
+    return OpenRouterProvider(api_key=settings.openrouter_api_key)
+```
+
+**Agent Factory** (lazy initialization):
+```python
+def get_agent(
+    agent_name: str,
+    output_type: type,
+    system_prompt: str,
+    reasoning_effort: Literal["low", "medium", "high"] = "medium",
+) -> Agent[Any, Any]:
+    """Get or create an agent singleton by name."""
+    if agent_name not in _agent_container:
+        _agent_container[agent_name] = Agent(
+            OpenRouterModel(settings.default_model, provider=get_provider()),
+            output_type=output_type,
+            system_prompt=system_prompt,
+            model_settings=OpenRouterModelSettings(
+                openrouter_reasoning={"effort": reasoning_effort}
+            ),
+        )
+    return _agent_container[agent_name]
+```
+
+**Benefits**:
+- Single source of truth for agent creation
+- Shared provider instance (reused across all agents)
+- Lazy initialization (no API key errors during import)
+- Testable (can mock `summit_sim.agents.config.Agent`)
+
+---
+
+### 5. Scenario Generator Agent
 
 **File**: `src/summit_sim/agents/generator.py`
 
 Purpose: Generates complete scenarios from minimal `HostConfig`
 
 **Function**: `async def generate_scenario(host_config: HostConfig) -> ScenarioDraft`
+
+**Implementation**:
+```python
+async def generate_scenario(host_config: HostConfig) -> ScenarioDraft:
+    agent = get_agent(
+        agent_name="generator",
+        output_type=ScenarioDraft,
+        system_prompt=GENERATOR_SYSTEM_PROMPT,
+        reasoning_effort="high",
+    )
+    result = await agent.run(prompt)
+    return result.output
+```
 
 **System Prompt Focus**:
 - Creates 3-5 turns with cohesive narrative
@@ -151,13 +207,27 @@ scenario = await generate_scenario(config)
 # Returns complete scenario with all turns
 ```
 
-### 5. Simulation Feedback Agent
+### 6. Simulation Feedback Agent
 
 **File**: `src/summit_sim/agents/simulation.py`
 
 Purpose: Provides AI-generated feedback when students make choices
 
 **Function**: `async def process_choice(scenario, current_turn, selected_choice) -> SimulationResult`
+
+**Implementation**:
+```python
+async def process_choice(...) -> SimulationResult:
+    agent = get_agent(
+        agent_name="simulation_feedback",
+        output_type=SimulationResult,
+        system_prompt=FEEDBACK_SYSTEM_PROMPT,
+        reasoning_effort="medium",
+    )
+    result = await agent.run(prompt)
+    # ... post-processing logic
+    return simulation_result
+```
 
 **System Prompt Focus**:
 - Personalized feedback on choice selection
@@ -175,22 +245,28 @@ result = await process_choice(
 # Returns feedback + next_turn (or marks complete)
 ```
 
-### 6. Test Implementation
+### 7. Test Implementation
 
-**File**: `tests/test_simulation_agent.py`
+**Files**: 
+- `tests/test_generator.py` - Scenario generator tests
+- `tests/test_simulation.py` - Simulation feedback agent tests  
+- `tests/test_schemas.py` - Schema validation tests
 
-**Test Suite** (12 tests):
+**Test Suite** (22 tests):
 - `TestHostConfig`: 3 tests (creation, min/max validation)
 - `TestScenarioTurn`: 2 tests (creation, min choices validation)
 - `TestScenarioDraft`: 3 tests (creation, get_turn, not found)
-- `TestGeneratorAgent`: 1 test (scenario generation)
-- `TestSimulationAgent`: 2 tests (choice with next turn, end scenario)
+- `TestChoiceOption`: 2 tests (creation, end scenario)
 - `TestSimulationResult`: 1 test (creation)
+- `TestGeneratorAgent`: 7 tests (1 basic + 3 activities × 3 difficulties)
+- `TestSimulationAgent`: 4 tests (next turn, end scenario, incorrect selection, learning moments)
 
 **Testing Approach**:
 - All agent calls mocked with `AsyncMock`
 - No external API calls during unit tests
 - 100% coverage of schemas and agents
+- **Agent cache clearing fixture**: `clear_agent_cache` resets `_agent_container` before each test
+- **Patched at source**: Tests patch `summit_sim.agents.config.Agent` (not individual agent files)
 
 ### 7. Environment Configuration
 
@@ -209,20 +285,30 @@ OPENROUTER_API_KEY=sk-or-v1-...
 
 ### Automated Tests
 
-All 13 tests passing:
+All 22 tests passing:
 ```
-tests/test_simulation_agent.py::TestHostConfig::test_host_config_creation PASSED
-tests/test_simulation_agent.py::TestHostConfig::test_host_config_validation_min PASSED
-tests/test_simulation_agent.py::TestHostConfig::test_host_config_validation_max PASSED
-tests/test_simulation_agent.py::TestScenarioTurn::test_scenario_turn_creation PASSED
-tests/test_simulation_agent.py::TestScenarioTurn::test_scenario_turn_min_choices PASSED
-tests/test_simulation_agent.py::TestScenarioDraft::test_scenario_draft_creation PASSED
-tests/test_simulation_agent.py::TestScenarioDraft::test_get_turn PASSED
-tests/test_simulation_agent.py::TestScenarioDraft::test_get_turn_not_found PASSED
-tests/test_simulation_agent.py::TestGeneratorAgent::test_generate_scenario PASSED
-tests/test_simulation_agent.py::TestSimulationAgent::test_process_choice_with_next_turn PASSED
-tests/test_simulation_agent.py::TestSimulationAgent::test_process_choice_ends_scenario PASSED
-tests/test_simulation_agent.py::TestSimulationResult::test_simulation_result_creation PASSED
+tests/test_schemas.py::TestHostConfig::test_host_config_creation PASSED
+tests/test_schemas.py::TestHostConfig::test_host_config_validation_min PASSED
+tests/test_schemas.py::TestHostConfig::test_host_config_validation_max PASSED
+tests/test_schemas.py::TestScenarioTurn::test_scenario_turn_creation PASSED
+tests/test_schemas.py::TestScenarioTurn::test_scenario_turn_min_choices PASSED
+tests/test_schemas.py::TestScenarioDraft::test_scenario_draft_creation PASSED
+tests/test_schemas.py::TestScenarioDraft::test_get_turn PASSED
+tests/test_schemas.py::TestScenarioDraft::test_get_turn_not_found PASSED
+tests/test_schemas.py::TestSimulationResult::test_simulation_result_creation PASSED
+tests/test_schemas.py::TestChoiceOption::test_choice_option_creation PASSED
+tests/test_schemas.py::TestChoiceOption::test_choice_option_end_scenario PASSED
+tests/test_generator.py::TestGeneratorAgent::test_generate_scenario PASSED
+tests/test_generator.py::TestGeneratorAgent::test_generate_scenario_different_activities[canyoneering] PASSED
+tests/test_generator.py::TestGeneratorAgent::test_generate_scenario_different_activities[skiing] PASSED
+tests/test_generator.py::TestGeneratorAgent::test_generate_scenario_different_activities[hiking] PASSED
+tests/test_generator.py::TestGeneratorAgent::test_generate_scenario_different_difficulties[low] PASSED
+tests/test_generator.py::TestGeneratorAgent::test_generate_scenario_different_difficulties[med] PASSED
+tests/test_generator.py::TestGeneratorAgent::test_generate_scenario_different_difficulties[high] PASSED
+tests/test_simulation.py::TestSimulationAgent::test_process_choice_with_next_turn PASSED
+tests/test_simulation.py::TestSimulationAgent::test_process_choice_ends_scenario PASSED
+tests/test_simulation.py::TestSimulationAgent::test_process_choice_incorrect_selection PASSED
+tests/test_simulation.py::TestSimulationAgent::test_process_choice_learning_moments PASSED
 ```
 
 ### Coverage Report
@@ -262,24 +348,32 @@ To verify MLflow tracing:
   - [x] ScenarioTurn (pre-written turns)
   - [x] ScenarioDraft (AI-generated complete scenario)
   - [x] SimulationResult (AI feedback)
-- [x] Scenario Generator Agent returns complete ScenarioDraft
-- [x] Simulation Agent provides personalized feedback on choices
-- [x] Tests pass with mocked data (100% coverage)
+- [x] Shared agent configuration in `config.py`
+  - [x] `get_provider()` - Singleton OpenRouter provider
+  - [x] `get_agent()` - Factory for creating agents
+  - [x] Lazy initialization for testability
+- [x] Scenario Generator Agent uses shared `get_agent()` factory
+- [x] Simulation Agent uses shared `get_agent()` factory
+- [x] Tests pass with mocked data (100% coverage, 22 tests)
 - [x] MLflow tracking URI configured for homelab server
 - [x] Test coverage ≥80% (achieved 100%)
 - [x] `pytest-asyncio` configured for async test support
-- [ ] All code passes ruff linting (blocked by NixOS binary compatibility)
+- [x] All code passes ruff linting
 
 ## Files Created/Modified
 
 1. `pyproject.toml` - Added dependencies and pytest config
 2. `src/summit_sim/settings.py` - Pydantic settings with env vars
 3. `src/summit_sim/schemas.py` - Complete schema hierarchy
-4. `src/summit_sim/agents/generator.py` - Scenario generator agent
-5. `src/summit_sim/agents/simulation.py` - Simulation feedback agent
-6. `tests/test_simulation_agent.py` - 12 comprehensive tests
-7. `.env.example` - Environment template
-8. `plans/story-1-1-implementation.md` - This document
+4. `src/summit_sim/agents/config.py` - **NEW**: Shared provider and agent factory
+5. `src/summit_sim/agents/generator.py` - Scenario generator agent (uses `get_agent()`)
+6. `src/summit_sim/agents/simulation.py` - Simulation feedback agent (uses `get_agent()`)
+7. `tests/test_generator.py` - Generator agent tests (7 tests)
+8. `tests/test_simulation.py` - Simulation agent tests (4 tests)
+9. `tests/test_schemas.py` - Schema validation tests (9 tests)
+10. `.env.example` - Environment template
+11. `plans/story-1-1-implementation.md` - This document
+12. `plans/agent-configuration-patterns.md` - Documentation for future patterns
 
 ## Next Steps
 
@@ -296,11 +390,16 @@ To verify MLflow tracing:
 
 ## Notes
 
+- **Architecture Pattern**: Shared agent factory in `config.py` replaces hardcoded agent functions
+  - `get_agent()` creates agents on-demand with configurable parameters
+  - `get_provider()` provides singleton OpenRouter provider instance
+  - Agents cached by name in `_agent_container` dict
 - Model hardcoded to `nvidia/nemotron-3-super-120b-a12b:free` as requested
 - MLflow tracing enabled via `mlflow.set_tracking_uri()` - autologging to be verified
-- Used `OpenAIChatModel` instead of deprecated `OpenAIModel`
 - Agent uses `output_type` parameter per pydantic-ai 1.70.0 API
 - Schema file named `schemas.py` as preferred over `models.py`
 - All code follows project conventions from AGENTS.md
 - Hybrid approach balances demo reliability with AI capabilities
 - Few-shot prompting can be added to generator agent later for consistency
+- Tests patch `summit_sim.agents.config.Agent` to mock at the source
+- Agent cache cleared between tests via `clear_agent_cache` fixture
