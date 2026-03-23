@@ -10,9 +10,9 @@ Implement a LangGraph workflow that orchestrates the simulation loop with human-
 
 ## Implementation Status
 
-**Status**: PENDING
-**Test Coverage**: TBD
-**All Tests**: TBD
+**Status**: COMPLETED ✅
+**Test Coverage**: 12 unit tests + 34 total tests passing
+**All Tests**: ✅ PASSING
 
 ---
 
@@ -70,17 +70,10 @@ Update type signatures:
 
 **File**: `src/summit_sim/graphs/state.py`
 
-```python
-class AppState(BaseModel):
-    """LangGraph state for simulation workflow."""
-    
-    scenario_draft: ScenarioDraft
-    current_turn_id: int
-    transcript: list[TranscriptEntry]
-    is_complete: bool = False
-    key_learning_moments: list[str] = Field(default_factory=list)
+**Implementation Note**: Used TypedDict instead of Pydantic BaseModel for better LangGraph compatibility.
 
-class TranscriptEntry(BaseModel):
+```python
+class TranscriptEntry(TypedDict):
     """Single entry in simulation transcript."""
     
     turn_id: int
@@ -90,6 +83,18 @@ class TranscriptEntry(BaseModel):
     feedback: str
     learning_moments: list[str]
     next_turn_id: int | None
+
+class AppState(TypedDict):
+    """LangGraph state for simulation workflow."""
+    
+    scenario_draft: ScenarioDraft
+    current_turn_id: int
+    transcript: Annotated[list[TranscriptEntry], _add]
+    is_complete: bool
+    key_learning_moments: Annotated[list[str], _add]
+    last_selected_choice: Any
+    simulation_result: Any
+    class_id: str  # Added for MLflow trace linking
 ```
 
 ---
@@ -208,32 +213,41 @@ async def test_full_simulation_cycle():
 
 ## Success Criteria
 
-- [ ] LangGraph added via `uv add`
-- [ ] Schemas updated to use integer turn IDs
-- [ ] `AppState` Pydantic model defined with full transcript context
-- [ ] Simulation graph implemented with 5 nodes
-- [ ] Graph uses `interrupt()` for human-in-the-loop
-- [ ] Unit tests pass (full cycle test with mocked agent)
-- [ ] Notebook demonstrates E2E flow with real agents
-- [ ] MLflow traces show multi-step execution under Parent Run
-- [ ] Error handling for invalid turn references
-- [ ] All code passes ruff linting
-- [ ] Coverage ≥80%
+- [x] LangGraph added via `uv add` (also added `langchain` for MLflow tracing)
+- [x] Schemas updated to use integer turn IDs
+- [x] `AppState` TypedDict defined with full transcript context (TypedDict chosen over Pydantic for LangGraph compatibility)
+- [x] Simulation graph implemented with 5 nodes
+- [x] Graph uses `interrupt()` for human-in-the-loop
+- [x] Unit tests pass (12 tests, full cycle with mocked agent)
+- [x] Notebook demonstrates E2E flow with real agents
+- [x] MLflow traces show multi-step execution under Parent Run
+- [x] Error handling for invalid turn references
+- [x] All code passes ruff linting
+- [x] Coverage ≥80%
+
+### Additional Features Implemented (Not in Original Plan)
+
+- [x] **class_id linking**: Added `class_id` field to link generation and simulation traces in MLflow
+- [x] **Unified tracing module**: Created `src/summit_sim/tracing.py` for centralized MLflow configuration
+- [x] **Session management**: Context managers for parent runs with descriptive naming (`sim-{class_id}-{activity}-{participants}p-{difficulty}`)
+- [x] **Cross-phase trace linking**: Filter by `tags.class_id` in MLflow UI to see complete flow
 
 ---
 
-## Files to Create/Modify
+## Files Created/Modified
 
 ### New Files
-1. `src/summit_sim/graphs/__init__.py` - Package init
-2. `src/summit_sim/graphs/state.py` - AppState and TranscriptEntry
-3. `src/summit_sim/graphs/simulation.py` - LangGraph implementation
-4. `tests/test_simulation_graph.py` - Graph unit tests
-5. `notebooks/story-1-2-simulation-graph.ipynb` - E2E integration test
+1. ✅ `src/summit_sim/graphs/__init__.py` - Package init
+2. ✅ `src/summit_sim/graphs/state.py` - AppState and TranscriptEntry (TypedDict)
+3. ✅ `src/summit_sim/graphs/simulation.py` - LangGraph implementation with 5 nodes
+4. ✅ `src/summit_sim/tracing.py` - MLflow tracing utilities with session management
+5. ✅ `tests/test_simulation_graph.py` - Graph unit tests (12 tests)
+6. ✅ `notebooks/story-1-2-simulation-graph.ipynb` - E2E integration test
 
 ### Modified Files
-1. `src/summit_sim/schemas.py` - Update to integer turn IDs
-2. `pyproject.toml` - Add langgraph dependency (via uv)
+1. ✅ `src/summit_sim/schemas.py` - Update to integer turn IDs, added `class_id` to HostConfig
+2. ✅ `pyproject.toml` - Added `langgraph`, `langchain`, and notebook-specific ruff ignores
+3. ✅ `plans/high-level-arch.md` - Replaced `room_id` with `class_id`
 
 ---
 
@@ -256,23 +270,44 @@ async def test_full_simulation_cycle():
 ## Notes
 
 - **Turn IDs**: Changed from strings to integers (0, 1, 2) for simplicity
-- **State Type**: Using Pydantic BaseModel instead of TypedDict (consistent with project)
+- **State Type**: Using TypedDict instead of Pydantic BaseModel (better LangGraph compatibility)
 - **Interrupt Pattern**: Native LangGraph `interrupt()` with `Command(resume=...)`
 - **Transcript**: Full context captured for debrief analysis
 - **Testing**: Simple full-cycle test preferred over per-node tests
-- **MLflow**: Manual verification in notebook (not automated test)
+- **MLflow**: 
+  - Manual verification in notebook (not automated test)
+  - Uses `mlflow.langchain.autolog()` for LangGraph tracing
+  - Context propagation warnings expected with async + interrupt pattern
+- **class_id**: Added for cross-phase trace linking (generation → simulation)
+- **Session Names**: Format `sim-{class_id}-{activity}-{participants}p-{difficulty}`
+
+## Known Issues / Limitations
+
+- **MLflow Context Warnings**: Async context propagation issues with `interrupt()` - traces still functional
+- **Trace Flattening**: Some traces may not nest perfectly due to async context switching
+- **Interrupt Exceptions**: Expected behavior - not actual errors
 
 ---
 
-## Next Steps
+## Completed Work Summary
 
-1. **Run `uv add langgraph`** to install dependency
-2. **Update schemas** to use integer turn IDs
-3. **Implement AppState** Pydantic model
-4. **Build simulation graph** with interrupt handling
-5. **Write unit tests** with mocked agent
-6. **Create E2E notebook** with real agents
-7. **Verify MLflow** traces show multi-step execution
+All implementation tasks completed successfully:
+
+1. ✅ Installed langgraph and langchain dependencies
+2. ✅ Updated schemas to use integer turn IDs (0, 1, 2)
+3. ✅ Implemented AppState as TypedDict with transcript support
+4. ✅ Built simulation graph with 5 nodes and interrupt handling
+5. ✅ Created comprehensive unit tests (12 tests, all passing)
+6. ✅ Created E2E notebook demonstrating full flow
+7. ✅ Implemented MLflow tracing with class_id linking
+
+## Ready for Next Story
+
+This story is complete. Next steps per high-level-arch.md:
+- Validation judges (Safety, Realism, Pedagogy)
+- Host review workflow
+- Student multi-user support
+- Debrief generation
 
 ---
 
@@ -281,13 +316,16 @@ async def test_full_simulation_cycle():
 ```toml
 [project]
 dependencies = [
-    "langgraph>=0.2.0",  # Will be added via uv
+    "langgraph>=1.1.3",    # Added via uv
+    "langchain>=1.2.13",   # Required for MLflow LangGraph tracing
     "mlflow>=3.10.1",
     "pydantic-ai>=1.70.0",
     "pydantic-settings>=2.13.1",
     "pytest-asyncio>=1.3.0",
 ]
 ```
+
+**Note**: `langchain` added for MLflow integration (`mlflow.langchain.autolog()`) since LangGraph traces through LangChain.
 
 ---
 
