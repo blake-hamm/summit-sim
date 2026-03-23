@@ -1,6 +1,6 @@
 {
   "template": "https://github.com/blake-hamm/boilerplates/",
-  "commit": "43a6d90dcd3310c6e6107fd27394c82a52ee24a7",
+  "commit": "cbbe2d621b3fab40cb3883f47ceda6c9bed366af",
   "checkout": null,
   "context": {
     "cookiecutter": {
@@ -11,7 +11,7 @@
       "project_short_description": "Summit-Sim is an AI wilderness rescue simulator. It uses multi-agent validation to generate medically safe, interactive backcountry emergencies for dynamic first-responder training.",
       "open_source_license": "BSD license",
       "_template": "https://github.com/blake-hamm/boilerplates/",
-      "_commit": "43a6d90dcd3310c6e6107fd27394c82a52ee24a7"
+      "_commit": "cbbe2d621b3fab40cb3883f47ceda6c9bed366af"
     }
   },
   "directory": "python"
