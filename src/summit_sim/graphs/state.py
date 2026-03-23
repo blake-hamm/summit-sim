@@ -7,8 +7,8 @@ from typing_extensions import TypedDict
 from summit_sim.schemas import ScenarioDraft
 
 
-def _add(left: list, right: list) -> list:
-    """Reducer that appends right to left."""
+def append_reducer(left: list, right: list) -> list:
+    """Append right items to left list for LangGraph state merging."""
     return left + right
 
 
@@ -32,13 +32,14 @@ class AppState(TypedDict):
 
     Maintains all state needed for the cyclic simulation graph,
     including the scenario, current position, and accumulated history.
+    Uses append_reducer for list fields to accumulate history across turns.
     """
 
     scenario_draft: ScenarioDraft
     current_turn_id: int
-    transcript: Annotated[list[TranscriptEntry], _add]
+    transcript: Annotated[list[TranscriptEntry], append_reducer]
     is_complete: bool
-    key_learning_moments: Annotated[list[str], _add]
+    key_learning_moments: Annotated[list[str], append_reducer]
     last_selected_choice: Any
     simulation_result: Any
     class_id: str
