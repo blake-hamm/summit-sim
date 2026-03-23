@@ -34,27 +34,27 @@ class TestSimulationAgent:
     def sample_scenario(self):
         """Create a sample scenario for testing."""
         turn1 = ScenarioTurn(
-            turn_id="turn_1",
+            turn_id=1,
             narrative_text="Patient is bleeding.",
             choices=[
                 ChoiceOption(
                     choice_id="treat",
                     description="Treat patient",
                     is_correct=True,
-                    next_turn_id="turn_2",
+                    next_turn_id=2,
                 ),
                 ChoiceOption(
                     choice_id="wait",
                     description="Wait",
                     is_correct=False,
-                    next_turn_id="turn_2",
+                    next_turn_id=2,
                 ),
             ],
             is_starting_turn=True,
         )
 
         turn2 = ScenarioTurn(
-            turn_id="turn_2",
+            turn_id=2,
             narrative_text="Treatment complete.",
             choices=[
                 ChoiceOption(
@@ -79,13 +79,13 @@ class TestSimulationAgent:
             hidden_truth="Truth",
             learning_objectives=["Objective"],
             turns=[turn1, turn2],
-            starting_turn_id="turn_1",
+            starting_turn_id=1,
         )
 
     @pytest.mark.asyncio
     async def test_process_choice_with_next_turn(self, sample_scenario):
         """Test processing a choice that leads to another turn."""
-        current_turn = sample_scenario.get_turn("turn_1")
+        current_turn = sample_scenario.get_turn(1)
         selected_choice = current_turn.choices[0]
 
         mock_result = AsyncMock()
@@ -109,12 +109,12 @@ class TestSimulationAgent:
         assert result.feedback == "Good choice!"
         assert result.is_complete is False
         assert result.next_turn is not None
-        assert result.next_turn.turn_id == "turn_2"
+        assert result.next_turn.turn_id == 2
 
     @pytest.mark.asyncio
     async def test_process_choice_ends_scenario(self, sample_scenario):
         """Test processing a choice that ends the scenario."""
-        current_turn = sample_scenario.get_turn("turn_2")
+        current_turn = sample_scenario.get_turn(2)
         selected_choice = current_turn.choices[0]
 
         mock_result = AsyncMock()
@@ -141,7 +141,7 @@ class TestSimulationAgent:
     @pytest.mark.asyncio
     async def test_process_choice_incorrect_selection(self, sample_scenario):
         """Test processing an incorrect choice selection."""
-        current_turn = sample_scenario.get_turn("turn_1")
+        current_turn = sample_scenario.get_turn(1)
         selected_choice = current_turn.choices[1]  # The incorrect choice
 
         mock_result = AsyncMock()
@@ -172,7 +172,7 @@ class TestSimulationAgent:
     @pytest.mark.asyncio
     async def test_process_choice_learning_moments(self, sample_scenario):
         """Test that learning moments are captured."""
-        current_turn = sample_scenario.get_turn("turn_1")
+        current_turn = sample_scenario.get_turn(1)
         selected_choice = current_turn.choices[0]
 
         mock_result = AsyncMock()

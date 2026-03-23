@@ -46,18 +46,18 @@ class TestScenarioTurn:
                 choice_id="choice_a",
                 description="Apply tourniquet",
                 is_correct=True,
-                next_turn_id="turn_2",
+                next_turn_id=2,
             ),
             ChoiceOption(
                 choice_id="choice_b",
                 description="Apply pressure bandage",
                 is_correct=False,
-                next_turn_id="turn_2",
+                next_turn_id=2,
             ),
         ]
 
         turn = ScenarioTurn(
-            turn_id="turn_1",
+            turn_id=1,
             narrative_text="Patient has severe leg bleeding.",
             choices=choices,
             is_starting_turn=True,
@@ -65,7 +65,7 @@ class TestScenarioTurn:
             hidden_state={"bleeding_rate": "severe"},
         )
 
-        assert turn.turn_id == "turn_1"
+        assert turn.turn_id == 1
         assert len(turn.choices) == 2
         assert turn.is_starting_turn
 
@@ -73,14 +73,14 @@ class TestScenarioTurn:
         """Test that turns require at least 2 choices."""
         with pytest.raises(ValueError, match="at least 2 items"):
             ScenarioTurn(
-                turn_id="turn_1",
+                turn_id=1,
                 narrative_text="Test",
                 choices=[
                     ChoiceOption(
                         choice_id="choice_a",
                         description="Only option",
                         is_correct=True,
-                        next_turn_id="turn_2",
+                        next_turn_id=2,
                     )
                 ],
             )
@@ -97,25 +97,25 @@ class TestScenarioDraft:
                 choice_id="treat",
                 description="Treat the patient",
                 is_correct=True,
-                next_turn_id="turn_2",
+                next_turn_id=2,
             ),
             ChoiceOption(
                 choice_id="wait",
                 description="Wait and observe",
                 is_correct=False,
-                next_turn_id="turn_2",
+                next_turn_id=2,
             ),
         ]
 
         turn1 = ScenarioTurn(
-            turn_id="turn_1",
+            turn_id=1,
             narrative_text="Patient is bleeding.",
             choices=choices,
             is_starting_turn=True,
         )
 
         turn2 = ScenarioTurn(
-            turn_id="turn_2",
+            turn_id=2,
             narrative_text="Treatment applied.",
             choices=[
                 ChoiceOption(
@@ -140,24 +140,24 @@ class TestScenarioDraft:
             hidden_truth="Test Truth",
             learning_objectives=["Objective 1"],
             turns=[turn1, turn2],
-            starting_turn_id="turn_1",
+            starting_turn_id=1,
         )
 
     def test_scenario_draft_creation(self, sample_scenario):
         """Test creating a complete scenario draft."""
         assert sample_scenario.title == "Test Scenario"
         assert len(sample_scenario.turns) == 2
-        assert sample_scenario.starting_turn_id == "turn_1"
+        assert sample_scenario.starting_turn_id == 1
 
     def test_get_turn(self, sample_scenario):
         """Test retrieving turns by ID."""
-        turn = sample_scenario.get_turn("turn_1")
+        turn = sample_scenario.get_turn(1)
         assert turn is not None
-        assert turn.turn_id == "turn_1"
+        assert turn.turn_id == 1
 
     def test_get_turn_not_found(self, sample_scenario):
         """Test retrieving non-existent turn."""
-        turn = sample_scenario.get_turn("nonexistent")
+        turn = sample_scenario.get_turn(999)
         assert turn is None
 
 
@@ -195,12 +195,12 @@ class TestChoiceOption:
             choice_id="apply_tourniquet",
             description="Apply a tourniquet to the bleeding leg",
             is_correct=True,
-            next_turn_id="turn_2",
+            next_turn_id=2,
         )
 
         assert choice.choice_id == "apply_tourniquet"
         assert choice.is_correct is True
-        assert choice.next_turn_id == "turn_2"
+        assert choice.next_turn_id == 2
 
     def test_choice_option_end_scenario(self):
         """Test creating a choice that ends the scenario."""

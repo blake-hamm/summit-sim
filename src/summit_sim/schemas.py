@@ -35,7 +35,7 @@ class ChoiceOption(BaseModel):
     is_correct: bool = Field(
         ..., description="Whether this is the medically optimal choice"
     )
-    next_turn_id: str | None = Field(
+    next_turn_id: int | None = Field(
         default=None, description="ID of next turn (null if scenario ends)"
     )
 
@@ -48,7 +48,7 @@ class ScenarioTurn(BaseModel):
     personalized feedback when a choice is made.
     """
 
-    turn_id: str = Field(..., description="Unique identifier for this turn")
+    turn_id: int = Field(..., description="Unique identifier for this turn")
     narrative_text: str = Field(
         ..., description="Story description of the current situation"
     )
@@ -90,9 +90,9 @@ class ScenarioDraft(BaseModel):
     turns: list[ScenarioTurn] = Field(
         ..., description="All turns in this scenario", min_length=1
     )
-    starting_turn_id: str = Field(..., description="ID of the first turn")
+    starting_turn_id: int = Field(..., description="ID of the first turn")
 
-    def get_turn(self, turn_id: str) -> ScenarioTurn | None:
+    def get_turn(self, turn_id: int) -> ScenarioTurn | None:
         """Get a turn by its ID."""
         for turn in self.turns:
             if turn.turn_id == turn_id:

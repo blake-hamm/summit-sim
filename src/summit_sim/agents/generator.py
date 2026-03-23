@@ -36,8 +36,8 @@ Guidelines for scenario generation:
    - Learning objectives: 2-3 specific wilderness first aid skills
    - Narrative: Immersive, medically accurate descriptions
 
-5. Turn IDs should be descriptive (e.g., "initial_assessment",
-   "treatment_decision", "evacuation")
+5. Turn IDs should be sequential integers starting from 0
+    (e.g., 0, 1, 2, 3, 4). Use 0 for the starting turn.
 
 6. Medical accuracy:
    - Base scenarios on common wilderness emergencies
