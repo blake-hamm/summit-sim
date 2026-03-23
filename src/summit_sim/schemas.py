@@ -1,8 +1,19 @@
 """Pydantic schemas for Summit-Sim data models."""
 
+import uuid
 from typing import Literal
 
 from pydantic import BaseModel, Field
+
+
+def generate_class_id() -> str:
+    """Generate a short, human-readable class ID.
+
+    Returns:
+        6-character alphanumeric string (e.g., 'a3f8d2').
+
+    """
+    return uuid.uuid4().hex[:6]
 
 
 class HostConfig(BaseModel):
@@ -21,6 +32,10 @@ class HostConfig(BaseModel):
     difficulty: Literal["low", "med", "high"] = Field(
         ..., description="Scenario difficulty level"
     )
+    class_id: str = Field(
+        default_factory=generate_class_id,
+        description="Links generation and simulation traces in MLflow",
+    )
 
 
 class ChoiceOption(BaseModel):
@@ -35,7 +50,7 @@ class ChoiceOption(BaseModel):
     is_correct: bool = Field(
         ..., description="Whether this is the medically optimal choice"
     )
-    next_turn_id: str | None = Field(
+    next_turn_id: int | None = Field(
         default=None, description="ID of next turn (null if scenario ends)"
     )
 
@@ -48,7 +63,7 @@ class ScenarioTurn(BaseModel):
     personalized feedback when a choice is made.
     """
 
-    turn_id: str = Field(..., description="Unique identifier for this turn")
+    turn_id: int = Field(..., description="Unique identifier for this turn")
     narrative_text: str = Field(
         ..., description="Story description of the current situation"
     )
@@ -90,9 +105,9 @@ class ScenarioDraft(BaseModel):
     turns: list[ScenarioTurn] = Field(
         ..., description="All turns in this scenario", min_length=1
     )
-    starting_turn_id: str = Field(..., description="ID of the first turn")
+    starting_turn_id: int = Field(..., description="ID of the first turn")
 
-    def get_turn(self, turn_id: str) -> ScenarioTurn | None:
+    def get_turn(self, turn_id: int) -> ScenarioTurn | None:
         """Get a turn by its ID."""
         for turn in self.turns:
             if turn.turn_id == turn_id:

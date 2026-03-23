@@ -42,26 +42,26 @@ class TestGeneratorAgent:
             learning_objectives=["Assess chest pain", "Monitor vitals"],
             turns=[
                 ScenarioTurn(
-                    turn_id="start",
+                    turn_id=0,
                     narrative_text="Patient complains of chest pain.",
                     choices=[
                         ChoiceOption(
                             choice_id="assess",
                             description="Assess ABCs",
                             is_correct=True,
-                            next_turn_id="turn_2",
+                            next_turn_id=1,
                         ),
                         ChoiceOption(
                             choice_id="ignore",
                             description="Tell them to rest",
                             is_correct=False,
-                            next_turn_id="turn_2",
+                            next_turn_id=1,
                         ),
                     ],
                     is_starting_turn=True,
                 )
             ],
-            starting_turn_id="start",
+            starting_turn_id=0,
         )
 
         with patch("summit_sim.agents.config.Agent") as mock_agent_class:
@@ -93,7 +93,7 @@ class TestGeneratorAgent:
             learning_objectives=["Objective"],
             turns=[
                 ScenarioTurn(
-                    turn_id="start",
+                    turn_id=0,
                     narrative_text="Test scenario.",
                     choices=[
                         ChoiceOption(
@@ -112,7 +112,7 @@ class TestGeneratorAgent:
                     is_starting_turn=True,
                 )
             ],
-            starting_turn_id="start",
+            starting_turn_id=0,
         )
 
         with patch("summit_sim.agents.config.Agent") as mock_agent_class:
@@ -143,7 +143,7 @@ class TestGeneratorAgent:
             learning_objectives=["Objective"],
             turns=[
                 ScenarioTurn(
-                    turn_id="start",
+                    turn_id=0,
                     narrative_text="Test scenario.",
                     choices=[
                         ChoiceOption(
@@ -162,7 +162,7 @@ class TestGeneratorAgent:
                     is_starting_turn=True,
                 )
             ],
-            starting_turn_id="start",
+            starting_turn_id=0,
         )
 
         with patch("summit_sim.agents.config.Agent") as mock_agent_class:
