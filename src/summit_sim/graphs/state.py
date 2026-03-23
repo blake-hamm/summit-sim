@@ -1,5 +1,7 @@
 """LangGraph state definitions for simulation workflow."""
 
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 from summit_sim.schemas import ScenarioDraft
@@ -43,6 +45,13 @@ class AppState(BaseModel):
     )
     key_learning_moments: list[str] = Field(
         default_factory=list, description="Accumulated learning moments from all turns"
+    )
+    last_selected_choice: Any = Field(
+        default=None,
+        description="The choice selected by the student in the current turn",
+    )
+    simulation_result: Any = Field(
+        default=None, description="Result from the simulation agent"
     )
 
     class Config:
