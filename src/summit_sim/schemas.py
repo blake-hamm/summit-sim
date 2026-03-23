@@ -1,8 +1,19 @@
 """Pydantic schemas for Summit-Sim data models."""
 
+import uuid
 from typing import Literal
 
 from pydantic import BaseModel, Field
+
+
+def generate_class_id() -> str:
+    """Generate a short, human-readable class ID.
+
+    Returns:
+        6-character alphanumeric string (e.g., 'a3f8d2').
+
+    """
+    return uuid.uuid4().hex[:6]
 
 
 class HostConfig(BaseModel):
@@ -20,6 +31,10 @@ class HostConfig(BaseModel):
     )
     difficulty: Literal["low", "med", "high"] = Field(
         ..., description="Scenario difficulty level"
+    )
+    class_id: str = Field(
+        default_factory=generate_class_id,
+        description="Links generation and simulation traces in MLflow",
     )
 
 

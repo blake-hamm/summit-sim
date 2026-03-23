@@ -41,3 +41,4 @@ class AppState(TypedDict):
     key_learning_moments: Annotated[list[str], _add]
     last_selected_choice: Any
     simulation_result: Any
+    class_id: str

@@ -135,7 +135,7 @@ Example fields:
 
 ```python
 class AppState:
-    room_id                          # Shareable link code (e.g., "abc123")
+    class_id                         # Shareable link code (e.g., "abc123")
     host_config                      # Minimal scenario parameters (3 fields)
     scenario_draft                   # Complete generated scenario
     validated_scenario
@@ -167,7 +167,7 @@ class AppState:
 on_host_start():
     config = get_host_config()                          # Chainlit - 3 fields
     state.host_config = config
-    state.room_id = generate_room_code()                # Short shareable link
+    state.class_id = generate_class_id()                # Short shareable link
 
     state = run_generation_flow(state)                 # LangGraph
     
@@ -178,11 +178,11 @@ on_host_start():
         host_decision = await_host_review(state)
     
     state.scenario_status = "active"
-    show_shared_link(state.room_id)                    # Chainlit
+    show_shared_link(state.class_id)                   # Chainlit
     show_starting_turn(state)
 
-on_student_join(room_id):
-    state = load_state(room_id)                        # LangGraph checkpoint
+on_student_join(class_id):
+    state = load_state(class_id)                       # LangGraph checkpoint
     render_current_turn(state)                         # Chainlit - show choices
 
 on_simulation_turn():
