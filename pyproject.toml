@@ -8,7 +8,13 @@ authors = [
 ]
 license = {text = "BSD license"}
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "mlflow>=3.10.1",
+    "pydantic-ai>=1.70.0",
+    "pydantic-ai-slim[openrouter]>=1.70.0",
+    "pydantic-settings>=2.13.1",
+    "pytest-asyncio>=1.3.0",
+]
 
 [project.optional-dependencies]
 dev = [
@@ -30,12 +36,16 @@ build-backend = "setuptools.build_meta"
 
 [tool.ruff.lint]
 select = ["I", "F", "E", "W", "N", "D", "ANN", "B", "A", "T20", "PYI", "Q", "RET", "ARG", "PTH", "PL", "PT"]
-ignore = ["D203", "D213"]
+ignore = ["D203", "D213", "PLR2004"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["ANN", "S101"]
 
 
 [tool.pytest.ini_options]
 addopts = "-s"
 testpaths = ["tests"]
+asyncio_mode = "auto"
 
 [tool.coverage] # Coverage config
 source = [

@@ -2,15 +2,22 @@
 
 Summit-Sim is an AI wilderness rescue simulator using multi-agent validation to generate medically safe, interactive backcountry emergencies for first-responder training.
 
+> **CRITICAL: This repo requires Nix. Run `nix develop` BEFORE any commands or they will fail.**
+>
 > **Hackathon Context**: This is a 2-week sprint. Prioritize working code over perfection, but maintain basic hygiene (types, tests, docs) to keep velocity high. Use the existing patterns - don't over-engineer.
 > 
 > **Core Flow**: Host configures scenario → AI generates scenario → Validation judges check it → Host reviews → Students join via link → Simulation runs → Debrief at end. See `plans/high-level-arch.md` for full details.
 
 ## Build/Lint/Test Commands
 
+**ALL commands require `nix develop` first. The environment won't work without it.**
+
 ```bash
-# Development environment setup (uses Nix + uv)
-nix develop                          # Enter dev shell with Python 3.12, uv, ruff
+# REQUIRED FIRST: Enter Nix development shell
+# Without this step, all commands below will fail
+nix develop                          # Enter dev shell with Python 3.12, uv, ruff, pre-commit
+
+# One-time setup (after nix develop)
 uv sync --all-extras                # Install all dependencies including dev
 source .venv/bin/activate           # Activate virtual environment
 
