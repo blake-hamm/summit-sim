@@ -46,6 +46,28 @@ Guidelines:
 - Learning moments should be actionable takeaways"""
 
 
+SIMULATION_USER_PROMPT = """Scenario: {title}
+Setting: {setting}
+Patient: {patient_summary}
+Hidden Truth: {hidden_truth}
+Learning Objectives: {learning_objectives}
+
+Current Situation:
+{narrative_text}
+
+Available Choices:
+{choices_text}
+
+Student Selected: {selected_choice_id} - {selected_choice_description}
+
+Generate personalized feedback for this choice and indicate if the scenario continues.
+
+For the next_turn field:
+- If selected_choice.next_turn_id exists, use scenario.get_turn() to fetch it
+- If next_turn_id is null, set next_turn=null and is_complete=true
+- selected_choice should reference the ChoiceOption passed in"""
+
+
 async def process_choice(
     scenario: ScenarioDraft,
     current_turn: ScenarioTurn,
@@ -78,26 +100,17 @@ async def process_choice(
         for c in current_turn.choices
     )
 
-    prompt = f"""Scenario: {scenario.title}
-Setting: {scenario.setting}
-Patient: {scenario.patient_summary}
-Hidden Truth: {scenario.hidden_truth}
-Learning Objectives: {", ".join(scenario.learning_objectives)}
-
-Current Situation:
-{current_turn.narrative_text}
-
-Available Choices:
-{choices_text}
-
-Student Selected: {selected_choice.choice_id} - {selected_choice.description}
-
-Generate personalized feedback for this choice and indicate if the scenario continues.
-
-For the next_turn field:
-- If selected_choice.next_turn_id exists, use scenario.get_turn() to fetch it
-- If next_turn_id is null, set next_turn=null and is_complete=true
-- selected_choice should reference the ChoiceOption passed in"""
+    prompt = SIMULATION_USER_PROMPT.format(
+        title=scenario.title,
+        setting=scenario.setting,
+        patient_summary=scenario.patient_summary,
+        hidden_truth=scenario.hidden_truth,
+        learning_objectives=", ".join(scenario.learning_objectives),
+        narrative_text=current_turn.narrative_text,
+        choices_text=choices_text,
+        selected_choice_id=selected_choice.choice_id,
+        selected_choice_description=selected_choice.description,
+    )
 
     result = await agent.run(prompt)
 

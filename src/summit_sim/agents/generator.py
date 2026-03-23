@@ -48,6 +48,23 @@ Generate a complete, coherent scenario that teaches proper wilderness first aid
 through decision-making."""
 
 
+GENERATOR_USER_PROMPT = """\
+Generate a wilderness rescue scenario with the following parameters:
+
+Number of Participants: {num_participants}
+Activity Type: {activity_type}
+Difficulty Level: {difficulty}
+
+Create a complete scenario with:
+- Compelling title and setting appropriate for {activity_type}
+- Realistic patient case matching the {difficulty} difficulty
+- 3-5 turns with multiple choice decision points
+- Medically accurate content
+- Clear learning objectives
+
+The scenario should be challenging but educational for wilderness first responders."""
+
+
 async def generate_scenario(host_config: HostConfig) -> ScenarioDraft:
     """Generate a complete scenario from minimal host configuration.
 
@@ -65,20 +82,11 @@ async def generate_scenario(host_config: HostConfig) -> ScenarioDraft:
         reasoning_effort="high",
     )
 
-    prompt = f"""Generate a wilderness rescue scenario with the following parameters:
-
-Number of Participants: {host_config.num_participants}
-Activity Type: {host_config.activity_type}
-Difficulty Level: {host_config.difficulty}
-
-Create a complete scenario with:
-- Compelling title and setting appropriate for {host_config.activity_type}
-- Realistic patient case matching the {host_config.difficulty} difficulty
-- 3-5 turns with multiple choice decision points
-- Medically accurate content
-- Clear learning objectives
-
-The scenario should be challenging but educational for wilderness first responders."""
+    prompt = GENERATOR_USER_PROMPT.format(
+        num_participants=host_config.num_participants,
+        activity_type=host_config.activity_type,
+        difficulty=host_config.difficulty,
+    )
 
     result = await agent.run(prompt)
     return result.output
