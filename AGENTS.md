@@ -8,6 +8,15 @@ Summit-Sim is an AI wilderness rescue simulator using multi-agent validation to 
 >
 > **Core Flow**: Host configures scenario -> AI generates scenario -> Validation judges check it -> Host reviews -> Students join via link -> Simulation runs -> Debrief at end. See `plans/high-level-arch.md` for full details.
 
+## Hard Boundaries
+
+These rules are absolute. Do not violate them under any circumstances.
+
+- **No git commands.** Do not run `git add`, `git commit`, `git push`, or any other version control commands. The human developer handles all git operations. Your job is only to write, test, and verify code.
+- **No bypassing the agent factory.** All agents must be created via `get_agent()` from `agents/config.py`. Never instantiate `Agent(...)` directly in application code.
+- **Use Nix-provided ruff only.** The `.venv` installs a dynamically-linked `ruff` binary that does NOT work on NixOS. Always use the `ruff` binary from the Nix dev shell. Do not rely on `.venv/bin/ruff` or run pre-commit hooks for linting -- run ruff and coverage checks manually instead.
+- **No external API calls in tests.** All LLM calls must be mocked via `unittest.mock.AsyncMock`. Patch at `summit_sim.agents.config.Agent`, not at import sites.
+
 ## Environment Setup
 
 ```bash
@@ -16,11 +25,9 @@ uv sync --all-extras            # One-time: install all dependencies
 source .venv/bin/activate       # Activate virtual environment
 ```
 
-**NixOS caveat**: The venv installs a dynamically-linked `ruff` binary that does NOT work on NixOS. Always use ruff from the Nix shell (call `ruff` before activating `.venv`, or use the full Nix path). The `pre-commit` hooks for ruff currently fail for this reason -- run ruff and coverage checks manually instead.
-
 ## Quality Gates (run after every change)
 
-Every change must pass these two checks before committing:
+Every change must pass these two checks before declaring a task complete:
 
 ```bash
 ruff check --fix . && ruff format .     # Lint + format (use Nix-provided ruff)
@@ -39,7 +46,7 @@ That's it. If those pass, you're good. Ruff config is in `pyproject.toml` -- let
 - **Specific exceptions** -- no bare `except:`; use `raise from` when re-raising
 - 4 spaces, 88-char lines, ruff handles the rest
 
-## Architecture Overview
+## Architecture & Patterns
 
 ```
 src/summit_sim/
@@ -58,10 +65,8 @@ tests/
   test_generator.py     # Generator agent (mocked)
   test_simulation.py    # Simulation agent (mocked)
   test_simulation_graph.py  # Graph nodes + full integration test
-notebooks/
-  story-1-1-integration-test.ipynb  # E2E with live API
-  story-1-2-simulation-graph.ipynb  # Full simulation with MLflow
-plans/                  # Story plans -- read before implementing
+notebooks/                  # Live E2E verification, not production code
+plans/                      # Story plans -- read before implementing a story
 ```
 
 ### Key Patterns
@@ -71,9 +76,9 @@ plans/                  # Story plans -- read before implementing
 - **LangGraph state**: Uses `TypedDict` (not Pydantic BaseModel) with `append_reducer` for list fields.
 - **Human-in-the-loop**: `interrupt()` in graph nodes, resumed via `Command(resume=value)`.
 - **MLflow tracing**: `simulation_session()` context manager wraps graph execution with parent runs.
-- **Test isolation**: All LLM calls are mocked via `unittest.mock.AsyncMock`. Patch at `summit_sim.agents.config.Agent`, not at import sites. No external API calls in tests.
+- **Test isolation**: All LLM calls are mocked via `unittest.mock.AsyncMock`. Patch at `summit_sim.agents.config.Agent`, not at import sites.
 
-### Tech Stack (actual usage)
+### Tech Stack
 
 | Framework | Status | Role |
 |-----------|--------|------|
@@ -82,25 +87,8 @@ plans/                  # Story plans -- read before implementing
 | MLflow | Active | Tracing, autologging, experiment tracking |
 | Pydantic + pydantic-settings | Active | Schemas, env config |
 | OpenRouter | Active | LLM provider (default: gemini-3.1-flash-lite-preview) |
-| Chainlit | Planned | Frontend -- not yet implemented |
-| DragonflyDB | Planned | Persistence -- currently using InMemorySaver |
-
-## Current Progress
-
-### Completed
-- **Story 1.1**: Schemas, generator agent, simulation feedback agent, MLflow tracing, agent factory (22 tests)
-- **Story 1.2**: LangGraph simulation graph, 5-node workflow, interrupt(), transcript tracking, MLflow sessions (12 more tests, 34 total)
-- **Story 1.3 pre-reqs**: SimulationState renamed, was_correct added, class_id/scenario_id in state, tracing updated
-
-### Next Up
-- **Story 1.3** (`plans/story-1-3-student-debrief.md`): Debrief agent, DebriefReport schema, MLflow debrief metrics. Most pre-reqs already done -- read the plan before starting.
-
-### Backlog
-- Validation judges (Safety, Realism, Pedagogy) + Refiner agent
-- Chainlit frontend
-- DragonflyDB persistence
-- YAML-based model config (`plans/backlog/agent-configuration-patterns.md`)
-- Generator debrief (`plans/backlog/story-1-4-generator-debrief.md`)
+| Chainlit | Not yet implemented | Frontend (planned) |
+| DragonflyDB | Not yet implemented | Persistence (currently using InMemorySaver) |
 
 ## Development Tips
 
@@ -117,9 +105,15 @@ plans/                  # Story plans -- read before implementing
 3. Wire it into the graph builder in `create_simulation_graph()`
 4. Test the node in isolation, then test the full graph flow
 
-### General Workflow
-- Read the relevant plan in `plans/` before starting a story
-- Focus on happy path first, then edge cases
-- Use `pytest -x` for fast feedback during development
-- Run the quality gates before committing
-- Notebooks are for live E2E verification, not for production code
+### Architecture Decisions
+- **Prioritize features**: Get new functionality working first, polish later
+- **Happy path focus**: Build testable, verifiable features without over-engineering
+- **Keep it simple**: Avoid premature abstraction and security overthinking
+- **Monolithic app**: One Python app, no frontend/backend split
+- **Use existing patterns**: Follow conventions from similar files
+- **One module per domain**: Group related functionality
+- **Agent-based design**: Embrace Chainlit + LangGraph + PydanticAI architecture
+- **Anonymous users**: No user management, focus on collaborative learning
+- **Read the plan first**: Check `plans/` for a story plan before starting implementation
+- **Happy path first**: Focus on the main flow, then edge cases
+- **Use `pytest -x`** for fast feedback during development
