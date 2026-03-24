@@ -17,7 +17,7 @@ from summit_sim.settings import settings
 if TYPE_CHECKING:
     from collections.abc import Generator
 
-    from summit_sim.schemas import HostConfig
+    from summit_sim.schemas import DebriefReport, HostConfig
 
 
 def enable_tracing(run_tracer_inline: bool = True) -> None:
@@ -116,20 +116,18 @@ def simulation_session(
         # Graph config with thread_id for trace grouping
         graph_config: dict[str, Any] = {"configurable": {"thread_id": session_id}}
 
-        try:
-            yield session_id, graph_config
-            # Log successful completion
-            mlflow.set_tag("status", "completed")
-        except Exception:
-            # Log failure status before re-raising
-            mlflow.set_tag("status", "failed")
-            raise
+        # Return session id and graph config
+        yield session_id, graph_config
+
+        # Log successful completion
+        mlflow.set_tag("status", "completed")
 
 
 def log_simulation_results(
     transcript: list[dict[str, Any]],
     is_complete: bool,
     key_learning_moments: list[str],
+    debrief_report: DebriefReport | None = None,
 ) -> None:
     """Log final simulation results to the current MLflow run.
 
@@ -139,6 +137,7 @@ def log_simulation_results(
         transcript: List of transcript entries from the simulation.
         is_complete: Whether the simulation completed successfully.
         key_learning_moments: List of key learning moments accumulated.
+        debrief_report: Optional debrief report to log final score and status.
 
     """
     mlflow.log_metrics(
@@ -153,37 +152,15 @@ def log_simulation_results(
     if key_learning_moments:
         mlflow.set_tag("learning_moments_count", str(len(key_learning_moments)))
 
+    # Log debrief metrics if report is provided
+    if debrief_report is not None:
+        mlflow.log_metrics(
+            {
+                "final_score": debrief_report.final_score,
+            }
+        )
 
-def log_debrief_metrics(
-    final_score: float,
-    completion_status: str,
-    scenario_id: str,
-    class_id: str | None = None,
-) -> None:
-    """Log debrief metrics to current MLflow run.
-
-    Should be called within simulation_session context.
-
-    Args:
-        final_score: Percentage score (0-100)
-        completion_status: "pass" or "fail"
-        scenario_id: Unique scenario identifier
-        class_id: Optional class grouping ID
-
-    """
-    mlflow.log_metrics(
-        {
-            "final_score": final_score,
-            "is_complete": 1.0,
+        tags: dict[str, str] = {
+            "pass_fail": debrief_report.completion_status,
         }
-    )
-
-    tags: dict[str, str] = {
-        "pass_fail": completion_status,
-        "scenario_id": scenario_id,
-    }
-
-    if class_id:
-        tags["class_id"] = class_id
-
-    mlflow.set_tags(tags)
+        mlflow.set_tags(tags)
