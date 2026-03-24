@@ -152,3 +152,38 @@ def log_simulation_results(
     # Log learning moments as artifacts/tags for easy viewing
     if key_learning_moments:
         mlflow.set_tag("learning_moments_count", str(len(key_learning_moments)))
+
+
+def log_debrief_metrics(
+    final_score: float,
+    completion_status: str,
+    scenario_id: str,
+    class_id: str | None = None,
+) -> None:
+    """Log debrief metrics to current MLflow run.
+
+    Should be called within simulation_session context.
+
+    Args:
+        final_score: Percentage score (0-100)
+        completion_status: "pass" or "fail"
+        scenario_id: Unique scenario identifier
+        class_id: Optional class grouping ID
+
+    """
+    mlflow.log_metrics(
+        {
+            "final_score": final_score,
+            "is_complete": 1.0,
+        }
+    )
+
+    tags: dict[str, str] = {
+        "pass_fail": completion_status,
+        "scenario_id": scenario_id,
+    }
+
+    if class_id:
+        tags["class_id"] = class_id
+
+    mlflow.set_tags(tags)
