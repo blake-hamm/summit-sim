@@ -40,7 +40,7 @@ class SimulationState(TypedDict):
     current_turn_id: int
     transcript: Annotated[list[TranscriptEntry], append_reducer]
     is_complete: bool
-    key_learning_moments: Annotated[list[str], append_reducer]
+    key_learning_moments: list[str]
     last_selected_choice: Any
     simulation_result: Any
     scenario_id: str

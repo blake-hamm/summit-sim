@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import mlflow
+from mlflow.entities import SpanType
+
 from summit_sim.agents.config import get_agent
 from summit_sim.graphs.state import TranscriptEntry
 from summit_sim.schemas import DebriefReport, ScenarioDraft
@@ -51,6 +54,7 @@ The completion_status should be "pass" if score >= 70, otherwise "fail".
 The final_score should match the calculated score above."""
 
 
+@mlflow.trace(span_type=SpanType.AGENT)
 async def generate_debrief(
     transcript: list[TranscriptEntry],
     scenario_draft: ScenarioDraft,

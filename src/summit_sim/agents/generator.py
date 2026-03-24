@@ -3,12 +3,10 @@
 from __future__ import annotations
 
 import mlflow
+from mlflow.entities import SpanType
 
 from summit_sim.agents.config import get_agent
 from summit_sim.schemas import HostConfig, ScenarioDraft
-from summit_sim.settings import settings
-
-mlflow.set_tracking_uri(settings.mlflow_tracking_uri)
 
 GENERATOR_SYSTEM_PROMPT = """You are an expert wilderness rescue scenario designer.
 
@@ -65,6 +63,7 @@ Create a complete scenario with:
 The scenario should be challenging but educational for wilderness first responders."""
 
 
+@mlflow.trace(span_type=SpanType.AGENT)
 async def generate_scenario(host_config: HostConfig) -> ScenarioDraft:
     """Generate a complete scenario from minimal host configuration.
 

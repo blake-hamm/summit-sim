@@ -9,6 +9,7 @@ In the hybrid model:
 from __future__ import annotations
 
 import mlflow
+from mlflow.entities import SpanType
 
 from summit_sim.agents.config import get_agent
 from summit_sim.schemas import (
@@ -17,9 +18,6 @@ from summit_sim.schemas import (
     ScenarioTurn,
     SimulationResult,
 )
-from summit_sim.settings import settings
-
-mlflow.set_tracking_uri(settings.mlflow_tracking_uri)
 
 FEEDBACK_SYSTEM_PROMPT = """You are a wilderness rescue instructor providing
 personalized feedback.
@@ -68,6 +66,7 @@ For the next_turn field:
 - selected_choice should reference the ChoiceOption passed in"""
 
 
+@mlflow.trace(span_type=SpanType.AGENT)
 async def process_choice(
     scenario: ScenarioDraft,
     current_turn: ScenarioTurn,

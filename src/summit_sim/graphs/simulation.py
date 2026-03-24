@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import mlflow
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
@@ -108,6 +109,14 @@ async def process_turn(state: SimulationState) -> dict:
         msg = f"Turn {state['current_turn_id']} not found in scenario"
         raise ValueError(msg)
 
+    # Link trace to session metadata
+    mlflow.update_current_trace(
+        metadata={
+            "turn_id": str(current_turn.turn_id),
+            "choice_id": str(selected_choice.choice_id),
+        }
+    )
+
     result = await process_choice(scenario, current_turn, selected_choice)
 
     return {"simulation_result": result}
@@ -164,6 +173,13 @@ async def generate_debrief_node(state: SimulationState) -> dict:
     Calls the Debrief Agent to analyze the complete simulation transcript
     and generate a structured performance report.
     """
+    # Link trace to session metadata
+    mlflow.update_current_trace(
+        metadata={
+            "scenario_id": state["scenario_id"],
+        }
+    )
+
     debrief_report = await generate_debrief(
         transcript=state["transcript"],
         scenario_draft=state["scenario_draft"],

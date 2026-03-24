@@ -273,12 +273,7 @@ class TestUpdateState:
         assert updated["current_turn_id"] == 0
 
     def test_update_state_returns_learning_moments(self, initial_state):
-        """Test that update_state returns learning moments for reducer."""
-        state = {
-            **initial_state,
-            "key_learning_moments": ["Previous lesson"],
-        }
-
+        """Test that update_state returns learning moments from result."""
         selected_choice = ChoiceOption(
             choice_id="test",
             description="Test",
@@ -294,12 +289,16 @@ class TestUpdateState:
             is_complete=False,
         )
 
-        state["last_selected_choice"] = selected_choice
-        state["simulation_result"] = result
+        state = {
+            **initial_state,
+            "last_selected_choice": selected_choice,
+            "simulation_result": result,
+        }
 
         updated = update_state(state)
 
-        # update_state returns just the new values - reducer handles concatenation
+        # update_state returns just the learning moments from the result
+        # LangGraph checkpointing handles state persistence
         assert updated["key_learning_moments"] == ["New lesson"]
 
 
@@ -446,12 +445,9 @@ class TestSimulationGraphFullCycle:
                     assert state["transcript"][2]["choice_id"] == "monitor"
                     assert state["transcript"][2]["feedback"] == "Excellent monitoring!"
 
-                    assert len(state["key_learning_moments"]) == 3
-                    assert "Always check ABCs first" in state["key_learning_moments"]
-                    assert (
-                        "Don't hesitate to call for help"
-                        in state["key_learning_moments"]
-                    )
+                    # With checkpoint-based state persistence (no append_reducer),
+                    # key_learning_moments contains only the current turn's moments
+                    assert len(state["key_learning_moments"]) == 1
                     assert (
                         "Continuous monitoring is key" in state["key_learning_moments"]
                     )
