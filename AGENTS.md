@@ -58,13 +58,15 @@ src/summit_sim/
     generator.py        # Scenario generation (PydanticAI + OpenRouter)
     simulation.py       # Per-turn feedback agent
   graphs/
-    state.py            # LangGraph TypedDict states (SimulationState, TranscriptEntry)
+    state.py            # LangGraph TypedDict states (SimulationState, TeacherReviewState, TranscriptEntry)
     simulation.py       # 5-node LangGraph workflow with interrupt() for human-in-the-loop
+    teacher_review.py   # Teacher review workflow: initialize → generate → interrupt → approve
 tests/
   test_schemas.py       # Schema validation
   test_generator.py     # Generator agent (mocked)
   test_simulation.py    # Simulation agent (mocked)
-  test_simulation_graph.py  # Graph nodes + full integration test
+  test_simulation_graph.py  # Simulation graph nodes + full integration test
+  test_teacher_review.py    # Teacher review graph nodes + full integration test
 notebooks/                  # Live E2E verification, not production code
 plans/                      # Story plans -- read before implementing a story
 ```
@@ -75,7 +77,7 @@ plans/                      # Story plans -- read before implementing a story
 - **Structured outputs**: Agents return Pydantic models directly via PydanticAI's `output_type`.
 - **LangGraph state**: Uses `TypedDict` (not Pydantic BaseModel) with `append_reducer` for list fields.
 - **Human-in-the-loop**: `interrupt()` in graph nodes, resumed via `Command(resume=value)`.
-- **MLflow tracing**: `simulation_session()` context manager wraps graph execution with parent runs.
+- **MLflow tracing**: `summit_session()` context manager wraps graph execution with parent runs. Supports both generation (phase="gen") and simulation (phase="sim") phases.
 - **Test isolation**: All LLM calls are mocked via `unittest.mock.AsyncMock`. Patch at `summit_sim.agents.config.Agent`, not at import sites.
 
 ### Tech Stack

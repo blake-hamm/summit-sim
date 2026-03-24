@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import uuid
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 import mlflow
 
@@ -17,7 +17,7 @@ from summit_sim.settings import settings
 if TYPE_CHECKING:
     from collections.abc import Generator
 
-    from summit_sim.schemas import DebriefReport, HostConfig
+    from summit_sim.schemas import DebriefReport, TeacherConfig
 
 
 def enable_tracing(run_tracer_inline: bool = True) -> None:
@@ -38,11 +38,11 @@ def enable_tracing(run_tracer_inline: bool = True) -> None:
     mlflow.langchain.autolog(run_tracer_inline=run_tracer_inline)
 
 
-def generate_session_name(config: HostConfig, phase: str = "sim") -> str:
+def generate_session_name(config: TeacherConfig, phase: str = "sim") -> str:
     """Generate descriptive session name from config.
 
     Args:
-        config: Host configuration containing activity type,
+        config: Teacher configuration containing activity type,
             participant count, difficulty, and class_id.
         phase: Phase identifier ("gen" for generation, "sim" for simulation).
 
@@ -58,42 +58,45 @@ def generate_session_name(config: HostConfig, phase: str = "sim") -> str:
 
 
 @contextmanager
-def simulation_session(
-    config: HostConfig,
+def summit_session(
+    config: TeacherConfig,
     scenario_id: str,
     session_id: str | None = None,
+    phase: Literal["gen", "sim"] = "sim",
 ) -> Generator[tuple[str, dict[str, Any]], None, None]:
-    """Context manager for a simulation session with MLflow parent run.
+    """Context manager for Summit-Sim sessions with MLflow parent run.
 
     Creates a parent MLflow run that encompasses all agent traces,
-    with session metadata and descriptive naming. Automatically handles
-    error tracking and logs final session metrics.
+    with session metadata and descriptive naming. Supports both
+    generation ("gen") and simulation ("sim") phases.
 
     Args:
-        config: Host configuration for naming and metadata.
+        config: Teacher configuration for naming and metadata.
         scenario_id: Unique scenario identifier for trace linking.
         session_id: Optional session ID. If not provided, generates a UUID.
+        phase: Session phase - "gen" for generation, "sim" for simulation.
 
     Yields:
         Tuple of (session_id, graph_config) for use in LangGraph invocation.
 
     Example:
-        >>> config = HostConfig(num_participants=3, activity_type="hiking")
-        >>> with simulation_session(
-        ...     config, scenario_id="scn-abc123"
+        >>> config = TeacherConfig(num_participants=3, activity_type="hiking")
+        >>> with summit_session(
+        ...     config, scenario_id="scn-abc123", phase="gen"
         ... ) as (session_id, graph_config):
-        ...     graph = create_simulation_graph()
+        ...     graph = create_teacher_review_graph()
         ...     state = await graph.ainvoke(initial_state, graph_config)
 
     """
     session_id = session_id or str(uuid.uuid4())
-    session_name = generate_session_name(config, phase="sim")
+    session_name = generate_session_name(config, phase=phase)
 
     with mlflow.start_run(run_name=session_name):
         # Log session-level parameters
         params = {
             "session_id": session_id,
             "scenario_id": scenario_id,
+            "phase": phase,
             "activity_type": config.activity_type,
             "num_participants": config.num_participants,
             "difficulty": config.difficulty,
@@ -104,7 +107,7 @@ def simulation_session(
 
         # Set tags for easy filtering
         tags = {
-            "session_type": "simulation",
+            "session_type": phase,
             "scenario_id": scenario_id,
             "activity_type": config.activity_type,
             "difficulty": config.difficulty,
@@ -131,7 +134,7 @@ def log_simulation_results(
 ) -> None:
     """Log final simulation results to the current MLflow run.
 
-    Should be called within a simulation_session context.
+    Should be called within a summit_session context with phase="sim".
 
     Args:
         transcript: List of transcript entries from the simulation.
