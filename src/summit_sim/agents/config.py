@@ -9,7 +9,6 @@ from pydantic_ai import Agent
 from pydantic_ai.models.openrouter import (
     OpenRouterModel,
     OpenRouterModelSettings,
-    OpenRouterReasoning,
 )
 from pydantic_ai.providers.openrouter import OpenRouterProvider
 
@@ -53,7 +52,6 @@ def get_agent(
 
     """
     if agent_name not in _agent_container:
-        reasoning_config: OpenRouterReasoning = {"effort": reasoning_effort}  # type: ignore[typeddict-item]
         _agent_container[agent_name] = Agent(
             OpenRouterModel(
                 settings.default_model,
@@ -62,7 +60,8 @@ def get_agent(
             output_type=output_type,
             system_prompt=system_prompt,
             model_settings=OpenRouterModelSettings(
-                openrouter_reasoning=reasoning_config
+                openrouter_reasoning={"effort": reasoning_effort},
+                openrouter_usage={"include": True},
             ),
         )
     return _agent_container[agent_name]
