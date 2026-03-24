@@ -1,0 +1,27 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      # Hot reload: mount source code for development (writable for reload)
+      - ./src:/app/src
+      - ./.chainlit:/app/.chainlit
+      - ./public:/app/public
+      - ./chainlit.md:/app/chainlit.md
+      - ./chainlit_en-US.md:/app/chainlit_en-US.md
+      # Mount dependency files for updates
+      - ./pyproject.toml:/app/pyproject.toml
+      - ./uv.lock:/app/uv.lock
+    command: ["uv", "run", "chainlit", "run", "src/summit_sim/app.py", "--host", "0.0.0.0", "--port", "8000", "--watch"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
