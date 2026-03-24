@@ -18,11 +18,59 @@ Implement the teacher review workflow with human-in-the-loop (HITL) via LangGrap
 - [x] `TeacherReviewState` defined with full schema (including future-use fields)
 - [x] Teacher graph executes: initialize → generate → interrupt → approve → END
 - [x] Notebook demonstrates full teacher flow end-to-end
-- [ ] Chainlit renders config form and review screen (deferred - notebook first)
+- [x] Chainlit renders config form and review screen
 - [x] Unique URL generated with scenario_id and class_id
 - [x] MLflow logs generation with `sme_approved: true` tag
 - [x] Unit and integration tests pass (≥80% coverage)
 - [x] Ruff linting passes
+
+## Running the Chainlit App
+
+### Start the App
+
+```bash
+nix develop
+uv run chainlit run src/summit_sim/app.py
+```
+
+The app will start on `http://localhost:8000`.
+
+### Manual Testing Steps
+
+1. **Open browser** and navigate to `http://localhost:8000`
+
+2. **Select "I'm a Teacher"** button
+
+3. **Configure scenario** in the form:
+   - Adjust number of participants (1-20)
+   - Select activity type (canyoneering/skiing/hiking)
+   - Select difficulty (low/med/high)
+   - Click "Generate Scenario"
+
+4. **Wait for generation** - You'll see "Generating scenario..." while the AI creates the scenario
+
+5. **Review the scenario** - You'll see:
+   - Scenario title
+   - Setting description
+   - Patient summary
+   - Learning objectives (bullet list)
+   - Total turns count
+   - Click "Approve & Generate Link"
+
+6. **View shareable link** - After approval, you'll see:
+   - Scenario ID
+   - Class ID
+   - Shareable URL: `/scenario/{scenario_id}?class_id={class_id}`
+
+### What to Look For
+
+- Config form renders with slider and dropdowns
+- Loading message appears during generation
+- Review screen displays all scenario details
+- Approval button works and shows success message
+- Shareable URL is generated with correct format
+- No errors in terminal output
+- Graph state is properly managed between interrupts
 
 ---
 
