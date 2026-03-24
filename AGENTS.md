@@ -2,159 +2,124 @@
 
 Summit-Sim is an AI wilderness rescue simulator using multi-agent validation to generate medically safe, interactive backcountry emergencies for first-responder training.
 
-> **CRITICAL: This repo requires Nix. Run `nix develop` BEFORE any commands or they will fail.**
+> **CRITICAL: This repo runs on NixOS and requires Nix. Run `nix develop` BEFORE any commands.**
 >
-> **Hackathon Context**: This is a 2-week sprint. Prioritize working code over perfection, but maintain basic hygiene (types, tests, docs) to keep velocity high. Use the existing patterns - don't over-engineer.
-> 
-> **Core Flow**: Host configures scenario → AI generates scenario → Validation judges check it → Host reviews → Students join via link → Simulation runs → Debrief at end. See `plans/high-level-arch.md` for full details.
+> **Hackathon Context**: 2-week sprint. Prioritize working code over perfection, but maintain hygiene (types, tests, docs). Use existing patterns -- don't over-engineer.
+>
+> **Core Flow**: Host configures scenario -> AI generates scenario -> Validation judges check it -> Host reviews -> Students join via link -> Simulation runs -> Debrief at end. See `plans/high-level-arch.md` for full details.
 
-## Build/Lint/Test Commands
-
-**ALL commands require `nix develop` first. The environment won't work without it.**
+## Environment Setup
 
 ```bash
-# REQUIRED FIRST: Enter Nix development shell
-# Without this step, all commands below will fail
-nix develop                          # Enter dev shell with Python 3.12, uv, ruff, pre-commit
-
-# One-time setup (after nix develop)
-uv sync --all-extras                # Install all dependencies including dev
-source .venv/bin/activate           # Activate virtual environment
-
-# Testing - Essential for rapid iteration
-pytest                              # Run all tests (quick feedback)
-pytest tests/test_specific.py       # Run single test file (faster)
-pytest tests/test_specific.py::test_function  # Run single test (fastest)
-pytest -k "test_name"               # Run tests matching pattern
-pytest -s                           # Run with print statements enabled
-pytest --cov=src --cov=tests        # Run with coverage
-pytest -x                           # Stop on first failure (fast feedback)
-pytest --tb=short                   # Shorter tracebacks
-
-# Linting and Formatting (must pass before commit)
-ruff check .                        # Check all files
-ruff check --fix .                  # Check and auto-fix issues
-ruff format .                       # Format all files
-ruff format --check .               # Check formatting without changes
-
-# Coverage
-coverage run -m pytest              # Run tests with coverage
-coverage report                     # Show coverage report
-coverage html                       # Generate HTML coverage report
-
-# Pre-commit (runs automatically on commit)
-pre-commit install                  # Install hooks
-pre-commit run --all-files          # Run all hooks manually
+nix develop                     # REQUIRED -- enters dev shell with Python 3.12, ruff, uv, pre-commit
+uv sync --all-extras            # One-time: install all dependencies
+source .venv/bin/activate       # Activate virtual environment
 ```
 
-## Code Style Guidelines
+**NixOS caveat**: The venv installs a dynamically-linked `ruff` binary that does NOT work on NixOS. Always use ruff from the Nix shell (call `ruff` before activating `.venv`, or use the full Nix path). The `pre-commit` hooks for ruff currently fail for this reason -- run ruff and coverage checks manually instead.
 
-### Formatting
-- **Indentation**: 4 spaces (no tabs)
-- **Line length**: Default ruff (88 characters)
-- **Formatter**: ruff format (not black)
-- Format on save enabled in VSCode
+## Quality Gates (run after every change)
 
-### Imports
-- Use absolute imports within the package
-- Ruff enforces import sorting (I rule)
-- Group imports: stdlib, third-party, local
-- Use `__init__.py` files to expose public APIs
+Every change must pass these two checks before committing:
 
-### Type Hints
-- Python 3.12+ required - use modern syntax
-- Use `|` for union types (e.g., `str | None`)
-- Annotate all function parameters and return types
-- Ruff ANN rules enforce type annotations
-
-### Naming Conventions
-- **Modules**: lowercase with underscores (snake_case)
-- **Classes**: PascalCase
-- **Functions/Methods**: snake_case
-- **Constants**: UPPER_SNAKE_CASE
-- **Private**: prefix with underscore
-
-### Documentation
-- All public functions must have docstrings (D rules)
-- Use Google-style or NumPy-style docstrings
-- Module-level docstrings encouraged
-- Ignored: D203 (1 blank line before class), D213 (multi-line summary second line)
-
-### Error Handling
-- Use specific exceptions, avoid bare `except:`
-- Use `raise from` when re-raising exceptions
-- Prefer `pathlib` over `os.path` (PTH rules)
-
-### Ruff Lint Rules Enabled
-- **I**: Import sorting
-- **F**: Pyflakes
-- **E,W**: pycodestyle errors/warnings
-- **N**: pep8-naming
-- **D**: pydocstyle
-- **ANN**: flake8-annotations
-- **B**: flake8-bugbear
-- **A**: flake8-builtins
-- **T20**: flake8-print
-- **PYI**: flake8-pyi
-- **Q**: flake8-quotes
-- **RET**: flake8-return
-- **ARG**: flake8-unused-arguments
-- **PTH**: flake8-use-pathlib
-- **PL**: Pylint
-- **PT**: flake8-pytest-style
-
-## Project Structure
-
-```
-src/
-  summit_sim/          # Main package
-    __init__.py        # Package initialization
-tests/                 # Test files
-  __init__.py
-  test_*.py            # Test modules
-notebooks/             # Jupyter notebooks
-pyproject.toml         # Project config, dependencies
-.flake.nix            # Nix development environment
-.pre-commit-config.yaml # Pre-commit hooks
+```bash
+ruff check --fix . && ruff format .     # Lint + format (use Nix-provided ruff)
+coverage run -m pytest && coverage report  # Tests + coverage (must be >=80%)
 ```
 
-## Testing Requirements
+That's it. If those pass, you're good. Ruff config is in `pyproject.toml` -- let ruff teach you the rules rather than memorizing them.
 
-- Minimum 80% code coverage enforced
-- Use pytest fixtures for test setup
-- Test files must be named `test_*.py`
-- Test functions must be named `test_*`
-- Coverage includes: src/, tests/, notebooks/
+## Code Style (the essentials)
 
-## Git Workflow
+- **Python 3.12+** -- use modern syntax (`str | None`, not `Optional[str]`)
+- **Type-annotate** all function parameters and return types
+- **Docstrings** on all public functions -- short summary only, NO `Args:`, `Returns:`, `Raises:` sections (type hints and names should be self-documenting)
+- **Absolute imports** within the package
+- **pathlib** over `os.path`
+- **Specific exceptions** -- no bare `except:`; use `raise from` when re-raising
+- 4 spaces, 88-char lines, ruff handles the rest
 
-- Pre-commit hooks run automatically
-- Hooks include: ruff lint, ruff format, coverage run, coverage report
-- Coverage must be ≥80% for pre-commit to pass
-- Use conventional commits if possible
+## Architecture Overview
 
-## Rapid Development Tips
+```
+src/summit_sim/
+  settings.py           # pydantic-settings, loads from .env
+  schemas.py            # All Pydantic models (HostConfig, ScenarioDraft, SimulationResult, etc.)
+  tracing.py            # MLflow tracing + session management
+  agents/
+    config.py           # Shared agent factory: get_agent() -> cached PydanticAI Agent
+    generator.py        # Scenario generation (PydanticAI + OpenRouter)
+    simulation.py       # Per-turn feedback agent
+  graphs/
+    state.py            # LangGraph TypedDict states (SimulationState, TranscriptEntry)
+    simulation.py       # 5-node LangGraph workflow with interrupt() for human-in-the-loop
+tests/
+  test_schemas.py       # Schema validation
+  test_generator.py     # Generator agent (mocked)
+  test_simulation.py    # Simulation agent (mocked)
+  test_simulation_graph.py  # Graph nodes + full integration test
+notebooks/
+  story-1-1-integration-test.ipynb  # E2E with live API
+  story-1-2-simulation-graph.ipynb  # Full simulation with MLflow
+plans/                  # Story plans -- read before implementing
+```
 
-### When Adding Features
-1. Prefer TDD when it helps clarify requirements, but don't force it - use what works for the feature
-2. Focus on happy path first, verify core functionality works before edge cases
-3. Use type hints from the start - catches bugs immediately
-4. Add docstrings as you go (ruff will remind you)
-5. Run `pytest -x` frequently during development
+### Key Patterns
 
-### Debugging
-- Use `pytest -s` to see print statements
-- Add `breakpoint()` for interactive debugging
-- Use `pytest --tb=short` for cleaner error output
-- Run single tests with `pytest path/to/test.py::test_func`
+- **Agent factory** (`agents/config.py`): `get_agent(name, output_type, system_prompt)` returns a cached PydanticAI `Agent` singleton. Use this for all new agents.
+- **Structured outputs**: Agents return Pydantic models directly via PydanticAI's `output_type`.
+- **LangGraph state**: Uses `TypedDict` (not Pydantic BaseModel) with `append_reducer` for list fields.
+- **Human-in-the-loop**: `interrupt()` in graph nodes, resumed via `Command(resume=value)`.
+- **MLflow tracing**: `simulation_session()` context manager wraps graph execution with parent runs.
+- **Test isolation**: All LLM calls are mocked via `unittest.mock.AsyncMock`. Patch at `summit_sim.agents.config.Agent`, not at import sites. No external API calls in tests.
 
-### Architecture Decisions
-- **Prioritize features**: Get new functionality working first, polish later
-- **Happy path focus**: Build testable, verifiable features without over-engineering
-- **Build in order**: Host config → generation → single lead student → debrief, THEN add validation loop
-- **Keep it simple**: Avoid premature abstraction and security overthinking
-- **Monolithic app**: One Python app, no frontend/backend split
-- **Use existing patterns**: Follow conventions from similar files
-- **One module per domain**: Group related functionality
-- **Agent-based design**: Embrace Chainlit + LangGraph + PydanticAI architecture
-- **Anonymous users**: No user management, focus on collaborative learning
+### Tech Stack (actual usage)
+
+| Framework | Status | Role |
+|-----------|--------|------|
+| PydanticAI | Active | Agent calls, structured outputs, OpenRouter provider |
+| LangGraph | Active | Workflow orchestration, state, interrupt/resume |
+| MLflow | Active | Tracing, autologging, experiment tracking |
+| Pydantic + pydantic-settings | Active | Schemas, env config |
+| OpenRouter | Active | LLM provider (default: gemini-3.1-flash-lite-preview) |
+| Chainlit | Planned | Frontend -- not yet implemented |
+| DragonflyDB | Planned | Persistence -- currently using InMemorySaver |
+
+## Current Progress
+
+### Completed
+- **Story 1.1**: Schemas, generator agent, simulation feedback agent, MLflow tracing, agent factory (22 tests)
+- **Story 1.2**: LangGraph simulation graph, 5-node workflow, interrupt(), transcript tracking, MLflow sessions (12 more tests, 34 total)
+- **Story 1.3 pre-reqs**: SimulationState renamed, was_correct added, class_id/scenario_id in state, tracing updated
+
+### Next Up
+- **Story 1.3** (`plans/story-1-3-student-debrief.md`): Debrief agent, DebriefReport schema, MLflow debrief metrics. Most pre-reqs already done -- read the plan before starting.
+
+### Backlog
+- Validation judges (Safety, Realism, Pedagogy) + Refiner agent
+- Chainlit frontend
+- DragonflyDB persistence
+- YAML-based model config (`plans/backlog/agent-configuration-patterns.md`)
+- Generator debrief (`plans/backlog/story-1-4-generator-debrief.md`)
+
+## Development Tips
+
+### Adding a New Agent
+1. Define the output schema in `schemas.py`
+2. Create the agent module in `agents/` using `get_agent()` from `config.py`
+3. Write a clear system prompt; use a user prompt template for variable data
+4. Post-process deterministic fields outside the LLM (see `agents/simulation.py` for example)
+5. Test with mocked LLM calls; verify with a notebook for live E2E
+
+### Adding a New Graph Node
+1. Define any new state fields in `graphs/state.py` (use `append_reducer` for lists)
+2. Add the node function in the appropriate graph module
+3. Wire it into the graph builder in `create_simulation_graph()`
+4. Test the node in isolation, then test the full graph flow
+
+### General Workflow
+- Read the relevant plan in `plans/` before starting a story
+- Focus on happy path first, then edge cases
+- Use `pytest -x` for fast feedback during development
+- Run the quality gates before committing
+- Notebooks are for live E2E verification, not for production code
