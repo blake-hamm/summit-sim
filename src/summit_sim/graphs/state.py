@@ -45,7 +45,3 @@ class SimulationState(TypedDict):
     simulation_result: Any
     scenario_id: str
     class_id: str | None
-
-
-# Backward compatibility alias (deprecated)
-AppState = SimulationState
