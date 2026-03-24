@@ -1,8 +1,9 @@
 # Story 2.1: Teacher Review Graph - Happy Path
 
 **Epic**: Epic 2: Web POC with Teacher Review  
-**Status**: Ready for Implementation  
+**Status**: ✅ Completed  
 **Estimated Effort**: 1-2 days  
+**Actual Effort**: ~1 day  
 
 ## Overview
 
@@ -14,14 +15,14 @@ Implement the teacher review workflow with human-in-the-loop (HITL) via LangGrap
 
 ## Success Criteria
 
-- [ ] `TeacherReviewState` defined with full schema (including future-use fields)
-- [ ] Teacher graph executes: initialize → generate → interrupt → approve → END
-- [ ] Notebook demonstrates full teacher flow end-to-end
-- [ ] Chainlit renders config form and review screen
-- [ ] Unique URL generated with scenario_id and class_id
-- [ ] MLflow logs generation with `sme_approved: true` tag
-- [ ] Unit and integration tests pass (≥80% coverage)
-- [ ] Ruff linting passes
+- [x] `TeacherReviewState` defined with full schema (including future-use fields)
+- [x] Teacher graph executes: initialize → generate → interrupt → approve → END
+- [x] Notebook demonstrates full teacher flow end-to-end
+- [ ] Chainlit renders config form and review screen (deferred - notebook first)
+- [x] Unique URL generated with scenario_id and class_id
+- [x] MLflow logs generation with `sme_approved: true` tag
+- [x] Unit and integration tests pass (≥80% coverage)
+- [x] Ruff linting passes
 
 ---
 

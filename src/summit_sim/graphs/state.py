@@ -4,7 +4,7 @@ from typing import Annotated, Any
 
 from typing_extensions import TypedDict
 
-from summit_sim.schemas import ChoiceOption, DebriefReport, ScenarioDraft
+from summit_sim.schemas import ChoiceOption, DebriefReport, ScenarioDraft, TeacherConfig
 
 
 def append_reducer(left: list, right: list) -> list:
@@ -46,3 +46,20 @@ class SimulationState(TypedDict):
     scenario_id: str
     class_id: str | None
     debrief_report: DebriefReport | None
+
+
+class TeacherReviewState(TypedDict):
+    """LangGraph state for teacher review workflow.
+
+    Maintains all state needed for the teacher review graph,
+    including the teacher configuration, generated scenario draft,
+    and review metadata.
+    """
+
+    teacher_config: TeacherConfig
+    scenario_draft: ScenarioDraft | None
+    scenario_id: str
+    class_id: str
+    retry_count: int
+    feedback_history: Annotated[list[str], append_reducer]
+    approval_status: str | None

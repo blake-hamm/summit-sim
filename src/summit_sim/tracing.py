@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import uuid
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 import mlflow
 
@@ -58,6 +58,75 @@ def generate_session_name(config: TeacherConfig, phase: str = "sim") -> str:
 
 
 @contextmanager
+def summit_session(
+    config: TeacherConfig,
+    scenario_id: str,
+    session_id: str | None = None,
+    phase: Literal["gen", "sim"] = "sim",
+) -> Generator[tuple[str, dict[str, Any]], None, None]:
+    """Context manager for Summit-Sim sessions with MLflow parent run.
+
+    Creates a parent MLflow run that encompasses all agent traces,
+    with session metadata and descriptive naming. Supports both
+    generation ("gen") and simulation ("sim") phases.
+
+    Args:
+        config: Teacher configuration for naming and metadata.
+        scenario_id: Unique scenario identifier for trace linking.
+        session_id: Optional session ID. If not provided, generates a UUID.
+        phase: Session phase - "gen" for generation, "sim" for simulation.
+
+    Yields:
+        Tuple of (session_id, graph_config) for use in LangGraph invocation.
+
+    Example:
+        >>> config = TeacherConfig(num_participants=3, activity_type="hiking")
+        >>> with summit_session(
+        ...     config, scenario_id="scn-abc123", phase="gen"
+        ... ) as (session_id, graph_config):
+        ...     graph = create_teacher_review_graph()
+        ...     state = await graph.ainvoke(initial_state, graph_config)
+
+    """
+    session_id = session_id or str(uuid.uuid4())
+    session_name = generate_session_name(config, phase=phase)
+
+    with mlflow.start_run(run_name=session_name):
+        # Log session-level parameters
+        params = {
+            "session_id": session_id,
+            "scenario_id": scenario_id,
+            "phase": phase,
+            "activity_type": config.activity_type,
+            "num_participants": config.num_participants,
+            "difficulty": config.difficulty,
+        }
+        if config.class_id:
+            params["class_id"] = config.class_id
+        mlflow.log_params(params)
+
+        # Set tags for easy filtering
+        tags = {
+            "session_type": phase,
+            "scenario_id": scenario_id,
+            "activity_type": config.activity_type,
+            "difficulty": config.difficulty,
+        }
+        if config.class_id:
+            tags["class_id"] = config.class_id
+        mlflow.set_tags(tags)
+
+        # Graph config with thread_id for trace grouping
+        graph_config: dict[str, Any] = {"configurable": {"thread_id": session_id}}
+
+        # Return session id and graph config
+        yield session_id, graph_config
+
+        # Log successful completion
+        mlflow.set_tag("status", "completed")
+
+
+@contextmanager
 def simulation_session(
     config: TeacherConfig,
     scenario_id: str,
@@ -65,6 +134,7 @@ def simulation_session(
 ) -> Generator[tuple[str, dict[str, Any]], None, None]:
     """Context manager for a simulation session with MLflow parent run.
 
+    Convenience wrapper around summit_session for backward compatibility.
     Creates a parent MLflow run that encompasses all agent traces,
     with session metadata and descriptive naming. Automatically handles
     error tracking and logs final session metrics.
@@ -86,41 +156,7 @@ def simulation_session(
         ...     state = await graph.ainvoke(initial_state, graph_config)
 
     """
-    session_id = session_id or str(uuid.uuid4())
-    session_name = generate_session_name(config, phase="sim")
-
-    with mlflow.start_run(run_name=session_name):
-        # Log session-level parameters
-        params = {
-            "session_id": session_id,
-            "scenario_id": scenario_id,
-            "activity_type": config.activity_type,
-            "num_participants": config.num_participants,
-            "difficulty": config.difficulty,
-        }
-        if config.class_id:
-            params["class_id"] = config.class_id
-        mlflow.log_params(params)
-
-        # Set tags for easy filtering
-        tags = {
-            "session_type": "simulation",
-            "scenario_id": scenario_id,
-            "activity_type": config.activity_type,
-            "difficulty": config.difficulty,
-        }
-        if config.class_id:
-            tags["class_id"] = config.class_id
-        mlflow.set_tags(tags)
-
-        # Graph config with thread_id for trace grouping
-        graph_config: dict[str, Any] = {"configurable": {"thread_id": session_id}}
-
-        # Return session id and graph config
-        yield session_id, graph_config
-
-        # Log successful completion
-        mlflow.set_tag("status", "completed")
+    yield from summit_session(config, scenario_id, session_id, phase="sim")
 
 
 def log_simulation_results(
