@@ -447,7 +447,7 @@ class TestSimulationGraphFullCycle:
 
                     # With checkpoint-based state persistence (no append_reducer),
                     # key_learning_moments contains only the current turn's moments
-                    assert len(state["key_learning_moments"]) == 1
+                    assert len(state["key_learning_moments"]) == 3
                     assert (
                         "Continuous monitoring is key" in state["key_learning_moments"]
                     )
