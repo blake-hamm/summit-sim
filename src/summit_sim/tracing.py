@@ -126,39 +126,6 @@ def summit_session(
         mlflow.set_tag("status", "completed")
 
 
-@contextmanager
-def simulation_session(
-    config: TeacherConfig,
-    scenario_id: str,
-    session_id: str | None = None,
-) -> Generator[tuple[str, dict[str, Any]], None, None]:
-    """Context manager for a simulation session with MLflow parent run.
-
-    Convenience wrapper around summit_session for backward compatibility.
-    Creates a parent MLflow run that encompasses all agent traces,
-    with session metadata and descriptive naming. Automatically handles
-    error tracking and logs final session metrics.
-
-    Args:
-        config: Teacher configuration for naming and metadata.
-        scenario_id: Unique scenario identifier for trace linking.
-        session_id: Optional session ID. If not provided, generates a UUID.
-
-    Yields:
-        Tuple of (session_id, graph_config) for use in LangGraph invocation.
-
-    Example:
-        >>> config = TeacherConfig(num_participants=3, activity_type="hiking")
-        >>> with simulation_session(
-        ...     config, scenario_id="scn-abc123"
-        ... ) as (session_id, graph_config):
-        ...     graph = create_simulation_graph()
-        ...     state = await graph.ainvoke(initial_state, graph_config)
-
-    """
-    yield from summit_session(config, scenario_id, session_id, phase="sim")
-
-
 def log_simulation_results(
     transcript: list[dict[str, Any]],
     is_complete: bool,
@@ -167,7 +134,7 @@ def log_simulation_results(
 ) -> None:
     """Log final simulation results to the current MLflow run.
 
-    Should be called within a simulation_session context.
+    Should be called within a summit_session context with phase="sim".
 
     Args:
         transcript: List of transcript entries from the simulation.
