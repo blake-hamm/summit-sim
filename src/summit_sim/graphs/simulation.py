@@ -16,6 +16,7 @@ from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import interrupt
 
+from summit_sim.agents.debrief import generate_debrief
 from summit_sim.agents.simulation import process_choice
 from summit_sim.graphs.state import SimulationState, TranscriptEntry
 
@@ -157,14 +158,28 @@ def update_state(state: SimulationState) -> dict:
     }
 
 
+async def generate_debrief_node(state: SimulationState) -> dict:
+    """Generate debrief report after simulation completes.
+
+    Calls the Debrief Agent to analyze the complete simulation transcript
+    and generate a structured performance report.
+    """
+    debrief_report = await generate_debrief(
+        transcript=state["transcript"],
+        scenario_draft=state["scenario_draft"],
+        scenario_id=state["scenario_id"],
+    )
+    return {"debrief_report": debrief_report}
+
+
 def check_completion(state: SimulationState) -> str:
     """Check if simulation should continue or end.
 
-    Routes the graph to either continue presenting turns or end
-    based on the is_complete flag.
+    Routes the graph to either continue presenting turns or generate
+    debrief based on the is_complete flag.
     """
     if state["is_complete"]:
-        return "__end__"
+        return "generate_debrief"
     return "present_turn"
 
 
@@ -178,6 +193,7 @@ def create_simulation_graph(
     workflow.add_node("present_turn", present_turn)
     workflow.add_node("process_turn", process_turn)
     workflow.add_node("update_state", update_state)
+    workflow.add_node("generate_debrief", generate_debrief_node)
 
     workflow.set_entry_point("initialize")
     workflow.add_edge("initialize", "present_turn")
@@ -188,10 +204,12 @@ def create_simulation_graph(
         "update_state",
         check_completion,
         {
-            "__end__": END,
+            "generate_debrief": "generate_debrief",
             "present_turn": "present_turn",
         },
     )
+
+    workflow.add_edge("generate_debrief", END)
 
     if checkpointer is None:
         checkpointer = InMemorySaver()

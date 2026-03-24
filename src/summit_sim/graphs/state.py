@@ -4,7 +4,7 @@ from typing import Annotated, Any
 
 from typing_extensions import TypedDict
 
-from summit_sim.schemas import ScenarioDraft
+from summit_sim.schemas import DebriefReport, ScenarioDraft
 
 
 def append_reducer(left: list, right: list) -> list:
@@ -45,3 +45,4 @@ class SimulationState(TypedDict):
     simulation_result: Any
     scenario_id: str
     class_id: str | None
+    debrief_report: DebriefReport | None
