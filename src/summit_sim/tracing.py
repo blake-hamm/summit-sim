@@ -50,8 +50,9 @@ def generate_session_name(config: HostConfig, phase: str = "sim") -> str:
         Descriptive session name including class_id for MLflow linking.
 
     """
+    class_id_part = config.class_id if config.class_id else "noclass"
     return (
-        f"{phase}-{config.class_id}-{config.activity_type}-"
+        f"{phase}-{class_id_part}-{config.activity_type}-"
         f"{config.num_participants}p-{config.difficulty}"
     )
 
@@ -59,6 +60,7 @@ def generate_session_name(config: HostConfig, phase: str = "sim") -> str:
 @contextmanager
 def simulation_session(
     config: HostConfig,
+    scenario_id: str,
     session_id: str | None = None,
 ) -> Generator[tuple[str, dict[str, Any]], None, None]:
     """Context manager for a simulation session with MLflow parent run.
@@ -69,6 +71,7 @@ def simulation_session(
 
     Args:
         config: Host configuration for naming and metadata.
+        scenario_id: Unique scenario identifier for trace linking.
         session_id: Optional session ID. If not provided, generates a UUID.
 
     Yields:
@@ -76,7 +79,9 @@ def simulation_session(
 
     Example:
         >>> config = HostConfig(num_participants=3, activity_type="hiking")
-        >>> with simulation_session(config) as (session_id, graph_config):
+        >>> with simulation_session(
+        ...     config, scenario_id="scn-abc123"
+        ... ) as (session_id, graph_config):
         ...     graph = create_simulation_graph()
         ...     state = await graph.ainvoke(initial_state, graph_config)
 
@@ -86,25 +91,27 @@ def simulation_session(
 
     with mlflow.start_run(run_name=session_name):
         # Log session-level parameters
-        mlflow.log_params(
-            {
-                "session_id": session_id,
-                "class_id": config.class_id,
-                "activity_type": config.activity_type,
-                "num_participants": config.num_participants,
-                "difficulty": config.difficulty,
-            }
-        )
+        params = {
+            "session_id": session_id,
+            "scenario_id": scenario_id,
+            "activity_type": config.activity_type,
+            "num_participants": config.num_participants,
+            "difficulty": config.difficulty,
+        }
+        if config.class_id:
+            params["class_id"] = config.class_id
+        mlflow.log_params(params)
 
         # Set tags for easy filtering
-        mlflow.set_tags(
-            {
-                "session_type": "simulation",
-                "class_id": config.class_id,
-                "activity_type": config.activity_type,
-                "difficulty": config.difficulty,
-            }
-        )
+        tags = {
+            "session_type": "simulation",
+            "scenario_id": scenario_id,
+            "activity_type": config.activity_type,
+            "difficulty": config.difficulty,
+        }
+        if config.class_id:
+            tags["class_id"] = config.class_id
+        mlflow.set_tags(tags)
 
         # Graph config with thread_id for trace grouping
         graph_config: dict[str, Any] = {"configurable": {"thread_id": session_id}}

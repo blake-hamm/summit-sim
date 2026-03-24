@@ -22,12 +22,13 @@ class TranscriptEntry(TypedDict):
     turn_narrative: str
     choice_id: str
     choice_description: str
+    was_correct: bool
     feedback: str
     learning_moments: list[str]
     next_turn_id: int | None
 
 
-class AppState(TypedDict):
+class SimulationState(TypedDict):
     """LangGraph state for simulation workflow.
 
     Maintains all state needed for the cyclic simulation graph,
@@ -42,4 +43,9 @@ class AppState(TypedDict):
     key_learning_moments: Annotated[list[str], append_reducer]
     last_selected_choice: Any
     simulation_result: Any
-    class_id: str
+    scenario_id: str
+    class_id: str | None
+
+
+# Backward compatibility alias (deprecated)
+AppState = SimulationState

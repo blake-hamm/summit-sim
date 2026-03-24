@@ -17,7 +17,7 @@ from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import interrupt
 
 from summit_sim.agents.simulation import process_choice
-from summit_sim.graphs.state import AppState, TranscriptEntry
+from summit_sim.graphs.state import SimulationState, TranscriptEntry
 
 if TYPE_CHECKING:
     from langgraph.checkpoint.base import BaseCheckpointSaver
@@ -25,7 +25,7 @@ if TYPE_CHECKING:
     from summit_sim.schemas import ChoiceOption
 
 
-def initialize_state(state: AppState) -> AppState:
+def initialize_state(state: SimulationState) -> SimulationState:
     """Initialize simulation state from scenario draft.
 
     Validates that the starting turn ID exists in the scenario.
@@ -40,7 +40,7 @@ def initialize_state(state: AppState) -> AppState:
     return state
 
 
-def present_turn(state: AppState) -> dict:
+def present_turn(state: SimulationState) -> dict:
     """Present current turn to student and wait for choice selection.
 
     Uses LangGraph's interrupt() for human-in-the-loop interaction.
@@ -93,7 +93,7 @@ def _find_choice_by_id(choices: list[ChoiceOption], choice_id: str) -> ChoiceOpt
     raise ValueError(msg)
 
 
-async def process_turn(state: AppState) -> dict:
+async def process_turn(state: SimulationState) -> dict:
     """Process student's choice and generate feedback.
 
     Calls the Simulation Feedback Agent to generate personalized
@@ -112,7 +112,7 @@ async def process_turn(state: AppState) -> dict:
     return {"simulation_result": result}
 
 
-def update_state(state: AppState) -> dict:
+def update_state(state: SimulationState) -> dict:
     """Update simulation state after processing choice.
 
     Appends transcript entry, updates learning moments, and advances
@@ -132,6 +132,7 @@ def update_state(state: AppState) -> dict:
         "turn_narrative": current_turn.narrative_text,
         "choice_id": selected_choice.choice_id,
         "choice_description": selected_choice.description,
+        "was_correct": selected_choice.is_correct,
         "feedback": result.feedback,
         "learning_moments": result.learning_moments,
         "next_turn_id": selected_choice.next_turn_id,
@@ -156,7 +157,7 @@ def update_state(state: AppState) -> dict:
     }
 
 
-def check_completion(state: AppState) -> str:
+def check_completion(state: SimulationState) -> str:
     """Check if simulation should continue or end.
 
     Routes the graph to either continue presenting turns or end
@@ -171,7 +172,7 @@ def create_simulation_graph(
     checkpointer: BaseCheckpointSaver | None = None,
 ) -> CompiledStateGraph:
     """Create and configure the simulation LangGraph."""
-    workflow = StateGraph(AppState)
+    workflow = StateGraph(SimulationState)
 
     workflow.add_node("initialize", initialize_state)
     workflow.add_node("present_turn", present_turn)

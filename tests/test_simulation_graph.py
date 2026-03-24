@@ -13,7 +13,6 @@ from summit_sim.graphs.simulation import (
     present_turn,
     update_state,
 )
-from summit_sim.graphs.state import AppState
 from summit_sim.schemas import (
     ChoiceOption,
     ScenarioDraft,
@@ -105,7 +104,26 @@ def initial_state(sample_scenario):
         "key_learning_moments": [],
         "last_selected_choice": None,
         "simulation_result": None,
+        "scenario_id": "test-scenario-123",
+        "class_id": None,
     }
+
+
+def create_test_state(sample_scenario, **overrides):
+    """Create a test state with required fields."""
+    base = {
+        "scenario_draft": sample_scenario,
+        "current_turn_id": sample_scenario.starting_turn_id,
+        "transcript": [],
+        "is_complete": False,
+        "key_learning_moments": [],
+        "last_selected_choice": None,
+        "simulation_result": None,
+        "scenario_id": "test-scenario-123",
+        "class_id": None,
+    }
+    base.update(overrides)
+    return base
 
 
 class TestInitializeState:
@@ -120,7 +138,7 @@ class TestInitializeState:
 
     def test_initialize_state_invalid_turn(self, sample_scenario):
         """Test initialization with invalid starting turn raises error."""
-        state: AppState = {
+        state = {
             "scenario_draft": sample_scenario,
             "current_turn_id": 999,
             "transcript": [],
@@ -128,6 +146,8 @@ class TestInitializeState:
             "key_learning_moments": [],
             "last_selected_choice": None,
             "simulation_result": None,
+            "scenario_id": "test-scenario-123",
+            "class_id": None,
         }
 
         with pytest.raises(ValueError, match="Starting turn 999 not found"):
@@ -175,7 +195,7 @@ class TestUpdateState:
             is_complete=False,
         )
 
-        state: AppState = {
+        state = {
             **initial_state,
             "last_selected_choice": selected_choice,
             "simulation_result": result,
@@ -209,7 +229,7 @@ class TestUpdateState:
             is_complete=False,
         )
 
-        state: AppState = {
+        state = {
             **initial_state,
             "last_selected_choice": selected_choice,
             "simulation_result": result,
@@ -237,7 +257,7 @@ class TestUpdateState:
             is_complete=True,
         )
 
-        state: AppState = {
+        state = {
             **initial_state,
             "last_selected_choice": selected_choice,
             "simulation_result": result,
@@ -250,7 +270,7 @@ class TestUpdateState:
 
     def test_update_state_returns_learning_moments(self, initial_state):
         """Test that update_state returns learning moments for reducer."""
-        state: AppState = {
+        state = {
             **initial_state,
             "key_learning_moments": ["Previous lesson"],
         }
@@ -284,7 +304,7 @@ class TestCheckCompletion:
 
     def test_check_completion_returns_end_when_complete(self, initial_state):
         """Test routing to END when complete."""
-        state: AppState = {**initial_state, "is_complete": True}
+        state = {**initial_state, "is_complete": True}
         result = check_completion(state)
         assert result == "__end__"
 
@@ -292,7 +312,7 @@ class TestCheckCompletion:
         self, initial_state
     ):
         """Test routing back to present_turn when not complete."""
-        state: AppState = {**initial_state, "is_complete": False}
+        state = {**initial_state, "is_complete": False}
         result = check_completion(state)
         assert result == "present_turn"
 
@@ -359,7 +379,7 @@ class TestSimulationGraphFullCycle:
                 ]
                 mock_interrupt.side_effect = interrupt_returns
 
-                initial_state: AppState = {
+                initial_state = {
                     "scenario_draft": sample_scenario,
                     "current_turn_id": 0,
                     "transcript": [],
@@ -367,6 +387,8 @@ class TestSimulationGraphFullCycle:
                     "key_learning_moments": [],
                     "last_selected_choice": None,
                     "simulation_result": None,
+                    "scenario_id": "test-scenario-123",
+                    "class_id": None,
                 }
 
                 graph = create_simulation_graph()
