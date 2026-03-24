@@ -13,9 +13,9 @@ from summit_sim.graphs.simulation import (
     present_turn,
     update_state,
 )
-from summit_sim.graphs.state import AppState
 from summit_sim.schemas import (
     ChoiceOption,
+    DebriefReport,
     ScenarioDraft,
     ScenarioTurn,
     SimulationResult,
@@ -105,7 +105,28 @@ def initial_state(sample_scenario):
         "key_learning_moments": [],
         "last_selected_choice": None,
         "simulation_result": None,
+        "scenario_id": "test-scenario-123",
+        "class_id": None,
+        "debrief_report": None,
     }
+
+
+def create_test_state(sample_scenario, **overrides):
+    """Create a test state with required fields."""
+    base = {
+        "scenario_draft": sample_scenario,
+        "current_turn_id": sample_scenario.starting_turn_id,
+        "transcript": [],
+        "is_complete": False,
+        "key_learning_moments": [],
+        "last_selected_choice": None,
+        "simulation_result": None,
+        "scenario_id": "test-scenario-123",
+        "class_id": None,
+        "debrief_report": None,
+    }
+    base.update(overrides)
+    return base
 
 
 class TestInitializeState:
@@ -120,7 +141,7 @@ class TestInitializeState:
 
     def test_initialize_state_invalid_turn(self, sample_scenario):
         """Test initialization with invalid starting turn raises error."""
-        state: AppState = {
+        state = {
             "scenario_draft": sample_scenario,
             "current_turn_id": 999,
             "transcript": [],
@@ -128,6 +149,9 @@ class TestInitializeState:
             "key_learning_moments": [],
             "last_selected_choice": None,
             "simulation_result": None,
+            "scenario_id": "test-scenario-123",
+            "class_id": None,
+            "debrief_report": None,
         }
 
         with pytest.raises(ValueError, match="Starting turn 999 not found"):
@@ -175,7 +199,7 @@ class TestUpdateState:
             is_complete=False,
         )
 
-        state: AppState = {
+        state = {
             **initial_state,
             "last_selected_choice": selected_choice,
             "simulation_result": result,
@@ -209,7 +233,7 @@ class TestUpdateState:
             is_complete=False,
         )
 
-        state: AppState = {
+        state = {
             **initial_state,
             "last_selected_choice": selected_choice,
             "simulation_result": result,
@@ -237,7 +261,7 @@ class TestUpdateState:
             is_complete=True,
         )
 
-        state: AppState = {
+        state = {
             **initial_state,
             "last_selected_choice": selected_choice,
             "simulation_result": result,
@@ -249,12 +273,7 @@ class TestUpdateState:
         assert updated["current_turn_id"] == 0
 
     def test_update_state_returns_learning_moments(self, initial_state):
-        """Test that update_state returns learning moments for reducer."""
-        state: AppState = {
-            **initial_state,
-            "key_learning_moments": ["Previous lesson"],
-        }
-
+        """Test that update_state returns learning moments from result."""
         selected_choice = ChoiceOption(
             choice_id="test",
             description="Test",
@@ -270,29 +289,35 @@ class TestUpdateState:
             is_complete=False,
         )
 
-        state["last_selected_choice"] = selected_choice
-        state["simulation_result"] = result
+        state = {
+            **initial_state,
+            "last_selected_choice": selected_choice,
+            "simulation_result": result,
+        }
 
         updated = update_state(state)
 
-        # update_state returns just the new values - reducer handles concatenation
+        # update_state returns just the learning moments from the result
+        # LangGraph checkpointing handles state persistence
         assert updated["key_learning_moments"] == ["New lesson"]
 
 
 class TestCheckCompletion:
     """Tests for check_completion routing."""
 
-    def test_check_completion_returns_end_when_complete(self, initial_state):
-        """Test routing to END when complete."""
-        state: AppState = {**initial_state, "is_complete": True}
+    def test_check_completion_returns_generate_debrief_when_complete(
+        self, initial_state
+    ):
+        """Test routing to generate_debrief when complete."""
+        state = {**initial_state, "is_complete": True}
         result = check_completion(state)
-        assert result == "__end__"
+        assert result == "generate_debrief"
 
     def test_check_completion_returns_present_turn_when_not_complete(
         self, initial_state
     ):
         """Test routing back to present_turn when not complete."""
-        state: AppState = {**initial_state, "is_complete": False}
+        state = {**initial_state, "is_complete": False}
         result = check_completion(state)
         assert result == "present_turn"
 
@@ -346,60 +371,88 @@ class TestSimulationGraphFullCycle:
                 is_complete=True,
             )
 
+        mock_debrief_report = DebriefReport(
+            summary="Test summary",
+            key_mistakes=[],
+            strong_actions=["Good job"],
+            best_next_actions=["Practice more"],
+            teaching_points=["Key concepts"],
+            completion_status="pass",
+            final_score=100.0,
+        )
+
         with patch(
             "summit_sim.graphs.simulation.process_choice"
         ) as mock_process_choice:
             mock_process_choice.side_effect = mock_process_impl
 
-            with patch("summit_sim.graphs.simulation.interrupt") as mock_interrupt:
-                interrupt_returns = [
-                    {"choice_id": "check_airway"},
-                    {"choice_id": "call_help"},
-                    {"choice_id": "monitor"},
-                ]
-                mock_interrupt.side_effect = interrupt_returns
+            with patch(
+                "summit_sim.graphs.simulation.generate_debrief"
+            ) as mock_generate_debrief:
+                mock_generate_debrief.return_value = mock_debrief_report
 
-                initial_state: AppState = {
-                    "scenario_draft": sample_scenario,
-                    "current_turn_id": 0,
-                    "transcript": [],
-                    "is_complete": False,
-                    "key_learning_moments": [],
-                    "last_selected_choice": None,
-                    "simulation_result": None,
-                }
+                with patch("summit_sim.graphs.simulation.interrupt") as mock_interrupt:
+                    interrupt_returns = [
+                        {"choice_id": "check_airway"},
+                        {"choice_id": "call_help"},
+                        {"choice_id": "monitor"},
+                    ]
+                    mock_interrupt.side_effect = interrupt_returns
 
-                graph = create_simulation_graph()
-                config: Any = {"configurable": {"thread_id": "test-thread"}}
+                    initial_state = {
+                        "scenario_draft": sample_scenario,
+                        "current_turn_id": 0,
+                        "transcript": [],
+                        "is_complete": False,
+                        "key_learning_moments": [],
+                        "last_selected_choice": None,
+                        "simulation_result": None,
+                        "scenario_id": "test-scenario-123",
+                        "class_id": None,
+                        "debrief_report": None,
+                    }
 
-                result = await graph.ainvoke(initial_state, config)
-                state = result
+                    graph = create_simulation_graph()
+                    config: Any = {"configurable": {"thread_id": "test-thread"}}
 
-                for _ in range(2):
-                    if state["is_complete"]:
-                        break
-                    result = await graph.ainvoke(state, config)
+                    result = await graph.ainvoke(initial_state, config)
                     state = result
 
-        assert len(state["transcript"]) == 3
-        assert state["is_complete"] is True
+                    for _ in range(2):
+                        if state["is_complete"]:
+                            break
+                        result = await graph.ainvoke(state, config)
+                        state = result
 
-        assert state["transcript"][0]["turn_id"] == 0
-        assert state["transcript"][0]["choice_id"] == "check_airway"
-        assert state["transcript"][0]["feedback"] == "Good job checking the airway!"
+                    assert len(state["transcript"]) == 3
+                    assert state["is_complete"] is True
 
-        assert state["transcript"][1]["turn_id"] == 1
-        assert state["transcript"][1]["choice_id"] == "call_help"
-        assert state["transcript"][1]["feedback"] == "Calling for help was correct!"
+                    assert state["transcript"][0]["turn_id"] == 0
+                    assert state["transcript"][0]["choice_id"] == "check_airway"
+                    assert (
+                        state["transcript"][0]["feedback"]
+                        == "Good job checking the airway!"
+                    )
 
-        assert state["transcript"][2]["turn_id"] == 2
-        assert state["transcript"][2]["choice_id"] == "monitor"
-        assert state["transcript"][2]["feedback"] == "Excellent monitoring!"
+                    assert state["transcript"][1]["turn_id"] == 1
+                    assert state["transcript"][1]["choice_id"] == "call_help"
+                    assert (
+                        state["transcript"][1]["feedback"]
+                        == "Calling for help was correct!"
+                    )
 
-        assert len(state["key_learning_moments"]) == 3
-        assert "Always check ABCs first" in state["key_learning_moments"]
-        assert "Don't hesitate to call for help" in state["key_learning_moments"]
-        assert "Continuous monitoring is key" in state["key_learning_moments"]
+                    assert state["transcript"][2]["turn_id"] == 2
+                    assert state["transcript"][2]["choice_id"] == "monitor"
+                    assert state["transcript"][2]["feedback"] == "Excellent monitoring!"
+
+                    # With checkpoint-based state persistence (no append_reducer),
+                    # key_learning_moments contains only the current turn's moments
+                    assert len(state["key_learning_moments"]) == 3
+                    assert (
+                        "Continuous monitoring is key" in state["key_learning_moments"]
+                    )
+
+                    assert state["debrief_report"] is not None
 
     def test_graph_creation(self):
         """Test that graph can be created successfully."""

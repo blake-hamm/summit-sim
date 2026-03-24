@@ -11,13 +11,15 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import mlflow
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import interrupt
 
+from summit_sim.agents.debrief import generate_debrief
 from summit_sim.agents.simulation import process_choice
-from summit_sim.graphs.state import AppState, TranscriptEntry
+from summit_sim.graphs.state import SimulationState, TranscriptEntry
 
 if TYPE_CHECKING:
     from langgraph.checkpoint.base import BaseCheckpointSaver
@@ -25,7 +27,7 @@ if TYPE_CHECKING:
     from summit_sim.schemas import ChoiceOption
 
 
-def initialize_state(state: AppState) -> AppState:
+def initialize_state(state: SimulationState) -> SimulationState:
     """Initialize simulation state from scenario draft.
 
     Validates that the starting turn ID exists in the scenario.
@@ -40,7 +42,7 @@ def initialize_state(state: AppState) -> AppState:
     return state
 
 
-def present_turn(state: AppState) -> dict:
+def present_turn(state: SimulationState) -> dict:
     """Present current turn to student and wait for choice selection.
 
     Uses LangGraph's interrupt() for human-in-the-loop interaction.
@@ -93,7 +95,7 @@ def _find_choice_by_id(choices: list[ChoiceOption], choice_id: str) -> ChoiceOpt
     raise ValueError(msg)
 
 
-async def process_turn(state: AppState) -> dict:
+async def process_turn(state: SimulationState) -> dict:
     """Process student's choice and generate feedback.
 
     Calls the Simulation Feedback Agent to generate personalized
@@ -107,12 +109,20 @@ async def process_turn(state: AppState) -> dict:
         msg = f"Turn {state['current_turn_id']} not found in scenario"
         raise ValueError(msg)
 
+    # Link trace to session metadata
+    mlflow.update_current_trace(
+        metadata={
+            "turn_id": str(current_turn.turn_id),
+            "choice_id": str(selected_choice.choice_id),
+        }
+    )
+
     result = await process_choice(scenario, current_turn, selected_choice)
 
     return {"simulation_result": result}
 
 
-def update_state(state: AppState) -> dict:
+def update_state(state: SimulationState) -> dict:
     """Update simulation state after processing choice.
 
     Appends transcript entry, updates learning moments, and advances
@@ -132,6 +142,7 @@ def update_state(state: AppState) -> dict:
         "turn_narrative": current_turn.narrative_text,
         "choice_id": selected_choice.choice_id,
         "choice_description": selected_choice.description,
+        "was_correct": selected_choice.is_correct,
         "feedback": result.feedback,
         "learning_moments": result.learning_moments,
         "next_turn_id": selected_choice.next_turn_id,
@@ -156,14 +167,35 @@ def update_state(state: AppState) -> dict:
     }
 
 
-def check_completion(state: AppState) -> str:
+async def generate_debrief_node(state: SimulationState) -> dict:
+    """Generate debrief report after simulation completes.
+
+    Calls the Debrief Agent to analyze the complete simulation transcript
+    and generate a structured performance report.
+    """
+    # Link trace to session metadata
+    mlflow.update_current_trace(
+        metadata={
+            "scenario_id": state["scenario_id"],
+        }
+    )
+
+    debrief_report = await generate_debrief(
+        transcript=state["transcript"],
+        scenario_draft=state["scenario_draft"],
+        scenario_id=state["scenario_id"],
+    )
+    return {"debrief_report": debrief_report}
+
+
+def check_completion(state: SimulationState) -> str:
     """Check if simulation should continue or end.
 
-    Routes the graph to either continue presenting turns or end
-    based on the is_complete flag.
+    Routes the graph to either continue presenting turns or generate
+    debrief based on the is_complete flag.
     """
     if state["is_complete"]:
-        return "__end__"
+        return "generate_debrief"
     return "present_turn"
 
 
@@ -171,12 +203,13 @@ def create_simulation_graph(
     checkpointer: BaseCheckpointSaver | None = None,
 ) -> CompiledStateGraph:
     """Create and configure the simulation LangGraph."""
-    workflow = StateGraph(AppState)
+    workflow = StateGraph(SimulationState)
 
     workflow.add_node("initialize", initialize_state)
     workflow.add_node("present_turn", present_turn)
     workflow.add_node("process_turn", process_turn)
     workflow.add_node("update_state", update_state)
+    workflow.add_node("generate_debrief", generate_debrief_node)
 
     workflow.set_entry_point("initialize")
     workflow.add_edge("initialize", "present_turn")
@@ -187,10 +220,12 @@ def create_simulation_graph(
         "update_state",
         check_completion,
         {
-            "__end__": END,
+            "generate_debrief": "generate_debrief",
             "present_turn": "present_turn",
         },
     )
+
+    workflow.add_edge("generate_debrief", END)
 
     if checkpointer is None:
         checkpointer = InMemorySaver()

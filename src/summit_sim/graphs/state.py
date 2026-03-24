@@ -4,7 +4,7 @@ from typing import Annotated, Any
 
 from typing_extensions import TypedDict
 
-from summit_sim.schemas import ScenarioDraft
+from summit_sim.schemas import ChoiceOption, DebriefReport, ScenarioDraft
 
 
 def append_reducer(left: list, right: list) -> list:
@@ -22,12 +22,13 @@ class TranscriptEntry(TypedDict):
     turn_narrative: str
     choice_id: str
     choice_description: str
+    was_correct: bool
     feedback: str
     learning_moments: list[str]
     next_turn_id: int | None
 
 
-class AppState(TypedDict):
+class SimulationState(TypedDict):
     """LangGraph state for simulation workflow.
 
     Maintains all state needed for the cyclic simulation graph,
@@ -40,6 +41,8 @@ class AppState(TypedDict):
     transcript: Annotated[list[TranscriptEntry], append_reducer]
     is_complete: bool
     key_learning_moments: Annotated[list[str], append_reducer]
-    last_selected_choice: Any
+    last_selected_choice: ChoiceOption | None
     simulation_result: Any
-    class_id: str
+    scenario_id: str
+    class_id: str | None
+    debrief_report: DebriefReport | None

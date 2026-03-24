@@ -6,6 +6,16 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 
+def generate_scenario_id() -> str:
+    """Generate unique scenario identifier.
+
+    Returns:
+        Scenario ID in format 'scn-{8-char hex}' (e.g., 'scn-a3f8d2e9').
+
+    """
+    return f"scn-{uuid.uuid4().hex[:8]}"
+
+
 def generate_class_id() -> str:
     """Generate a short, human-readable class ID.
 
@@ -32,9 +42,9 @@ class HostConfig(BaseModel):
     difficulty: Literal["low", "med", "high"] = Field(
         ..., description="Scenario difficulty level"
     )
-    class_id: str = Field(
-        default_factory=generate_class_id,
-        description="Links generation and simulation traces in MLflow",
+    class_id: str | None = Field(
+        default=None,
+        description="Optional class grouping ID (e.g., 'class-2024-wfa')",
     )
 
 
@@ -136,4 +146,35 @@ class SimulationResult(BaseModel):
     )
     is_complete: bool = Field(
         ..., description="Whether the scenario has reached a conclusion"
+    )
+
+
+class DebriefReport(BaseModel):
+    """Structured debrief report analyzing student simulation performance.
+
+    Generated after simulation completion to provide comprehensive feedback
+    on student decision-making, learning opportunities, and performance metrics.
+    """
+
+    summary: str = Field(..., description="Executive summary of the simulation run")
+    key_mistakes: list[str] = Field(
+        ..., description="Critical errors made during the simulation"
+    )
+    strong_actions: list[str] = Field(
+        ..., description="Decisions the student handled well"
+    )
+    best_next_actions: list[str] = Field(
+        ..., description="Recommendations for future scenarios"
+    )
+    teaching_points: list[str] = Field(
+        ..., description="Key learning concepts to reinforce"
+    )
+    completion_status: Literal["pass", "fail"] = Field(
+        ..., description="Overall pass/fail based on performance"
+    )
+    final_score: float = Field(
+        ...,
+        ge=0,
+        le=100,
+        description="Percentage score (correct choices / total turns * 100)",
     )
