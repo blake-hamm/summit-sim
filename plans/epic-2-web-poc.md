@@ -31,7 +31,7 @@ Clicks "Approve Scenario" (single button, no decline in happy path)
     ↓
 [LangGraph: END] → Returns approved scenario
     ↓
-System displays shareable class_id link + QR code
+System displays shareable link with scenario_id and class_id
     ↓
 Teacher can view student debriefs in dashboard
 ```
@@ -87,8 +87,8 @@ Views debrief: score, pass/fail, key mistakes, teaching points
   - Turn number and narrative snippet
   - Choice count indicator
 - Single "Approve & Generate Link" button (green, prominent)
-- Class_id displayed prominently after approval
-- QR code for easy mobile sharing
+- scenario_id and class_id displayed prominently after approval
+- Shareable URL format: /scenario/{scenario_id}?class_id={class_id}
 
 **3. Teacher Dashboard** (post-approval)
 - List of scenarios created by this session
@@ -196,7 +196,7 @@ Views debrief: score, pass/fail, key mistakes, teaching points
 
 **2. Unified State Management**
 - `TeacherReviewState` (TypedDict):
-  - `host_config: HostConfig`
+  - `teacher_config: TeacherConfig`
   - `scenario_draft: ScenarioDraft | None`
   - `scenario_id: str`
   - `class_id: str`
@@ -205,16 +205,28 @@ Views debrief: score, pass/fail, key mistakes, teaching points
   - `approval_status: str | None`
 
 **3. Chainlit Integration Pattern**
+- Single entry point at `/` with mode selection (Teacher/Student checkbox)
 - Graph state stored in `cl.user_session` between interrupts
 - Each interrupt displays appropriate UI elements
 - Button callbacks resume graph with `Command(resume=...)`
+- URL structure:
+  - Teacher dashboard: `/`
+  - Scenario review: `/review/{scenario_id}`
+  - Student simulation: `/scenario/{scenario_id}?class_id={class_id}`
 - No persistence across browser sessions (for POC)
 
 **4. MLflow Tracing**
 - Single parent run per scenario
 - Child spans for each generation/simulation step
 - Tags link teacher generation to student runs via class_id
-- Approved scenarios tagged `golden_candidate: true`
+- Approved scenarios tagged `sme_approved: true` in 2.1
+- `golden_candidate` and `needs_review` tags added in 2.4
+
+**5. Storage Strategy**
+- LangGraph `InMemorySaver` for POC session state (replaced with DragonflyDB in 2.5)
+- MLflow for trace logging and metadata storage
+- No additional persistence layer for 2.1-2.4
+- Scenarios retrieved via MLflow API query by class_id/scenario_id
 
 ---
 
@@ -262,6 +274,8 @@ Views debrief: score, pass/fail, key mistakes, teaching points
 **TDD**:
 - Test: Config → generate → interrupt → approve → END
 - Verify: MLflow shows generation trace with approval tag
+
+**Implementation Plan**: See `plans/story-2-1-teacher-review-happy-path.md` for detailed implementation guide.
 
 ---
 
@@ -363,18 +377,26 @@ Views debrief: score, pass/fail, key mistakes, teaching points
 
 **MLflow Schema**:
 ```python
-# Teacher Generation Run
+# Teacher Generation Run (Story 2.1)
 tags = {
     "class_id": "abc123",
-    "sme_approved": "true",  # or "false"
-    "golden_candidate": "true",
-    "retry_count": "0",
+    "scenario_id": "scn-a3f8d2e9",
+    "sme_approved": "true",  # "true" in 2.1 happy path
 }
 params = {
     "activity_type": "hiking",
     "difficulty": "med",
     "num_participants": "4",
-    "teacher_feedback": "",  # empty if approved first try
+}
+
+# Teacher Generation Run (Story 2.4 - adds:)
+tags = {
+    "golden_candidate": "true",  # Approved scenarios
+    "needs_review": "true",      # Declined scenarios
+    "retry_count": "0",
+}
+params = {
+    "teacher_feedback": "",  # Populated in 2.3+
 }
 
 # Student Simulation Run
@@ -460,11 +482,13 @@ metrics = {
 - [ ] Tests cover happy paths (≥80% coverage)
 
 ### Story 2.1 Complete When:
-- [ ] TeacherReviewState defined
+- [ ] TeacherReviewState defined with full schema
 - [ ] Teacher graph runs: initialize → generate → interrupt → approve → END
+- [ ] Notebook expanded with teacher flow demonstration
 - [ ] Chainlit renders config form and review screen
-- [ ] Class_id generated and displayed
-- [ ] MLflow logs generation with approval tag
+- [ ] scenario_id and class_id generated and displayed
+- [ ] Unique URL format: /scenario/{scenario_id}?class_id={class_id}
+- [ ] MLflow logs generation with sme_approved tag
 
 ### Story 2.2 Complete When:
 - [ ] Student joins with class_id
@@ -496,7 +520,8 @@ tests/
   test_app.py              # Integration tests
 
 plans/
-  epic-2-web-poc.md        # This document
+  epic-2-web-poc.md                         # This document
+  story-2-1-teacher-review-happy-path.md    # Detailed implementation guide
 ```
 
 ### Dependencies

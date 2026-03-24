@@ -26,8 +26,8 @@ def generate_class_id() -> str:
     return uuid.uuid4().hex[:6]
 
 
-class HostConfig(BaseModel):
-    """Minimal configuration provided by the host to generate a scenario.
+class TeacherConfig(BaseModel):
+    """Minimal configuration provided by the teacher to generate a scenario.
 
     This is the starting point - the AI expands these 3 parameters
     into a full wilderness rescue scenario with multiple turns.
@@ -98,7 +98,7 @@ class ScenarioTurn(BaseModel):
 class ScenarioDraft(BaseModel):
     """Complete AI-generated wilderness rescue scenario.
 
-    Generated from HostConfig and contains all turns pre-written.
+    Generated from TeacherConfig and contains all turns pre-written.
     The scenario follows a branching path based on student choices,
     but all content is generated upfront.
     """

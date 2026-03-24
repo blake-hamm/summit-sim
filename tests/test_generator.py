@@ -7,7 +7,7 @@ import pytest
 
 from summit_sim.agents import config as agent_config
 from summit_sim.agents.generator import generate_scenario
-from summit_sim.schemas import ChoiceOption, HostConfig, ScenarioDraft, ScenarioTurn
+from summit_sim.schemas import ChoiceOption, ScenarioDraft, ScenarioTurn, TeacherConfig
 
 
 class TestGeneratorAgent:
@@ -28,8 +28,8 @@ class TestGeneratorAgent:
 
     @pytest.mark.asyncio
     async def test_generate_scenario(self):
-        """Test scenario generation from host config."""
-        host_config = HostConfig(
+        """Test scenario generation from teacher config."""
+        teacher_config = TeacherConfig(
             num_participants=4, activity_type="hiking", difficulty="med"
         )
 
@@ -68,7 +68,7 @@ class TestGeneratorAgent:
             mock_agent = AsyncMock()
             mock_agent.run.return_value = mock_result
             mock_agent_class.return_value = mock_agent
-            result = await generate_scenario(host_config)
+            result = await generate_scenario(teacher_config)
 
         assert isinstance(result, ScenarioDraft)
         assert result.title == "Hiking Emergency"
@@ -80,7 +80,7 @@ class TestGeneratorAgent:
         self, activity: Literal["canyoneering", "skiing", "hiking"]
     ):
         """Test scenario generation for different activity types."""
-        host_config = HostConfig(
+        teacher_config = TeacherConfig(
             num_participants=3, activity_type=activity, difficulty="low"
         )
 
@@ -119,7 +119,7 @@ class TestGeneratorAgent:
             mock_agent = AsyncMock()
             mock_agent.run.return_value = mock_result
             mock_agent_class.return_value = mock_agent
-            result = await generate_scenario(host_config)
+            result = await generate_scenario(teacher_config)
 
         assert isinstance(result, ScenarioDraft)
         assert activity in result.title.lower()
@@ -130,7 +130,7 @@ class TestGeneratorAgent:
         self, difficulty: Literal["low", "med", "high"]
     ):
         """Test scenario generation for different difficulty levels."""
-        host_config = HostConfig(
+        teacher_config = TeacherConfig(
             num_participants=5, activity_type="hiking", difficulty=difficulty
         )
 
@@ -169,7 +169,7 @@ class TestGeneratorAgent:
             mock_agent = AsyncMock()
             mock_agent.run.return_value = mock_result
             mock_agent_class.return_value = mock_agent
-            result = await generate_scenario(host_config)
+            result = await generate_scenario(teacher_config)
 
         assert isinstance(result, ScenarioDraft)
         assert difficulty in result.title.lower()

@@ -136,7 +136,7 @@ Example fields:
 ```python
 class AppState:
     class_id                         # Shareable link code (e.g., "abc123")
-    host_config                      # Minimal scenario parameters (3 fields)
+    teacher_config                   # Minimal scenario parameters (3 fields)
     scenario_draft                   # Complete generated scenario
     validated_scenario
     host_review_status               # "pending" | "accepted" | "declined"
@@ -164,18 +164,18 @@ class AppState:
 ### High-level pseudocode
 
 ```python
-on_host_start():
-    config = get_host_config()                          # Chainlit - 3 fields
-    state.host_config = config
+on_teacher_start():
+    config = get_teacher_config()                       # Chainlit - 3 fields
+    state.teacher_config = config
     state.class_id = generate_class_id()                # Short shareable link
 
     state = run_generation_flow(state)                 # LangGraph
     
-    # Host async review
-    host_decision = await_host_review(state)           # Chainlit
-    if host_decision == "declined":
+    # Teacher async review
+    teacher_decision = await_teacher_review(state)     # Chainlit
+    if teacher_decision == "declined":
         state = regenerate_scenario(state)             # Loop back
-        host_decision = await_host_review(state)
+        teacher_decision = await_teacher_review(state)
     
     state.scenario_status = "active"
     show_shared_link(state.class_id)                   # Chainlit
@@ -202,7 +202,7 @@ on_scenario_complete():
 
 ```python
 run_generation_flow(state):
-    state.scenario_draft = generate_complete_scenario(state.host_config)
+    state.scenario_draft = generate_complete_scenario(state.teacher_config)
     # Scenario now contains all turns with multiple choice options
 
     while state.retry_count < MAX_RETRIES:
@@ -210,7 +210,7 @@ run_generation_flow(state):
 
         if results.pass_all:
             state.validated_scenario = state.scenario_draft
-            state.host_review_status = "pending"
+            state.teacher_review_status = "pending"
             return state
 
         state.scenario_draft = refine_scenario(
@@ -258,9 +258,9 @@ run_simulation_turn(state):
 
 Define clear typed contracts between components.
 
-### Host Config (Input)
+### Teacher Config (Input)
 ```python
-HostConfig:
+TeacherConfig:
     num_participants   # int (1-20)
     activity_type      # "canyoneering" | "skiing" | "hiking"
     difficulty         # "low" | "med" | "high"

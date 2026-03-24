@@ -17,7 +17,7 @@ from summit_sim.settings import settings
 if TYPE_CHECKING:
     from collections.abc import Generator
 
-    from summit_sim.schemas import DebriefReport, HostConfig
+    from summit_sim.schemas import DebriefReport, TeacherConfig
 
 
 def enable_tracing(run_tracer_inline: bool = True) -> None:
@@ -38,11 +38,11 @@ def enable_tracing(run_tracer_inline: bool = True) -> None:
     mlflow.langchain.autolog(run_tracer_inline=run_tracer_inline)
 
 
-def generate_session_name(config: HostConfig, phase: str = "sim") -> str:
+def generate_session_name(config: TeacherConfig, phase: str = "sim") -> str:
     """Generate descriptive session name from config.
 
     Args:
-        config: Host configuration containing activity type,
+        config: Teacher configuration containing activity type,
             participant count, difficulty, and class_id.
         phase: Phase identifier ("gen" for generation, "sim" for simulation).
 
@@ -59,7 +59,7 @@ def generate_session_name(config: HostConfig, phase: str = "sim") -> str:
 
 @contextmanager
 def simulation_session(
-    config: HostConfig,
+    config: TeacherConfig,
     scenario_id: str,
     session_id: str | None = None,
 ) -> Generator[tuple[str, dict[str, Any]], None, None]:
@@ -70,7 +70,7 @@ def simulation_session(
     error tracking and logs final session metrics.
 
     Args:
-        config: Host configuration for naming and metadata.
+        config: Teacher configuration for naming and metadata.
         scenario_id: Unique scenario identifier for trace linking.
         session_id: Optional session ID. If not provided, generates a UUID.
 
@@ -78,7 +78,7 @@ def simulation_session(
         Tuple of (session_id, graph_config) for use in LangGraph invocation.
 
     Example:
-        >>> config = HostConfig(num_participants=3, activity_type="hiking")
+        >>> config = TeacherConfig(num_participants=3, activity_type="hiking")
         >>> with simulation_session(
         ...     config, scenario_id="scn-abc123"
         ... ) as (session_id, graph_config):

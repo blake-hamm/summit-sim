@@ -6,12 +6,12 @@ import mlflow
 from mlflow.entities import SpanType
 
 from summit_sim.agents.config import get_agent
-from summit_sim.schemas import HostConfig, ScenarioDraft
+from summit_sim.schemas import ScenarioDraft, TeacherConfig
 
 GENERATOR_SYSTEM_PROMPT = """You are an expert wilderness rescue scenario designer.
 
 Your task is to create a realistic, medically accurate wilderness rescue scenario
-based on minimal host inputs. You must generate a complete scenario with ALL
+based on minimal teacher inputs. You must generate a complete scenario with ALL
 turns pre-written.
 
 Guidelines for scenario generation:
@@ -64,11 +64,11 @@ The scenario should be challenging but educational for wilderness first responde
 
 
 @mlflow.trace(span_type=SpanType.AGENT)
-async def generate_scenario(host_config: HostConfig) -> ScenarioDraft:
-    """Generate a complete scenario from minimal host configuration.
+async def generate_scenario(teacher_config: TeacherConfig) -> ScenarioDraft:
+    """Generate a complete scenario from minimal teacher configuration.
 
     Args:
-        host_config: Minimal scenario parameters from the host
+        teacher_config: Minimal scenario parameters from the teacher
 
     Returns:
         Complete ScenarioDraft with all turns pre-generated
@@ -82,9 +82,9 @@ async def generate_scenario(host_config: HostConfig) -> ScenarioDraft:
     )
 
     prompt = GENERATOR_USER_PROMPT.format(
-        num_participants=host_config.num_participants,
-        activity_type=host_config.activity_type,
-        difficulty=host_config.difficulty,
+        num_participants=teacher_config.num_participants,
+        activity_type=teacher_config.activity_type,
+        difficulty=teacher_config.difficulty,
     )
 
     result = await agent.run(prompt)
