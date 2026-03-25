@@ -19,7 +19,7 @@ from summit_sim.graphs.teacher_review import create_teacher_review_graph
 from summit_sim.schemas import TeacherConfig
 from summit_sim.tracing import enable_tracing
 
-# Initialize MLflow tracing before any autologging occurs
+# Initialize MLflow tracing before any agent usage
 enable_tracing()
 
 if TYPE_CHECKING:

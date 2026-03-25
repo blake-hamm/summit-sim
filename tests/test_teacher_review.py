@@ -177,6 +177,33 @@ class TestTeacherReviewGraphFullCycle:
         """Clear the agent cache before each test."""
         agent_config._agent_container.clear()
 
+    @pytest.fixture(autouse=True)
+    def mock_prompts(self):
+        """Mock MLflow prompt loading."""
+
+        class MockPrompt:
+            def __init__(self, template):
+                self.template = template
+
+            def format(self, **kwargs):
+                return self.template.format(**kwargs)
+
+        user_prompt = (
+            "Test user prompt with {num_participants} {activity_type} {difficulty}"
+        )
+        mock_prompt_obj = MockPrompt(user_prompt)
+
+        with (
+            patch("summit_sim.agents.config.mlflow.genai.load_prompt") as mock_load,
+            patch("summit_sim.agents.config.mlflow.genai.register_prompt"),
+            patch(
+                "summit_sim.agents.generator.mlflow.genai.load_prompt"
+            ) as mock_load_gen,
+        ):
+            mock_load.return_value = MockPrompt("Test system prompt")
+            mock_load_gen.return_value = mock_prompt_obj
+            yield
+
     @pytest.mark.asyncio
     async def test_full_happy_path(self, sample_teacher_config, sample_scenario):
         """Test complete teacher review happy path with mocked generator."""

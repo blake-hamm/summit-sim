@@ -30,6 +30,35 @@ class TestDebriefAgent:
         """Clear the agent cache before each test."""
         agent_config._agent_container.clear()
 
+    @pytest.fixture(autouse=True)
+    def mock_prompts(self):
+        """Mock MLflow prompt loading."""
+        user_prompt = (
+            "Test debrief prompt with {scenario_context} {scenario_id} "
+            "{total_turns} {transcript_summary} {correct_count} "
+            "{incorrect_count} {score}"
+        )
+
+        class MockPrompt:
+            def __init__(self, template):
+                self.template = template
+
+            def format(self, **kwargs):
+                return self.template.format(**kwargs)
+
+        mock_prompt_obj = MockPrompt(user_prompt)
+
+        with (
+            patch("summit_sim.agents.config.mlflow.genai.load_prompt") as mock_load,
+            patch("summit_sim.agents.config.mlflow.genai.register_prompt"),
+            patch(
+                "summit_sim.agents.debrief.mlflow.genai.load_prompt"
+            ) as mock_load_deb,
+        ):
+            mock_load.return_value = MockPrompt("Test system prompt")
+            mock_load_deb.return_value = mock_prompt_obj
+            yield
+
     @pytest.fixture
     def sample_scenario(self):
         """Create a sample scenario for testing."""
