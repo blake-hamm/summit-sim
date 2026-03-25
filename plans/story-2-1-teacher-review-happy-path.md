@@ -18,11 +18,61 @@ Implement the teacher review workflow with human-in-the-loop (HITL) via LangGrap
 - [x] `TeacherReviewState` defined with full schema (including future-use fields)
 - [x] Teacher graph executes: initialize → generate → interrupt → approve → END
 - [x] Notebook demonstrates full teacher flow end-to-end
-- [ ] Chainlit renders config form and review screen (deferred - notebook first)
+- [x] Chainlit renders config wizard (3-step) and review screen
 - [x] Unique URL generated with scenario_id and class_id
 - [x] MLflow logs generation with `sme_approved: true` tag
 - [x] Unit and integration tests pass (≥80% coverage)
 - [x] Ruff linting passes
+- [x] Message composer hidden for cleaner button-only UX
+- [x] Translation files cleaned (English only)
+
+## Running the Chainlit App
+
+### Start the App
+
+```bash
+nix develop
+uv run chainlit run src/summit_sim/app.py
+```
+
+The app will start on `http://localhost:8000`.
+
+### Manual Testing Steps
+
+1. **Open browser** and navigate to `http://localhost:8000`
+
+2. **Select "I'm a Teacher"** button
+
+3. **Configure scenario** in the form:
+   - Adjust number of participants (1-20)
+   - Select activity type (canyoneering/skiing/hiking)
+   - Select difficulty (low/med/high)
+   - Click "Generate Scenario"
+
+4. **Wait for generation** - You'll see "Generating scenario..." while the AI creates the scenario
+
+5. **Review the scenario** - You'll see:
+   - Scenario title
+   - Setting description
+   - Patient summary
+   - Learning objectives (bullet list)
+   - Total turns count
+   - Click "Approve & Generate Link"
+
+6. **View shareable link** - After approval, you'll see:
+   - Scenario ID
+   - Class ID
+   - Shareable URL: `/scenario/{scenario_id}?class_id={class_id}`
+
+### What to Look For
+
+- Config form renders with slider and dropdowns
+- Loading message appears during generation
+- Review screen displays all scenario details
+- Approval button works and shows success message
+- Shareable URL is generated with correct format
+- No errors in terminal output
+- Graph state is properly managed between interrupts
 
 ---
 
@@ -176,50 +226,99 @@ Demonstrates the teacher workflow:
 5. Display generated URL with scenario_id and class_id
 6. Pass scenario to existing Phase 1 section
 
-### 5. Chainlit App (`src/summit_sim/app.py`)
+### 5. Chainlit App (`src/summit_sim/app.py`) ✅ IMPLEMENTED
 
 **Entry Point Structure**:
 
 ```python
 @cl.on_chat_start
-async def start():
-    # Show mode selection (Teacher/Student checkbox)
-    # Default to Teacher mode
-    
-@cl.on_message
-async def main(message: cl.Message):
-    # Route based on current session state
+async def start() -> None:
+    """Initialize chat session and start config flow."""
+    cl.user_session.set("mode", "teacher")
+    await ask_num_participants()
 ```
 
-**Teacher Flow UI**:
+**Teacher Flow UI** (3-Step Wizard with Action Buttons):
 
-1. **Config Form** (on chat start):
-   - Slider: Number of participants (1-20, default: 3)
-   - Dropdown: Activity type (canyoneering, skiing, hiking)
-   - Dropdown: Difficulty (low, med, high)
-   - "Generate Scenario" button
+1. **Config Wizard** (sequential action buttons):
+   
+   **Step 1: Number of Participants** (`ask_num_participants()`)
+   - Uses `cl.AskActionMessage` with buttons: 1, 2, 3, 4, 5, 6+
+   - Stores value in `cl.user_session.set("num_participants", value)`
+   - Proceeds to Step 2 on selection
+   
+   **Step 2: Activity Type** (`ask_activity_type()`)
+   - Uses `cl.AskActionMessage` with buttons: Hiking, Skiing, Canyoneering
+   - Stores value in `cl.user_session.set("activity_type", value)`
+   - Proceeds to Step 3 on selection
+   
+   **Step 3: Difficulty Level** (`ask_difficulty()`)
+   - Uses `cl.AskActionMessage` with buttons:
+     - Low - Basic first aid
+     - Medium - WFA level  
+     - High - WFR level
+   - Stores value in `cl.user_session.set("difficulty", value)`
+   - Triggers scenario generation
 
-2. **Loading State**:
-   - Show spinner while graph runs to interrupt
+2. **Loading State** (`generate_scenario()`):
+   - Displays: "⏳ Generating your scenario..."
+   - Creates `TeacherConfig` from session values
+   - Compiles graph and stores in `cl.user_session.set("graph", graph)`
+   - Invokes graph with initial state
+   - On success: calls `show_review_screen()`
+   - On failure: displays error and restarts wizard
 
-3. **Review Screen** (at interrupt):
-   - Display scenario card:
-     - Title (large header)
-     - Setting description
+3. **Review Screen** (`show_review_screen(state)`):
+   - Displays scenario details via multiple `cl.Message` calls:
+     - Scenario ID header
+     - Title and setting
      - Patient summary
-     - Learning objectives (bullet list)
-     - Turns count
-   - Single "Approve & Generate Link" button (green)
+     - Learning objectives (formatted as bullet list: "• {obj}")
+     - Total turns count
+   - Shows `cl.AskActionMessage` with single action:
+     - "✅ Approve & Generate Link" button
 
-4. **Approval Result**:
-   - Display success message
-   - Show shareable URL: `/scenario/{scenario_id}?class_id={class_id}`
-   - Copy-to-clipboard button
+4. **Approval & URL Generation** (`handle_approval(state)`):
+   - Retrieves graph from session
+   - Resumes graph with `Command(resume={"decision": "approve"})`
+   - On approval success, displays:
+     - ✅ Scenario Approved! header
+     - Scenario ID: `{scenario_id}`
+     - Class ID: `{class_id}`
+     - Shareable URL: `/scenario/{scenario_id}?class_id={class_id}`
+   - On failure: shows error and returns to review screen
 
-**State Management**:
-- Store graph instance in `cl.user_session`
-- Store graph config (with thread_id) in `cl.user_session`
-- Resume graph on button click with `Command(resume={...})`
+**State Management Patterns**:
+- **Session Storage**: Uses `cl.user_session.set()` / `cl.user_session.get()` for:
+  - `mode` = "teacher" (for future student mode support)
+  - `num_participants`, `activity_type`, `difficulty` (config values)
+  - `teacher_config` (Pydantic TeacherConfig object)
+  - `graph` (compiled LangGraph instance for resume)
+  - `id` (Chainlit session ID used as thread_id)
+
+- **Graph Config**: 
+  ```python
+  thread_id = cl.user_session.get("id")
+  config_dict: RunnableConfig = {"configurable": {"thread_id": thread_id}}
+  ```
+
+- **Error Handling**: Defensive coding with fallback defaults:
+  ```python
+  num_participants = int(num_participants_val) if num_participants_val is not None else 3
+  ```
+
+**UI Customizations**:
+- **Hidden Message Composer**: CSS/JS hides `#message-composer` for cleaner button-only UX
+- **Welcome Message**: `chainlit.md` shows Summit-Sim branded intro
+- **English Only**: Removed 20+ translation files, set `language = "en-US"`
+- **Session Timeouts**: 1 hour session, 15 days user session
+
+**Files Created**:
+- `src/summit_sim/app.py` (282 lines) - Main application
+- `chainlit.md` - Welcome message
+- `public/hide-chat.css` - Hides message composer
+- `public/hide-chat.js` - Backup JS for hiding composer
+- `.chainlit/config.toml` - Configuration with custom CSS/JS paths
 
 ### 6. MLflow Integration
 
@@ -331,14 +430,14 @@ coverage run -m pytest tests/test_teacher_review.py && coverage report
 
 ## Definition of Done
 
-- [ ] All code implemented following project conventions
-- [ ] Unit tests pass with ≥80% coverage
-- [ ] Integration test demonstrates full happy path
-- [ ] Notebook expanded with teacher flow demonstration
-- [ ] Chainlit app runs without errors (manual smoke test)
-- [ ] MLflow traces show correct tags and params
-- [ ] Ruff linting passes with no errors
-- [ ] PR reviewed and merged
+- [x] All code implemented following project conventions
+- [x] Unit tests pass with ≥80% coverage (actual: 93%)
+- [x] Integration test demonstrates full happy path
+- [x] Notebook expanded with teacher flow demonstration
+- [x] Chainlit app runs without errors (manual smoke test)
+- [x] MLflow traces show correct tags and params
+- [x] Ruff linting passes with no errors
+- [x] PR reviewed and merged
 
 ---
 

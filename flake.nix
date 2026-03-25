@@ -33,14 +33,14 @@
                     _PYTHONPATH = "${pkgs.python312}/lib/python3.12/site-packages";
 
                     shellHook = ''
-                        # Specify settings.env file
-                        set -a
-                        source .env
-                        set +a
-
                         # Setup pre-commit
                         pre-commit install
                     '';
+
+                    # Note: .env is NOT sourced here. Docker containers load
+                    # environment variables via docker-compose.yml env_file directive.
+                    # This prevents AWS credentials and other host env vars from
+                    # leaking into the container runtime.
                 };
         };
         flake = { };

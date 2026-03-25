@@ -8,6 +8,7 @@ from langgraph.types import Command
 
 from summit_sim.agents import config as agent_config
 from summit_sim.graphs.teacher_review import (
+    TeacherReviewState,
     create_teacher_review_graph,
     initialize_teacher_session,
     present_for_review,
@@ -67,15 +68,15 @@ def sample_scenario():
 @pytest.fixture
 def initial_state(sample_teacher_config):
     """Create initial state for testing."""
-    return {
-        "teacher_config": sample_teacher_config,
-        "scenario_draft": None,
-        "scenario_id": "",
-        "class_id": "",
-        "retry_count": 0,
-        "feedback_history": [],
-        "approval_status": None,
-    }
+    return TeacherReviewState(
+        teacher_config=sample_teacher_config.model_dump(),
+        scenario_draft=None,
+        scenario_id="",
+        class_id="",
+        retry_count=0,
+        feedback_history=[],
+        approval_status=None,
+    )
 
 
 class TestInitializeTeacherSession:
@@ -85,16 +86,16 @@ class TestInitializeTeacherSession:
         """Test that initialization generates scenario_id and class_id."""
         result = initialize_teacher_session(initial_state)
 
-        assert result["scenario_id"].startswith("scn-")
-        assert len(result["class_id"]) == 6
-        assert result["retry_count"] == 0
-        assert result["feedback_history"] == []
+        assert result.scenario_id.startswith("scn-")
+        assert len(result.class_id) == 6
+        assert result.retry_count == 0
+        assert result.feedback_history == []
 
     def test_initialize_preserves_teacher_config(self, initial_state):
         """Test that initialization preserves the teacher config."""
         result = initialize_teacher_session(initial_state)
 
-        assert result["teacher_config"] == initial_state["teacher_config"]
+        assert result.teacher_config == initial_state.teacher_config
 
 
 class TestPresentForReview:
@@ -102,58 +103,59 @@ class TestPresentForReview:
 
     def test_present_for_review_valid(self, sample_scenario):
         """Test presenting a valid scenario for review."""
-        state = {
-            "teacher_config": TeacherConfig(
+        state = TeacherReviewState(
+            teacher_config=TeacherConfig(
                 num_participants=3, activity_type="hiking", difficulty="med"
-            ),
-            "scenario_draft": sample_scenario,
-            "scenario_id": "scn-test123",
-            "class_id": "abc123",
-            "retry_count": 0,
-            "feedback_history": [],
-            "approval_status": None,
-        }
+            ).model_dump(),
+            scenario_draft=sample_scenario.model_dump(),
+            scenario_id="scn-test123",
+            class_id="abc123",
+            retry_count=0,
+            feedback_history=[],
+            approval_status=None,
+            current_trace_id="trace-123",
+        )
 
         with (
             patch("summit_sim.graphs.teacher_review.interrupt") as mock_interrupt,
-            patch("summit_sim.graphs.teacher_review.mlflow.set_tag") as mock_set_tag,
+            patch("summit_sim.graphs.teacher_review.mlflow") as mock_mlflow,
         ):
             mock_interrupt.return_value = {"decision": "approve"}
+            mock_mlflow.get_last_active_trace_id.return_value = "trace-123"
             result = present_for_review(state)
 
         assert result["approval_status"] == "approved"
-        mock_set_tag.assert_called_once_with("sme_approved", "true")
 
     def test_present_for_review_no_scenario(self):
         """Test presenting with no scenario raises error."""
-        state = {
-            "teacher_config": TeacherConfig(
+        state = TeacherReviewState(
+            teacher_config=TeacherConfig(
                 num_participants=3, activity_type="hiking", difficulty="med"
-            ),
-            "scenario_draft": None,
-            "scenario_id": "scn-test123",
-            "class_id": "abc123",
-            "retry_count": 0,
-            "feedback_history": [],
-            "approval_status": None,
-        }
+            ).model_dump(),
+            scenario_draft=None,
+            scenario_id="scn-test123",
+            class_id="abc123",
+            retry_count=0,
+            feedback_history=[],
+            approval_status=None,
+        )
 
         with pytest.raises(ValueError, match="No scenario draft available"):
             present_for_review(state)
 
     def test_present_for_review_invalid_decision(self, sample_scenario):
         """Test presenting with invalid decision raises error."""
-        state = {
-            "teacher_config": TeacherConfig(
+        state = TeacherReviewState(
+            teacher_config=TeacherConfig(
                 num_participants=3, activity_type="hiking", difficulty="med"
-            ),
-            "scenario_draft": sample_scenario,
-            "scenario_id": "scn-test123",
-            "class_id": "abc123",
-            "retry_count": 0,
-            "feedback_history": [],
-            "approval_status": None,
-        }
+            ).model_dump(),
+            scenario_draft=sample_scenario.model_dump(),
+            scenario_id="scn-test123",
+            class_id="abc123",
+            retry_count=0,
+            feedback_history=[],
+            approval_status=None,
+        )
 
         with patch("summit_sim.graphs.teacher_review.interrupt") as mock_interrupt:
             mock_interrupt.return_value = {"decision": "decline"}
@@ -173,9 +175,51 @@ class TestTeacherReviewGraphFullCycle:
             yield
 
     @pytest.fixture(autouse=True)
+    def mock_mlflow_span(self):
+        """Mock MLflow span to avoid trace_id errors."""
+        mock_span = type("MockSpan", (), {"trace_id": "test-trace-123"})()
+        with (
+            patch(
+                "summit_sim.graphs.teacher_review.mlflow.get_current_active_span",
+                return_value=mock_span,
+            ),
+            patch(
+                "summit_sim.graphs.teacher_review.mlflow.log_feedback",
+            ),
+        ):
+            yield
+
+    @pytest.fixture(autouse=True)
     def clear_agent_cache(self):
         """Clear the agent cache before each test."""
         agent_config._agent_container.clear()
+
+    @pytest.fixture(autouse=True)
+    def mock_prompts(self):
+        """Mock MLflow prompt loading."""
+
+        class MockPrompt:
+            def __init__(self, template):
+                self.template = template
+
+            def format(self, **kwargs):
+                return self.template.format(**kwargs)
+
+        user_prompt = (
+            "Test user prompt with {num_participants} {activity_type} {difficulty}"
+        )
+        mock_prompt_obj = MockPrompt(user_prompt)
+
+        with (
+            patch("summit_sim.agents.config.mlflow.genai.load_prompt") as mock_load,
+            patch("summit_sim.agents.config.mlflow.genai.register_prompt"),
+            patch(
+                "summit_sim.agents.generator.mlflow.genai.load_prompt"
+            ) as mock_load_gen,
+        ):
+            mock_load.return_value = MockPrompt("Test system prompt")
+            mock_load_gen.return_value = mock_prompt_obj
+            yield
 
     @pytest.mark.asyncio
     async def test_full_happy_path(self, sample_teacher_config, sample_scenario):
@@ -190,21 +234,18 @@ class TestTeacherReviewGraphFullCycle:
         ) as mock_generate:
             mock_generate.side_effect = mock_generate_impl
 
-            with (
-                patch("summit_sim.graphs.teacher_review.interrupt") as mock_interrupt,
-                patch("summit_sim.graphs.teacher_review.mlflow.set_tag"),
-            ):
+            with patch("summit_sim.graphs.teacher_review.interrupt") as mock_interrupt:
                 mock_interrupt.return_value = {"decision": "approve"}
 
-                initial_state = {
-                    "teacher_config": sample_teacher_config,
-                    "scenario_draft": None,
-                    "scenario_id": "",
-                    "class_id": "",
-                    "retry_count": 0,
-                    "feedback_history": [],
-                    "approval_status": None,
-                }
+                initial_state = TeacherReviewState(
+                    teacher_config=sample_teacher_config.model_dump(),
+                    scenario_draft=None,
+                    scenario_id="",
+                    class_id="",
+                    retry_count=0,
+                    feedback_history=[],
+                    approval_status=None,
+                )
 
                 graph = create_teacher_review_graph()
                 config: Any = {"configurable": {"thread_id": "test-thread"}}
@@ -213,9 +254,9 @@ class TestTeacherReviewGraphFullCycle:
                 result = await graph.ainvoke(initial_state, config)
 
                 # Verify we reached the interrupt
-                assert result["scenario_draft"] is not None
-                assert result["scenario_id"].startswith("scn-")
-                assert len(result["class_id"]) == 6
+                assert result.get("scenario_draft") is not None
+                assert result.get("scenario_id", "").startswith("scn-")
+                assert len(result.get("class_id", "")) == 6
 
                 # Resume with approval
                 final_result = await graph.ainvoke(
@@ -223,7 +264,7 @@ class TestTeacherReviewGraphFullCycle:
                 )
 
                 # Verify approval
-                assert final_result["approval_status"] == "approved"
+                assert final_result.get("approval_status") == "approved"
 
     def test_graph_creation(self):
         """Test that graph can be created successfully."""

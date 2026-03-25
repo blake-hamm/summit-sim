@@ -30,6 +30,35 @@ class TestSimulationAgent:
         """Clear the agent cache before each test."""
         agent_config._agent_container.clear()
 
+    @pytest.fixture(autouse=True)
+    def mock_prompts(self):
+        """Mock MLflow prompt loading."""
+        user_prompt = (
+            "Test user prompt with {title} {setting} {patient_summary} "
+            "{hidden_truth} {learning_objectives} {narrative_text} "
+            "{choices_text} {selected_choice_id} {selected_choice_description}"
+        )
+
+        class MockPrompt:
+            def __init__(self, template):
+                self.template = template
+
+            def format(self, **kwargs):
+                return self.template.format(**kwargs)
+
+        mock_prompt_obj = MockPrompt(user_prompt)
+
+        with (
+            patch("summit_sim.agents.config.mlflow.genai.load_prompt") as mock_load,
+            patch("summit_sim.agents.config.mlflow.genai.register_prompt"),
+            patch(
+                "summit_sim.agents.simulation.mlflow.genai.load_prompt"
+            ) as mock_load_sim,
+        ):
+            mock_load.return_value = MockPrompt("Test system prompt")
+            mock_load_sim.return_value = mock_prompt_obj
+            yield
+
     @pytest.fixture
     def sample_scenario(self):
         """Create a sample scenario for testing."""

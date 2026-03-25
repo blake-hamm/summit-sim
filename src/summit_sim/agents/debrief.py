@@ -6,10 +6,12 @@ import mlflow
 from mlflow.entities import SpanType
 
 from summit_sim.agents.config import get_agent
-from summit_sim.graphs.state import TranscriptEntry
+from summit_sim.graphs.shared import TranscriptEntry
 from summit_sim.schemas import DebriefReport, ScenarioDraft
 
-DEBRIEF_SYSTEM_PROMPT = """\
+AGENT_NAME = "debrief"
+
+SYSTEM_PROMPT = """\
 You are an expert wilderness first aid educator analyzing a student's \
 simulation performance.
 
@@ -29,24 +31,23 @@ Scoring:
 
 Tone: Encouraging but honest. Focus on learning, not grading."""
 
-DEBRIEF_USER_PROMPT_TEMPLATE = """\
+
+USER_PROMPT_TEMPLATE = """\
 Analyze this completed wilderness rescue simulation and generate a debrief report.
 
 SCENARIO INFORMATION:
-{scenario_context}
+{{scenario_context}}
 
-SCENARIO ID: {scenario_id}
+SCENARIO ID: {{scenario_id}}
 
-SIMULATION TRANSCRIPT ({total_turns} turns):
-{{'=' * 50}}
-{transcript_summary}
-{{'=' * 50}}
+SIMULATION TRANSCRIPT ({{total_turns}} turns):
+{{transcript_summary}}
 
 STATISTICS:
-- Total turns: {total_turns}
-- Correct choices: {correct_count}
-- Incorrect choices: {incorrect_count}
-- Calculated score: {score:.1f}%
+- Total turns: {{total_turns}}
+- Correct choices: {{correct_count}}
+- Incorrect choices: {{incorrect_count}}
+- Calculated score: {{score}}%
 - Pass threshold: 70%
 
 Provide a comprehensive debrief report following the schema requirements.
@@ -72,9 +73,9 @@ async def generate_debrief(
 
     """
     agent = get_agent(
-        agent_name="debrief",
+        agent_name=AGENT_NAME,
         output_type=DebriefReport,
-        system_prompt=DEBRIEF_SYSTEM_PROMPT,
+        system_prompt=SYSTEM_PROMPT,
         reasoning_effort="medium",
     )
 
@@ -92,20 +93,23 @@ def _build_debrief_prompt(
     """Build prompt for debrief agent."""
     score = calculate_score(transcript)
     total_turns = len(transcript)
-    correct_count = sum(1 for e in transcript if e["was_correct"])
+    correct_count = sum(1 for e in transcript if e.was_correct)
     incorrect_count = total_turns - correct_count
 
     scenario_context = _format_scenario_context(scenario_draft)
     transcript_summary = _format_transcript_summary(transcript)
 
-    return DEBRIEF_USER_PROMPT_TEMPLATE.format(
+    user_prompt = mlflow.genai.load_prompt(  # type: ignore[attr-defined]
+        f"prompts:/{AGENT_NAME}-user@latest"
+    )
+    return user_prompt.format(
         scenario_context=scenario_context,
         scenario_id=scenario_id,
         total_turns=total_turns,
         transcript_summary=transcript_summary,
         correct_count=correct_count,
         incorrect_count=incorrect_count,
-        score=score,
+        score=f"{score:.1f}",
     )
 
 
@@ -123,11 +127,11 @@ def _format_transcript_summary(transcript: list[TranscriptEntry]) -> str:
     """Format transcript entries for prompt."""
     lines = []
     for entry in transcript:
-        status = "CORRECT" if entry["was_correct"] else "INCORRECT"
+        status = "CORRECT" if entry.was_correct else "INCORRECT"
         lines.append(
-            f"Turn {entry['turn_id']}: {status}\n"
-            f"  Choice: {entry['choice_description']}\n"
-            f"  Feedback: {entry['feedback']}"
+            f"Turn {entry.turn_id}: {status}\n"
+            f"  Choice: {entry.choice_description}\n"
+            f"  Feedback: {entry.feedback}"
         )
     return "\n".join(lines)
 
@@ -148,6 +152,6 @@ def calculate_score(transcript: list[TranscriptEntry]) -> float:
         return 0.0
 
     total_turns = len(transcript)
-    correct_choices = sum(1 for entry in transcript if entry.get("was_correct", False))
+    correct_choices = sum(1 for entry in transcript if entry.was_correct)
 
     return (correct_choices / total_turns) * 100

@@ -9,9 +9,9 @@ This module implements a cyclic LangGraph workflow that:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from dataclasses import dataclass, field, fields
+from typing import TYPE_CHECKING, Any
 
-import mlflow
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
@@ -19,12 +19,38 @@ from langgraph.types import interrupt
 
 from summit_sim.agents.debrief import generate_debrief
 from summit_sim.agents.simulation import process_choice
-from summit_sim.graphs.state import SimulationState, TranscriptEntry
+from summit_sim.graphs.shared import TranscriptEntry
+from summit_sim.schemas import ChoiceOption, ScenarioDraft, SimulationResult
 
 if TYPE_CHECKING:
     from langgraph.checkpoint.base import BaseCheckpointSaver
 
-    from summit_sim.schemas import ChoiceOption
+
+@dataclass
+class SimulationState:
+    """LangGraph state for simulation workflow.
+
+    Maintains all state needed for the cyclic simulation graph,
+    including the scenario, current position, and accumulated history.
+    """
+
+    scenario_draft: dict | None
+    current_turn_id: int
+    transcript: list[TranscriptEntry] = field(default_factory=list)
+    is_complete: bool = False
+    key_learning_moments: list[str] = field(default_factory=list)
+    last_selected_choice: dict | None = None
+    simulation_result: dict | None = None
+    scenario_id: str = ""
+    class_id: str | None = None
+    debrief_report: dict | None = None
+
+    @classmethod
+    def from_graph_result(cls, result: dict[str, Any]) -> "SimulationState":
+        """Create state from LangGraph result, filtering extra fields."""
+        valid_fields = {f.name for f in fields(cls)}
+        filtered = {k: v for k, v in result.items() if k in valid_fields}
+        return cls(**filtered)
 
 
 def initialize_state(state: SimulationState) -> SimulationState:
@@ -32,11 +58,11 @@ def initialize_state(state: SimulationState) -> SimulationState:
 
     Validates that the starting turn ID exists in the scenario.
     """
-    scenario = state["scenario_draft"]
-    starting_turn = scenario.get_turn(state["current_turn_id"])
+    scenario = ScenarioDraft.model_validate(state.scenario_draft)
+    starting_turn = scenario.get_turn(state.current_turn_id)
 
     if starting_turn is None:
-        msg = f"Starting turn {state['current_turn_id']} not found in scenario"
+        msg = f"Starting turn {state.current_turn_id} not found in scenario"
         raise ValueError(msg)
 
     return state
@@ -49,11 +75,11 @@ def present_turn(state: SimulationState) -> dict:
     Displays the narrative and available choices, then pauses execution
     until the student provides their choice.
     """
-    scenario = state["scenario_draft"]
-    current_turn = scenario.get_turn(state["current_turn_id"])
+    scenario = ScenarioDraft.model_validate(state.scenario_draft)
+    current_turn = scenario.get_turn(state.current_turn_id)
 
     if current_turn is None:
-        msg = f"Turn {state['current_turn_id']} not found in scenario"
+        msg = f"Turn {state.current_turn_id} not found in scenario"
         raise ValueError(msg)
 
     choice_options = [
@@ -83,7 +109,7 @@ def present_turn(state: SimulationState) -> dict:
         msg = f"Invalid choice_id: {selected_choice_id}"
         raise ValueError(msg)
 
-    return {"last_selected_choice": selected_choice}
+    return {"last_selected_choice": selected_choice.model_dump()}
 
 
 def _find_choice_by_id(choices: list[ChoiceOption], choice_id: str) -> ChoiceOption:
@@ -101,25 +127,16 @@ async def process_turn(state: SimulationState) -> dict:
     Calls the Simulation Feedback Agent to generate personalized
     feedback for the student's choice.
     """
-    scenario = state["scenario_draft"]
-    current_turn = scenario.get_turn(state["current_turn_id"])
-    selected_choice = state["last_selected_choice"]
+    scenario = ScenarioDraft.model_validate(state.scenario_draft)
+    current_turn = scenario.get_turn(state.current_turn_id)
+    selected_choice = ChoiceOption.model_validate(state.last_selected_choice)
 
     if current_turn is None:
-        msg = f"Turn {state['current_turn_id']} not found in scenario"
+        msg = f"Turn {state.current_turn_id} not found in scenario"
         raise ValueError(msg)
 
-    # Link trace to session metadata
-    mlflow.update_current_trace(
-        metadata={
-            "turn_id": str(current_turn.turn_id),
-            "choice_id": str(selected_choice.choice_id),
-        }
-    )
-
     result = await process_choice(scenario, current_turn, selected_choice)
-
-    return {"simulation_result": result}
+    return {"simulation_result": result.model_dump()}
 
 
 def update_state(state: SimulationState) -> dict:
@@ -128,25 +145,25 @@ def update_state(state: SimulationState) -> dict:
     Appends transcript entry, updates learning moments, and advances
     to the next turn based on the selected choice.
     """
-    scenario = state["scenario_draft"]
-    current_turn = scenario.get_turn(state["current_turn_id"])
-    result = state["simulation_result"]
+    scenario = ScenarioDraft.model_validate(state.scenario_draft)
+    current_turn = scenario.get_turn(state.current_turn_id)
+    result = SimulationResult.model_validate(state.simulation_result)
     selected_choice = result.selected_choice
 
     if current_turn is None:
-        msg = f"Turn {state['current_turn_id']} not found in scenario"
+        msg = f"Turn {state.current_turn_id} not found in scenario"
         raise ValueError(msg)
 
-    transcript_entry: TranscriptEntry = {
-        "turn_id": current_turn.turn_id,
-        "turn_narrative": current_turn.narrative_text,
-        "choice_id": selected_choice.choice_id,
-        "choice_description": selected_choice.description,
-        "was_correct": selected_choice.is_correct,
-        "feedback": result.feedback,
-        "learning_moments": result.learning_moments,
-        "next_turn_id": selected_choice.next_turn_id,
-    }
+    transcript_entry = TranscriptEntry(
+        turn_id=current_turn.turn_id,
+        turn_narrative=current_turn.narrative_text,
+        choice_id=selected_choice.choice_id,
+        choice_description=selected_choice.description,
+        was_correct=selected_choice.is_correct,
+        feedback=result.feedback,
+        learning_moments=result.learning_moments,
+        next_turn_id=selected_choice.next_turn_id,
+    )
 
     is_complete = selected_choice.next_turn_id is None
     next_turn_id = selected_choice.next_turn_id
@@ -158,10 +175,10 @@ def update_state(state: SimulationState) -> dict:
             raise ValueError(msg)
 
     return {
-        "transcript": [transcript_entry],
-        "key_learning_moments": result.learning_moments,
+        "transcript": state.transcript + [transcript_entry],
+        "key_learning_moments": state.key_learning_moments + result.learning_moments,
         "current_turn_id": (
-            next_turn_id if next_turn_id is not None else state["current_turn_id"]
+            next_turn_id if next_turn_id is not None else state.current_turn_id
         ),
         "is_complete": is_complete,
     }
@@ -173,19 +190,12 @@ async def generate_debrief_node(state: SimulationState) -> dict:
     Calls the Debrief Agent to analyze the complete simulation transcript
     and generate a structured performance report.
     """
-    # Link trace to session metadata
-    mlflow.update_current_trace(
-        metadata={
-            "scenario_id": state["scenario_id"],
-        }
-    )
-
     debrief_report = await generate_debrief(
-        transcript=state["transcript"],
-        scenario_draft=state["scenario_draft"],
-        scenario_id=state["scenario_id"],
+        transcript=state.transcript,
+        scenario_draft=ScenarioDraft.model_validate(state.scenario_draft),
+        scenario_id=state.scenario_id,
     )
-    return {"debrief_report": debrief_report}
+    return {"debrief_report": debrief_report.model_dump()}
 
 
 def check_completion(state: SimulationState) -> str:
@@ -194,7 +204,7 @@ def check_completion(state: SimulationState) -> str:
     Routes the graph to either continue presenting turns or generate
     debrief based on the is_complete flag.
     """
-    if state["is_complete"]:
+    if state.is_complete:
         return "generate_debrief"
     return "present_turn"
 

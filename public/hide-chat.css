@@ -1,0 +1,9 @@
+/* Hide the message composer/chat input */
+#message-composer,
+#message-composer *,
+#message-composer input,
+#message-composer textarea,
+#message-composer form,
+#message-composer button {
+    display: none !important;
+}

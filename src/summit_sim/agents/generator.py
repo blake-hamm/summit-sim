@@ -8,7 +8,10 @@ from mlflow.entities import SpanType
 from summit_sim.agents.config import get_agent
 from summit_sim.schemas import ScenarioDraft, TeacherConfig
 
-GENERATOR_SYSTEM_PROMPT = """You are an expert wilderness rescue scenario designer.
+AGENT_NAME = "generator-draft"
+
+SYSTEM_PROMPT = """\
+You are an expert wilderness rescue scenario designer.
 
 Your task is to create a realistic, medically accurate wilderness rescue scenario
 based on minimal teacher inputs. You must generate a complete scenario with ALL
@@ -46,16 +49,16 @@ Generate a complete, coherent scenario that teaches proper wilderness first aid
 through decision-making."""
 
 
-GENERATOR_USER_PROMPT = """\
+USER_PROMPT_TEMPLATE = """\
 Generate a wilderness rescue scenario with the following parameters:
 
-Number of Participants: {num_participants}
-Activity Type: {activity_type}
-Difficulty Level: {difficulty}
+Number of Participants: {{num_participants}}
+Activity Type: {{activity_type}}
+Difficulty Level: {{difficulty}}
 
 Create a complete scenario with:
-- Compelling title and setting appropriate for {activity_type}
-- Realistic patient case matching the {difficulty} difficulty
+- Compelling title and setting appropriate for {{activity_type}}
+- Realistic patient case matching the {{difficulty}} difficulty
 - 3-5 turns with multiple choice decision points
 - Medically accurate content
 - Clear learning objectives
@@ -65,23 +68,18 @@ The scenario should be challenging but educational for wilderness first responde
 
 @mlflow.trace(span_type=SpanType.AGENT)
 async def generate_scenario(teacher_config: TeacherConfig) -> ScenarioDraft:
-    """Generate a complete scenario from minimal teacher configuration.
-
-    Args:
-        teacher_config: Minimal scenario parameters from the teacher
-
-    Returns:
-        Complete ScenarioDraft with all turns pre-generated
-
-    """
+    """Generate a complete scenario from minimal teacher configuration."""
     agent = get_agent(
-        agent_name="generator",
+        agent_name=AGENT_NAME,
         output_type=ScenarioDraft,
-        system_prompt=GENERATOR_SYSTEM_PROMPT,
+        system_prompt=SYSTEM_PROMPT,
         reasoning_effort="high",
     )
 
-    prompt = GENERATOR_USER_PROMPT.format(
+    user_prompt = mlflow.genai.load_prompt(  # type: ignore[attr-defined]
+        f"prompts:/{AGENT_NAME}-user@latest"
+    )
+    prompt = user_prompt.format(
         num_participants=teacher_config.num_participants,
         activity_type=teacher_config.activity_type,
         difficulty=teacher_config.difficulty,

@@ -19,8 +19,10 @@ from summit_sim.schemas import (
     SimulationResult,
 )
 
-FEEDBACK_SYSTEM_PROMPT = """You are a wilderness rescue instructor providing
-personalized feedback.
+AGENT_NAME = "simulation-feedback"
+
+SYSTEM_PROMPT = """\
+You are a wilderness rescue instructor providing personalized feedback.
 
 Your task is to generate educational feedback when a student makes a choice
 in a wilderness rescue scenario.
@@ -44,19 +46,20 @@ Guidelines:
 - Learning moments should be actionable takeaways"""
 
 
-SIMULATION_USER_PROMPT = """Scenario: {title}
-Setting: {setting}
-Patient: {patient_summary}
-Hidden Truth: {hidden_truth}
-Learning Objectives: {learning_objectives}
+USER_PROMPT_TEMPLATE = """\
+Scenario: {{title}}
+Setting: {{setting}}
+Patient: {{patient_summary}}
+Hidden Truth: {{hidden_truth}}
+Learning Objectives: {{learning_objectives}}
 
 Current Situation:
-{narrative_text}
+{{narrative_text}}
 
 Available Choices:
-{choices_text}
+{{choices_text}}
 
-Student Selected: {selected_choice_id} - {selected_choice_description}
+Student Selected: {{selected_choice_id}} - {{selected_choice_description}}
 
 Generate personalized feedback for this choice and indicate if the scenario continues.
 
@@ -88,9 +91,9 @@ async def process_choice(
 
     """
     agent = get_agent(
-        agent_name="simulation_feedback",
+        agent_name=AGENT_NAME,
         output_type=SimulationResult,
-        system_prompt=FEEDBACK_SYSTEM_PROMPT,
+        system_prompt=SYSTEM_PROMPT,
         reasoning_effort="medium",
     )
 
@@ -99,7 +102,10 @@ async def process_choice(
         for c in current_turn.choices
     )
 
-    prompt = SIMULATION_USER_PROMPT.format(
+    user_prompt = mlflow.genai.load_prompt(  # type: ignore[attr-defined]
+        f"prompts:/{AGENT_NAME}-user@latest"
+    )
+    prompt = user_prompt.format(
         title=scenario.title,
         setting=scenario.setting,
         patient_summary=scenario.patient_summary,

@@ -6,6 +6,7 @@ import pytest
 
 from summit_sim.agents import config as agent_config
 from summit_sim.agents.debrief import calculate_score, generate_debrief
+from summit_sim.graphs.shared import TranscriptEntry
 from summit_sim.schemas import (
     ChoiceOption,
     DebriefReport,
@@ -29,6 +30,35 @@ class TestDebriefAgent:
     def clear_agent_cache(self):
         """Clear the agent cache before each test."""
         agent_config._agent_container.clear()
+
+    @pytest.fixture(autouse=True)
+    def mock_prompts(self):
+        """Mock MLflow prompt loading."""
+        user_prompt = (
+            "Test debrief prompt with {scenario_context} {scenario_id} "
+            "{total_turns} {transcript_summary} {correct_count} "
+            "{incorrect_count} {score}"
+        )
+
+        class MockPrompt:
+            def __init__(self, template):
+                self.template = template
+
+            def format(self, **kwargs):
+                return self.template.format(**kwargs)
+
+        mock_prompt_obj = MockPrompt(user_prompt)
+
+        with (
+            patch("summit_sim.agents.config.mlflow.genai.load_prompt") as mock_load,
+            patch("summit_sim.agents.config.mlflow.genai.register_prompt"),
+            patch(
+                "summit_sim.agents.debrief.mlflow.genai.load_prompt"
+            ) as mock_load_deb,
+        ):
+            mock_load.return_value = MockPrompt("Test system prompt")
+            mock_load_deb.return_value = mock_prompt_obj
+            yield
 
     @pytest.fixture
     def sample_scenario(self):
@@ -67,62 +97,62 @@ class TestDebriefAgent:
     def sample_transcript_all_correct(self):
         """Create a transcript with all correct choices."""
         return [
-            {
-                "turn_id": 1,
-                "turn_narrative": "Patient is bleeding.",
-                "choice_id": "treat",
-                "choice_description": "Treat patient",
-                "was_correct": True,
-                "feedback": "Good choice!",
-                "learning_moments": ["Act quickly"],
-                "next_turn_id": 2,
-            },
-            {
-                "turn_id": 2,
-                "turn_narrative": "Bleeding controlled.",
-                "choice_id": "monitor",
-                "choice_description": "Monitor patient",
-                "was_correct": True,
-                "feedback": "Excellent!",
-                "learning_moments": ["Monitor vitals"],
-                "next_turn_id": None,
-            },
+            TranscriptEntry(
+                turn_id=1,
+                turn_narrative="Patient is bleeding.",
+                choice_id="treat",
+                choice_description="Treat patient",
+                was_correct=True,
+                feedback="Good choice!",
+                learning_moments=["Act quickly"],
+                next_turn_id=2,
+            ),
+            TranscriptEntry(
+                turn_id=2,
+                turn_narrative="Bleeding controlled.",
+                choice_id="monitor",
+                choice_description="Monitor patient",
+                was_correct=True,
+                feedback="Excellent!",
+                learning_moments=["Monitor vitals"],
+                next_turn_id=None,
+            ),
         ]
 
     @pytest.fixture
     def sample_transcript_mostly_incorrect(self):
         """Create a transcript with mostly incorrect choices."""
         return [
-            {
-                "turn_id": 1,
-                "turn_narrative": "Patient is bleeding.",
-                "choice_id": "wait",
-                "choice_description": "Wait",
-                "was_correct": False,
-                "feedback": "Should have acted sooner.",
-                "learning_moments": ["Time is critical"],
-                "next_turn_id": 2,
-            },
-            {
-                "turn_id": 2,
-                "turn_narrative": "Patient worsening.",
-                "choice_id": "ignore",
-                "choice_description": "Ignore symptoms",
-                "was_correct": False,
-                "feedback": "Patient needs attention.",
-                "learning_moments": ["Assess severity"],
-                "next_turn_id": 3,
-            },
-            {
-                "turn_id": 3,
-                "turn_narrative": "Emergency situation.",
-                "choice_id": "evac",
-                "choice_description": "Evacuate",
-                "was_correct": True,
-                "feedback": "Correct decision.",
-                "learning_moments": ["Know when to evac"],
-                "next_turn_id": None,
-            },
+            TranscriptEntry(
+                turn_id=1,
+                turn_narrative="Patient is bleeding.",
+                choice_id="wait",
+                choice_description="Wait",
+                was_correct=False,
+                feedback="Should have acted sooner.",
+                learning_moments=["Time is critical"],
+                next_turn_id=2,
+            ),
+            TranscriptEntry(
+                turn_id=2,
+                turn_narrative="Patient worsening.",
+                choice_id="ignore",
+                choice_description="Ignore symptoms",
+                was_correct=False,
+                feedback="Patient needs attention.",
+                learning_moments=["Assess severity"],
+                next_turn_id=3,
+            ),
+            TranscriptEntry(
+                turn_id=3,
+                turn_narrative="Emergency situation.",
+                choice_id="evac",
+                choice_description="Evacuate",
+                was_correct=True,
+                feedback="Correct decision.",
+                learning_moments=["Know when to evac"],
+                next_turn_id=None,
+            ),
         ]
 
     @pytest.mark.asyncio
@@ -241,9 +271,26 @@ class TestCalculateScore:
     def test_calculate_score_all_correct(self):
         """Test score with all correct choices."""
         transcript = [
-            {"was_correct": True},
-            {"was_correct": True},
-            {"was_correct": True},
+            TranscriptEntry(
+                turn_id=1,
+                turn_narrative="Turn 1",
+                choice_id="c1",
+                choice_description="Choice 1",
+                was_correct=True,
+                feedback="Good",
+                learning_moments=[],
+                next_turn_id=2,
+            ),
+            TranscriptEntry(
+                turn_id=2,
+                turn_narrative="Turn 2",
+                choice_id="c2",
+                choice_description="Choice 2",
+                was_correct=True,
+                feedback="Good",
+                learning_moments=[],
+                next_turn_id=None,
+            ),
         ]
         score = calculate_score(transcript)
         assert score == 100.0
@@ -251,8 +298,26 @@ class TestCalculateScore:
     def test_calculate_score_all_incorrect(self):
         """Test score with all incorrect choices."""
         transcript = [
-            {"was_correct": False},
-            {"was_correct": False},
+            TranscriptEntry(
+                turn_id=1,
+                turn_narrative="Turn 1",
+                choice_id="c1",
+                choice_description="Choice 1",
+                was_correct=False,
+                feedback="Bad",
+                learning_moments=[],
+                next_turn_id=2,
+            ),
+            TranscriptEntry(
+                turn_id=2,
+                turn_narrative="Turn 2",
+                choice_id="c2",
+                choice_description="Choice 2",
+                was_correct=False,
+                feedback="Bad",
+                learning_moments=[],
+                next_turn_id=None,
+            ),
         ]
         score = calculate_score(transcript)
         assert score == 0.0
@@ -260,9 +325,36 @@ class TestCalculateScore:
     def test_calculate_score_mixed(self):
         """Test score with mixed correctness."""
         transcript = [
-            {"was_correct": True},
-            {"was_correct": False},
-            {"was_correct": True},
+            TranscriptEntry(
+                turn_id=1,
+                turn_narrative="Turn 1",
+                choice_id="c1",
+                choice_description="Choice 1",
+                was_correct=True,
+                feedback="Good",
+                learning_moments=[],
+                next_turn_id=2,
+            ),
+            TranscriptEntry(
+                turn_id=2,
+                turn_narrative="Turn 2",
+                choice_id="c2",
+                choice_description="Choice 2",
+                was_correct=False,
+                feedback="Bad",
+                learning_moments=[],
+                next_turn_id=3,
+            ),
+            TranscriptEntry(
+                turn_id=3,
+                turn_narrative="Turn 3",
+                choice_id="c3",
+                choice_description="Choice 3",
+                was_correct=True,
+                feedback="Good",
+                learning_moments=[],
+                next_turn_id=None,
+            ),
         ]
         score = calculate_score(transcript)
         assert score == pytest.approx(66.67, rel=0.01)
@@ -275,12 +367,34 @@ class TestCalculateScore:
 
     def test_calculate_score_single_correct(self):
         """Test score with single correct choice."""
-        transcript = [{"was_correct": True}]
+        transcript = [
+            TranscriptEntry(
+                turn_id=1,
+                turn_narrative="Turn 1",
+                choice_id="c1",
+                choice_description="Choice 1",
+                was_correct=True,
+                feedback="Good",
+                learning_moments=[],
+                next_turn_id=None,
+            ),
+        ]
         score = calculate_score(transcript)
         assert score == 100.0
 
     def test_calculate_score_single_incorrect(self):
         """Test score with single incorrect choice."""
-        transcript = [{"was_correct": False}]
+        transcript = [
+            TranscriptEntry(
+                turn_id=1,
+                turn_narrative="Turn 1",
+                choice_id="c1",
+                choice_description="Choice 1",
+                was_correct=False,
+                feedback="Bad",
+                learning_moments=[],
+                next_turn_id=None,
+            ),
+        ]
         score = calculate_score(transcript)
         assert score == 0.0
