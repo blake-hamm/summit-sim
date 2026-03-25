@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     openrouter_api_key: str = ""
     default_model: str = "google/gemini-3.1-flash-lite-preview"
     mlflow_experiment_name: str = "summit-sim"
+    base_url: str = "http://localhost:8000"
 
     model_config = SettingsConfigDict(
         env_file=".env",

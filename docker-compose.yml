@@ -17,7 +17,7 @@ services:
       # Mount dependency files for updates
       - ./pyproject.toml:/app/pyproject.toml
       - ./uv.lock:/app/uv.lock
-    command: ["uv", "run", "chainlit", "run", "src/summit_sim/app.py", "--host", "0.0.0.0", "--port", "8000", "--watch"]
+    command: ["uv", "run", "chainlit", "run", "src/summit_sim/main.py", "--host", "0.0.0.0", "--port", "8000", "--watch"]
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/healthz"]

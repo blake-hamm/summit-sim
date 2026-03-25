@@ -16,10 +16,12 @@ import mlflow
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
+from langgraph.store.base import BaseStore
 from langgraph.types import interrupt
 from mlflow.entities import AssessmentSource, AssessmentSourceType
 
 from summit_sim.agents.generator import generate_scenario
+from summit_sim.graphs.utils import scenario_store
 from summit_sim.schemas import (
     ScenarioDraft,
     TeacherConfig,
@@ -131,6 +133,7 @@ def present_for_review(state: TeacherReviewState) -> dict:
 
 def create_teacher_review_graph(
     checkpointer: BaseCheckpointSaver | None = None,
+    store: BaseStore | None = None,
 ) -> CompiledStateGraph:
     """Create and configure the teacher review LangGraph."""
     workflow = StateGraph(TeacherReviewState)
@@ -138,13 +141,28 @@ def create_teacher_review_graph(
     workflow.add_node("initialize", initialize_teacher_session)
     workflow.add_node("generate", generate_scenario_node)
     workflow.add_node("review", present_for_review)
+    workflow.add_node("save", save_scenario_to_store)
 
     workflow.set_entry_point("initialize")
     workflow.add_edge("initialize", "generate")
     workflow.add_edge("generate", "review")
-    workflow.add_edge("review", END)
+    workflow.add_edge("review", "save")
+    workflow.add_edge("save", END)
 
     if checkpointer is None:
         checkpointer = InMemorySaver()
 
-    return workflow.compile(checkpointer=checkpointer)
+    used_store = store if store is not None else scenario_store
+
+    return workflow.compile(checkpointer=checkpointer, store=used_store)
+
+
+def save_scenario_to_store(state: TeacherReviewState) -> dict:
+    """Save approved scenario to LangGraph store."""
+    if state.scenario_draft and state.scenario_id:
+        scenario_store.put(
+            ("scenarios",),
+            state.scenario_id,
+            {"scenario_draft": state.scenario_draft, "class_id": state.class_id},
+        )
+    return {}

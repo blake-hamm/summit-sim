@@ -1,6 +1,8 @@
-"""Shared types for LangGraph state definitions."""
+"""Shared utilities for LangGraph state definitions."""
 
 from dataclasses import dataclass
+
+from langgraph.store.memory import InMemoryStore
 
 
 @dataclass
@@ -18,3 +20,6 @@ class TranscriptEntry:
     feedback: str
     learning_moments: list[str]
     next_turn_id: int | None
+
+
+scenario_store = InMemoryStore()

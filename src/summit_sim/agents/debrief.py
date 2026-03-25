@@ -6,7 +6,7 @@ import mlflow
 from mlflow.entities import SpanType
 
 from summit_sim.agents.config import get_agent
-from summit_sim.graphs.shared import TranscriptEntry
+from summit_sim.graphs.utils import TranscriptEntry
 from summit_sim.schemas import DebriefReport, ScenarioDraft
 
 AGENT_NAME = "debrief"

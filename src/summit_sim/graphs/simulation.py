@@ -19,7 +19,7 @@ from langgraph.types import interrupt
 
 from summit_sim.agents.debrief import generate_debrief
 from summit_sim.agents.simulation import process_choice
-from summit_sim.graphs.shared import TranscriptEntry
+from summit_sim.graphs.utils import TranscriptEntry
 from summit_sim.schemas import ChoiceOption, ScenarioDraft, SimulationResult
 
 if TYPE_CHECKING:

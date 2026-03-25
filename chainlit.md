@@ -5,4 +5,8 @@
 
 AI-powered wilderness rescue training scenarios for first responders.
 
-Configure your scenario below to get started.
+## I'm a Teacher
+Create and approve scenarios for students.
+
+## I'm a Student
+Join a scenario with your class link from your teacher.
