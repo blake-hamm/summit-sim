@@ -88,8 +88,8 @@ Views debrief: score, pass/fail, key mistakes, teaching points
 - Single "✅ Approve & Generate Link" action button
 - After approval, displays:
   - Scenario ID
-  - Class ID
-  - Shareable URL: `/scenario/{scenario_id}?class_id={class_id}`
+  - Class ID (internal use, not in URL)
+  - Shareable URL: `?scenario_id={scenario_id}` (uses BASE_URL env var)
 - Note: Hidden truth not displayed in current implementation
 
 **3. Teacher Dashboard** (post-approval)
@@ -99,11 +99,10 @@ Views debrief: score, pass/fail, key mistakes, teaching points
 
 ### Student Interface
 
-**1. Join Screen**
-- Class_id input (or auto-populated from URL param)
-- "Join Scenario" button
-- Scenario intro card (title, setting, patient)
-- "Start" button to begin
+**1. Join Screen** ✅ IMPLEMENTED
+- Scenario ID auto-populated from URL param (`?scenario_id=`)
+- Scenario intro card (title, setting, patient, learning objectives)
+- "Start Scenario" button to begin
 
 **2. Turn Display** (interrupt payload)
 - Narrative text in chat bubble style
@@ -225,10 +224,12 @@ Views debrief: score, pass/fail, key mistakes, teaching points
 - `golden_candidate` and `needs_review` tags added in 2.4
 
 **5. Storage Strategy**
-- LangGraph `InMemorySaver` for POC session state (replaced with DragonflyDB in 2.5)
+- LangGraph `InMemorySaver` for session state (checkpoints)
+- LangGraph `InMemoryStore` for scenario storage (shared between teacher/student flows)
+- `scenario_store` in `graphs/utils.py` - singleton instance
 - MLflow for trace logging and metadata storage
-- No additional persistence layer for 2.1-2.4
-- Scenarios retrieved via MLflow API query by class_id/scenario_id
+- No persistence across app restarts (InMemoryStore cleared on restart)
+- Scenarios saved to store on teacher approval, retrieved by student via scenario_id
 
 ---
 
@@ -294,9 +295,11 @@ Views debrief: score, pass/fail, key mistakes, teaching points
 
 ---
 
-### Story 2.2: Student Flow - Happy Path
+### Story 2.2: Student Flow - Happy Path ✅ COMPLETED
 
 **Goal**: Student joins via link, runs scenario, sees debrief. Reuses Epic 1 simulation graph.
+
+**Status**: Fully implemented and tested.
 
 **Architecture**: Use existing `create_simulation_graph()` from `src/summit_sim/graphs/simulation.py`
 
@@ -515,25 +518,36 @@ metrics = {
 - **Recovery**: On generation failure, show error message and restart wizard from beginning
 - **UX**: Friendly error messages with emojis (❌) for visibility
 
-### Current Status (Story 2.1)
-- ✅ All teacher flow functionality implemented
-- ✅ 51 tests passing, 93% coverage
+### Current Status (Epic 2 - All Stories Complete)
+- ✅ Story 2.1: Teacher flow (config → generate → review → approve)
+- ✅ Story 2.2: Student flow (join → simulate → debrief)
+- ✅ All tests passing, 80%+ coverage
 - ✅ Ruff linting clean
 - ✅ Chainlit UI functional with hidden composer
 - ✅ MLflow integration working
-- ⏳ Story 2.2 (Student flow) not yet started
+- ✅ Shared scenario storage via LangGraph InMemoryStore
+- ✅ Query param routing (?scenario_id=)
+- ✅ BASE_URL env var for configurable shareable links
+
+### Refactoring Notes (Post-Implementation)
+- Renamed `app/` directory to `ui/` for clarity (was misleading)
+- Renamed `app.py` to `main.py` as conventional entry point
+- Merged `__init__.py` handlers directly into `main.py`
+- Merged `storage.py` into `graphs/utils.py`
+- Changed URL routing from path-based (`/scenario/{id}`) to query params (`?scenario_id=`)
+- Removed `class_id` from shareable URL (kept in schema for future analytics use)
 
 ---
 
 ## Success Criteria
 
 ### Epic Complete When:
-- [ ] Teacher can complete happy path in <2 minutes ✅ (implemented)
-- [ ] Student can complete scenario in 5-10 minutes
-- [ ] MLflow shows complete trace: generation → approval → student run → debrief ✅ (partial: generation)
-- [ ] Demo works end-to-end without code changes
-- [ ] Ruff linting passes ✅ (clean)
-- [ ] Tests cover happy paths (≥80% coverage) ✅ (93% coverage)
+- [x] Teacher can complete happy path in <2 minutes
+- [x] Student can complete scenario in 5-10 minutes
+- [x] MLflow shows complete trace: generation → approval → student run → debrief
+- [x] Demo works end-to-end without code changes
+- [x] Ruff linting passes
+- [x] Tests cover happy paths (≥80% coverage)
 
 ### Story 2.1 Complete When:
 - [x] TeacherReviewState defined with full schema
@@ -541,16 +555,16 @@ metrics = {
 - [x] Notebook expanded with teacher flow demonstration
 - [x] Chainlit renders config wizard and review screen
 - [x] scenario_id and class_id generated and displayed
-- [x] Unique URL format: /scenario/{scenario_id}?class_id={class_id}
+- [x] Unique URL format: ?scenario_id={scenario_id} (uses BASE_URL env var)
 - [x] MLflow logs generation with sme_approved tag
 - [x] Message composer hidden for cleaner UX
 - [x] Translation files cleaned (English only)
 
 ### Story 2.2 Complete When:
-- [ ] Student joins with class_id
-- [ ] Simulation graph runs with interrupts
-- [ ] Debrief displays from state["debrief_report"]
-- [ ] MLflow links student run to class_id
+- [x] Student joins via ?scenario_id= URL param
+- [x] Simulation graph runs with interrupts
+- [x] Debrief displays from state["debrief_report"]
+- [x] MLflow links student run to scenario_id
 
 ---
 
@@ -565,15 +579,26 @@ metrics = {
 ### File Structure
 ```
 src/summit_sim/
+  main.py                   # Chainlit entry point
+  settings.py               # Configuration (includes BASE_URL)
+  schemas.py                # Data models
+  ui/
+    teacher.py              # Teacher flow handlers
+    student.py              # Student flow handlers
   graphs/
-    teacher_review.py      # Story 2.1, 2.3
-    simulation.py          # Existing (Epic 1)
-    state.py               # Add TeacherReviewState
-  app.py                   # Chainlit entry point
-  
+    teacher_review.py      # Teacher review LangGraph
+    simulation.py          # Student simulation LangGraph
+    utils.py               # Shared utilities (InMemoryStore, TranscriptEntry)
+  agents/
+    config.py              # Agent factory
+    generator.py           # Scenario generation agent
+    simulation.py          # Feedback generation agent
+    debrief.py             # Debrief generation agent
+
 tests/
-  test_teacher_review.py   # Story 2.1, 2.3
-  test_app.py              # Integration tests
+  test_teacher_review.py   # Teacher flow tests
+  test_student_flow.py     # Student flow tests
+  test_debrief.py          # Debrief agent tests
 
 plans/
   epic-2-web-poc.md                         # This document
