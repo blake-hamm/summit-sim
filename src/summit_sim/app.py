@@ -23,7 +23,7 @@ from summit_sim.settings import settings
 # Initialize MLflow before any agent usage
 mlflow.set_tracking_uri(settings.mlflow_tracking_uri)
 mlflow.set_experiment(settings.mlflow_experiment_name)
-mlflow.pydantic_ai.autolog()  # type: ignore[attr-defined]
+mlflow.pydantic_ai.autolog()
 
 if TYPE_CHECKING:
     import chainlit as cl
@@ -144,7 +144,6 @@ async def generate_scenario() -> None:
         "retry_count": 0,
         "feedback_history": [],
         "approval_status": None,
-        "mlflow_run_id": "",
     }
 
     try:

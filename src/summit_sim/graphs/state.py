@@ -46,7 +46,6 @@ class SimulationState(TypedDict):
     scenario_id: str
     class_id: str | None
     debrief_report: DebriefReport | None
-    mlflow_run_id: str
 
 
 class TeacherReviewState(TypedDict):
@@ -61,7 +60,7 @@ class TeacherReviewState(TypedDict):
     scenario_draft: ScenarioDraft | None
     scenario_id: str
     class_id: str
+    last_trace_id: str
     retry_count: int
     feedback_history: Annotated[list[str], append_reducer]
     approval_status: str | None
-    mlflow_run_id: str

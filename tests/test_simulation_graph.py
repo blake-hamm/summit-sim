@@ -1,7 +1,7 @@
 """Tests for the simulation graph workflow."""
 
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -125,7 +125,6 @@ def create_test_state(sample_scenario, **overrides):
         "scenario_id": "test-scenario-123",
         "class_id": None,
         "debrief_report": None,
-        "mlflow_run_id": "",
     }
     base.update(overrides)
     return base
@@ -154,7 +153,6 @@ class TestInitializeState:
             "scenario_id": "test-scenario-123",
             "class_id": None,
             "debrief_report": None,
-            "mlflow_run_id": "",
         }
 
         with pytest.raises(ValueError, match="Starting turn 999 not found"):
@@ -395,38 +393,25 @@ class TestSimulationGraphFullCycle:
                 mock_generate_debrief.return_value = mock_debrief_report
 
                 with patch("summit_sim.graphs.simulation.interrupt") as mock_interrupt:
-                    with patch(
-                        "summit_sim.graphs.simulation.mlflow.start_run"
-                    ) as mock_start_run:
-                        mock_run = MagicMock()
-                        mock_run.info.run_id = "mock-sim-run-id"
-                        mock_start_run.return_value.__enter__ = MagicMock(
-                            return_value=mock_run
-                        )
-                        mock_start_run.return_value.__exit__ = MagicMock(
-                            return_value=False
-                        )
+                    interrupt_returns = [
+                        {"choice_id": "check_airway"},
+                        {"choice_id": "call_help"},
+                        {"choice_id": "monitor"},
+                    ]
+                    mock_interrupt.side_effect = interrupt_returns
 
-                        interrupt_returns = [
-                            {"choice_id": "check_airway"},
-                            {"choice_id": "call_help"},
-                            {"choice_id": "monitor"},
-                        ]
-                        mock_interrupt.side_effect = interrupt_returns
-
-                        initial_state = {
-                            "scenario_draft": sample_scenario,
-                            "current_turn_id": 0,
-                            "transcript": [],
-                            "is_complete": False,
-                            "key_learning_moments": [],
-                            "last_selected_choice": None,
-                            "simulation_result": None,
-                            "scenario_id": "test-scenario-123",
-                            "class_id": None,
-                            "debrief_report": None,
-                            "mlflow_run_id": "",
-                        }
+                    initial_state = {
+                        "scenario_draft": sample_scenario,
+                        "current_turn_id": 0,
+                        "transcript": [],
+                        "is_complete": False,
+                        "key_learning_moments": [],
+                        "last_selected_choice": None,
+                        "simulation_result": None,
+                        "scenario_id": "test-scenario-123",
+                        "class_id": None,
+                        "debrief_report": None,
+                    }
 
                     graph = create_simulation_graph()
                     config: Any = {"configurable": {"thread_id": "test-thread"}}

@@ -16,6 +16,7 @@ from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import interrupt
+from mlflow.entities import AssessmentSource, AssessmentSourceType
 
 from summit_sim.agents.generator import generate_scenario
 from summit_sim.graphs.state import TeacherReviewState
@@ -46,9 +47,11 @@ async def generate_scenario_node(state: TeacherReviewState) -> dict:
     Calls the scenario generator agent to create a complete scenario
     based on the teacher's configuration parameters.
     """
-    with mlflow.start_run(run_name="generator-draft") as run:
-        scenario = await generate_scenario(state["teacher_config"])
-        return {"scenario_draft": scenario, "mlflow_run_id": run.info.run_id}
+    scenario = await generate_scenario(state["teacher_config"])
+    return {
+        "scenario_draft": scenario,
+        "last_trace_id": mlflow.get_last_active_trace_id(),
+    }
 
 
 def present_for_review(state: TeacherReviewState) -> dict:
@@ -78,6 +81,16 @@ def present_for_review(state: TeacherReviewState) -> dict:
         msg = f"Invalid decision: {decision}. Expected 'approve'"
         raise ValueError(msg)
 
+    last_trace_id = state["last_trace_id"]
+    mlflow.log_feedback(
+        trace_id=last_trace_id,
+        name="teacher_approved",
+        value=True,
+        rationale="Teacher approved",
+        source=AssessmentSource(
+            source_type=AssessmentSourceType.HUMAN, source_id=state["scenario_id"]
+        ),
+    )
     return {"approval_status": "approved"}
 
 

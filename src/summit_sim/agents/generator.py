@@ -68,15 +68,7 @@ The scenario should be challenging but educational for wilderness first responde
 
 @mlflow.trace(span_type=SpanType.AGENT)
 async def generate_scenario(teacher_config: TeacherConfig) -> ScenarioDraft:
-    """Generate a complete scenario from minimal teacher configuration.
-
-    Args:
-        teacher_config: Minimal scenario parameters from the teacher
-
-    Returns:
-        Complete ScenarioDraft with all turns pre-generated
-
-    """
+    """Generate a complete scenario from minimal teacher configuration."""
     agent = get_agent(
         agent_name=AGENT_NAME,
         output_type=ScenarioDraft,

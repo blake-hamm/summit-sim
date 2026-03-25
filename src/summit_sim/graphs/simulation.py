@@ -11,7 +11,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-import mlflow
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
@@ -109,9 +108,8 @@ async def process_turn(state: SimulationState) -> dict:
         msg = f"Turn {state['current_turn_id']} not found in scenario"
         raise ValueError(msg)
 
-    with mlflow.start_run(run_name="simulation-feedback") as run:
-        result = await process_choice(scenario, current_turn, selected_choice)
-        return {"simulation_result": result, "mlflow_run_id": run.info.run_id}
+    result = await process_choice(scenario, current_turn, selected_choice)
+    return {"simulation_result": result}
 
 
 def update_state(state: SimulationState) -> dict:
@@ -165,13 +163,12 @@ async def generate_debrief_node(state: SimulationState) -> dict:
     Calls the Debrief Agent to analyze the complete simulation transcript
     and generate a structured performance report.
     """
-    with mlflow.start_run(run_name="debrief") as run:
-        debrief_report = await generate_debrief(
-            transcript=state["transcript"],
-            scenario_draft=state["scenario_draft"],
-            scenario_id=state["scenario_id"],
-        )
-        return {"debrief_report": debrief_report, "mlflow_run_id": run.info.run_id}
+    debrief_report = await generate_debrief(
+        transcript=state["transcript"],
+        scenario_draft=state["scenario_draft"],
+        scenario_id=state["scenario_id"],
+    )
+    return {"debrief_report": debrief_report}
 
 
 def check_completion(state: SimulationState) -> str:
