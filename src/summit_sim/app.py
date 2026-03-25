@@ -10,20 +10,23 @@ Uses LangGraph state management with interrupt() for human-in-the-loop.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 import mlflow
 from langgraph.types import Command
 
-from summit_sim.graphs.state import TeacherReviewState
-from summit_sim.graphs.teacher_review import create_teacher_review_graph
-from summit_sim.schemas import TeacherConfig
+from summit_sim.graphs.teacher_review import (
+    TeacherReviewState,
+    create_teacher_review_graph,
+)
+from summit_sim.schemas import ScenarioDraft, TeacherConfig
 from summit_sim.settings import settings
 
 # Initialize MLflow before any agent usage
 mlflow.set_tracking_uri(settings.mlflow_tracking_uri)
 mlflow.set_experiment(settings.mlflow_experiment_name)
 mlflow.pydantic_ai.autolog()
+mlflow.langchain.autolog(run_tracer_inline=True)
 
 if TYPE_CHECKING:
     import chainlit as cl
@@ -136,15 +139,15 @@ async def generate_scenario() -> None:
     thread_id = cl.user_session.get("id")
     config_dict: RunnableConfig = {"configurable": {"thread_id": thread_id}}
 
-    initial_state: TeacherReviewState = {
-        "teacher_config": config,
-        "scenario_draft": None,
-        "scenario_id": "",
-        "class_id": "",
-        "retry_count": 0,
-        "feedback_history": [],
-        "approval_status": None,
-    }
+    initial_state: TeacherReviewState = TeacherReviewState(
+        teacher_config=config.model_dump(),
+        scenario_draft=None,
+        scenario_id="",
+        class_id="",
+        retry_count=0,
+        feedback_history=[],
+        approval_status=None,
+    )
 
     try:
         result = await graph.ainvoke(
@@ -153,7 +156,7 @@ async def generate_scenario() -> None:
         )
 
         if result.get("scenario_draft"):
-            state = cast(TeacherReviewState, result)
+            state = TeacherReviewState.from_graph_result(result)
             await show_review_screen(state)
         else:
             await cl.Message(
@@ -170,15 +173,16 @@ async def generate_scenario() -> None:
 
 async def show_review_screen(state: TeacherReviewState) -> None:
     """Display the scenario review screen with approve button."""
-    scenario = state["scenario_draft"]
-    scenario_id = state["scenario_id"]
+    scenario_dict = state.scenario_draft
+    scenario_id = state.scenario_id
 
-    if scenario is None:
+    if scenario_dict is None:
         await cl.Message(
             content="❌ Error: No scenario to review.",
         ).send()
         return
 
+    scenario = ScenarioDraft.model_validate(scenario_dict)
     await cl.Message(
         content=f"## 📋 Scenario Review\n\n**ID:** `{scenario_id}`",
     ).send()
@@ -235,11 +239,12 @@ async def handle_approval(state: TeacherReviewState) -> None:
             config=config_dict,
         )
 
-        scenario_id = result.get("scenario_id", "")
-        class_id = result.get("class_id", "")
-        approval_status = result.get("approval_status", "")
+        final_state = TeacherReviewState.from_graph_result(result)
+        approval_status = final_state.approval_status or ""
 
         if approval_status == "approved":
+            scenario_id = final_state.scenario_id or ""
+            class_id = final_state.class_id or ""
             shareable_url = f"/scenario/{scenario_id}?class_id={class_id}"
 
             await cl.Message(

@@ -9,7 +9,8 @@ This module implements a linear LangGraph workflow that:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from dataclasses import dataclass, field, fields
+from typing import TYPE_CHECKING, Any
 
 import mlflow
 from langgraph.checkpoint.memory import InMemorySaver
@@ -19,11 +20,41 @@ from langgraph.types import interrupt
 from mlflow.entities import AssessmentSource, AssessmentSourceType
 
 from summit_sim.agents.generator import generate_scenario
-from summit_sim.graphs.state import TeacherReviewState
-from summit_sim.schemas import generate_class_id, generate_scenario_id
+from summit_sim.schemas import (
+    ScenarioDraft,
+    TeacherConfig,
+    generate_class_id,
+    generate_scenario_id,
+)
 
 if TYPE_CHECKING:
     from langgraph.checkpoint.base import BaseCheckpointSaver
+
+
+@dataclass
+class TeacherReviewState:
+    """LangGraph state for teacher review workflow.
+
+    Maintains all state needed for the teacher review graph,
+    including the teacher configuration, generated scenario draft,
+    and review metadata.
+    """
+
+    teacher_config: dict
+    scenario_draft: dict | None = None
+    scenario_id: str = ""
+    class_id: str = ""
+    retry_count: int = 0
+    feedback_history: list[str] = field(default_factory=list)
+    approval_status: str | None = None
+    current_trace_id: str | None = None
+
+    @classmethod
+    def from_graph_result(cls, result: dict[str, Any]) -> "TeacherReviewState":
+        """Create state from LangGraph result, filtering extra fields."""
+        valid_fields = {f.name for f in fields(cls)}
+        filtered = {k: v for k, v in result.items() if k in valid_fields}
+        return cls(**filtered)
 
 
 def initialize_teacher_session(state: TeacherReviewState) -> TeacherReviewState:
@@ -32,13 +63,13 @@ def initialize_teacher_session(state: TeacherReviewState) -> TeacherReviewState:
     Generates scenario_id and class_id, initializes retry_count to 0,
     and creates empty feedback_history.
     """
-    return {
-        **state,
-        "scenario_id": generate_scenario_id(),
-        "class_id": generate_class_id(),
-        "retry_count": 0,
-        "feedback_history": [],
-    }
+    return TeacherReviewState(
+        teacher_config=state.teacher_config,
+        scenario_id=generate_scenario_id(),
+        class_id=generate_class_id(),
+        retry_count=0,
+        feedback_history=[],
+    )
 
 
 async def generate_scenario_node(state: TeacherReviewState) -> dict:
@@ -47,10 +78,13 @@ async def generate_scenario_node(state: TeacherReviewState) -> dict:
     Calls the scenario generator agent to create a complete scenario
     based on the teacher's configuration parameters.
     """
-    scenario = await generate_scenario(state["teacher_config"])
+    teacher_config = TeacherConfig.model_validate(state.teacher_config)
+    scenario = await generate_scenario(teacher_config)
+    active_span = mlflow.get_current_active_span()
+    current_trace_id = active_span.trace_id
     return {
-        "scenario_draft": scenario,
-        "last_trace_id": mlflow.get_last_active_trace_id(),
+        "scenario_draft": scenario.model_dump(),
+        "current_trace_id": current_trace_id,
     }
 
 
@@ -60,18 +94,19 @@ def present_for_review(state: TeacherReviewState) -> dict:
     Uses LangGraph's interrupt() for human-in-the-loop interaction.
     Displays the generated scenario and waits for teacher decision.
     """
-    scenario = state["scenario_draft"]
+    scenario = state.scenario_draft
 
     if scenario is None:
         msg = "No scenario draft available for review"
         raise ValueError(msg)
 
+    scenario_obj = ScenarioDraft.model_validate(scenario)
     choice_data = interrupt(
         {
             "type": "scenario_review",
-            "scenario": scenario,
-            "scenario_id": state["scenario_id"],
-            "class_id": state["class_id"],
+            "scenario": scenario_obj,
+            "scenario_id": state.scenario_id,
+            "class_id": state.class_id,
         }
     )
 
@@ -81,16 +116,16 @@ def present_for_review(state: TeacherReviewState) -> dict:
         msg = f"Invalid decision: {decision}. Expected 'approve'"
         raise ValueError(msg)
 
-    last_trace_id = state["last_trace_id"]
-    mlflow.log_feedback(
-        trace_id=last_trace_id,
-        name="teacher_approved",
-        value=True,
-        rationale="Teacher approved",
-        source=AssessmentSource(
-            source_type=AssessmentSourceType.HUMAN, source_id=state["scenario_id"]
-        ),
-    )
+    if current_trace_id := state.current_trace_id:
+        mlflow.log_feedback(
+            trace_id=current_trace_id,
+            name="teacher_approved",
+            value=True,
+            rationale="Teacher approved",
+            source=AssessmentSource(
+                source_type=AssessmentSourceType.HUMAN, source_id=state.scenario_id
+            ),
+        )
     return {"approval_status": "approved"}
 
 

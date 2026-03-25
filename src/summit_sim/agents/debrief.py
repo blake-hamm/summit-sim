@@ -6,7 +6,7 @@ import mlflow
 from mlflow.entities import SpanType
 
 from summit_sim.agents.config import get_agent
-from summit_sim.graphs.state import TranscriptEntry
+from summit_sim.graphs.shared import TranscriptEntry
 from summit_sim.schemas import DebriefReport, ScenarioDraft
 
 AGENT_NAME = "debrief"
@@ -93,7 +93,7 @@ def _build_debrief_prompt(
     """Build prompt for debrief agent."""
     score = calculate_score(transcript)
     total_turns = len(transcript)
-    correct_count = sum(1 for e in transcript if e["was_correct"])
+    correct_count = sum(1 for e in transcript if e.was_correct)
     incorrect_count = total_turns - correct_count
 
     scenario_context = _format_scenario_context(scenario_draft)
@@ -127,11 +127,11 @@ def _format_transcript_summary(transcript: list[TranscriptEntry]) -> str:
     """Format transcript entries for prompt."""
     lines = []
     for entry in transcript:
-        status = "CORRECT" if entry["was_correct"] else "INCORRECT"
+        status = "CORRECT" if entry.was_correct else "INCORRECT"
         lines.append(
-            f"Turn {entry['turn_id']}: {status}\n"
-            f"  Choice: {entry['choice_description']}\n"
-            f"  Feedback: {entry['feedback']}"
+            f"Turn {entry.turn_id}: {status}\n"
+            f"  Choice: {entry.choice_description}\n"
+            f"  Feedback: {entry.feedback}"
         )
     return "\n".join(lines)
 
@@ -152,6 +152,6 @@ def calculate_score(transcript: list[TranscriptEntry]) -> float:
         return 0.0
 
     total_turns = len(transcript)
-    correct_choices = sum(1 for entry in transcript if entry.get("was_correct", False))
+    correct_choices = sum(1 for entry in transcript if entry.was_correct)
 
     return (correct_choices / total_turns) * 100
