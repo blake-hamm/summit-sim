@@ -22,8 +22,6 @@ mlflow.langchain.autolog(run_tracer_inline=True)
 @on_chat_start
 async def start() -> None:
     """Initialize chat session - routes to teacher or student flow."""
-    teacher.set_restart_func(start)
-
     query_string = ""
     environ = cl.context.session.environ if hasattr(cl.context, "session") else {}
     http_referer = environ.get("HTTP_REFERER", "")

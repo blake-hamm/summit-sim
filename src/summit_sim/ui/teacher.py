@@ -1,6 +1,6 @@
 """Teacher flow handlers for the Chainlit app."""
 
-from typing import TYPE_CHECKING, Awaitable, Callable
+from typing import TYPE_CHECKING
 
 from langgraph.types import Command
 
@@ -16,21 +16,6 @@ if TYPE_CHECKING:
     from langchain_core.runnables import RunnableConfig
 else:
     import chainlit as cl
-
-RestartFunc = Callable[[], Awaitable[None]]
-_restart_func: RestartFunc | None = None
-
-
-def set_restart_func(func: RestartFunc) -> None:
-    """Set the restart function to be called on errors."""
-    global _restart_func  # noqa: PLW0603
-    _restart_func = func
-
-
-async def _restart() -> None:
-    """Restart the session."""
-    if _restart_func is not None:
-        await _restart_func()
 
 
 async def ask_num_participants() -> None:
@@ -153,13 +138,11 @@ async def generate_scenario() -> None:
             await cl.Message(
                 content="❌ Error: Scenario generation failed. Please try again.",
             ).send()
-            await _restart()
 
     except Exception as e:
         await cl.Message(
             content=f"❌ Error during generation: {e!s}",
         ).send()
-        await _restart()
 
 
 async def show_review_screen(state: TeacherState) -> None:
@@ -218,7 +201,6 @@ async def handle_approval(state: TeacherState) -> None:
     graph = cl.user_session.get("graph")
     if graph is None:
         await cl.Message(content="❌ Error: Session expired. Please start over.").send()
-        await _restart()
         return
 
     thread_id = cl.user_session.get("id")
