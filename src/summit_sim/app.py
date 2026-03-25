@@ -12,15 +12,18 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, cast
 
+import mlflow
 from langgraph.types import Command
 
 from summit_sim.graphs.state import TeacherReviewState
 from summit_sim.graphs.teacher_review import create_teacher_review_graph
 from summit_sim.schemas import TeacherConfig
-from summit_sim.tracing import enable_tracing
+from summit_sim.settings import settings
 
-# Initialize MLflow tracing before any agent usage
-enable_tracing()
+# Initialize MLflow before any agent usage
+mlflow.set_tracking_uri(settings.mlflow_tracking_uri)
+mlflow.set_experiment(settings.mlflow_experiment_name)
+mlflow.pydantic_ai.autolog()  # type: ignore[attr-defined]
 
 if TYPE_CHECKING:
     import chainlit as cl
@@ -141,6 +144,7 @@ async def generate_scenario() -> None:
         "retry_count": 0,
         "feedback_history": [],
         "approval_status": None,
+        "mlflow_run_id": "",
     }
 
     try:

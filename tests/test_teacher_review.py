@@ -1,7 +1,7 @@
 """Tests for the teacher review graph workflow."""
 
 from typing import Any
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from langgraph.types import Command
@@ -75,6 +75,7 @@ def initial_state(sample_teacher_config):
         "retry_count": 0,
         "feedback_history": [],
         "approval_status": None,
+        "mlflow_run_id": "",
     }
 
 
@@ -112,17 +113,14 @@ class TestPresentForReview:
             "retry_count": 0,
             "feedback_history": [],
             "approval_status": None,
+            "mlflow_run_id": "",
         }
 
-        with (
-            patch("summit_sim.graphs.teacher_review.interrupt") as mock_interrupt,
-            patch("summit_sim.graphs.teacher_review.mlflow.set_tag") as mock_set_tag,
-        ):
+        with patch("summit_sim.graphs.teacher_review.interrupt") as mock_interrupt:
             mock_interrupt.return_value = {"decision": "approve"}
             result = present_for_review(state)
 
         assert result["approval_status"] == "approved"
-        mock_set_tag.assert_called_once_with("sme_approved", "true")
 
     def test_present_for_review_no_scenario(self):
         """Test presenting with no scenario raises error."""
@@ -136,6 +134,7 @@ class TestPresentForReview:
             "retry_count": 0,
             "feedback_history": [],
             "approval_status": None,
+            "mlflow_run_id": "",
         }
 
         with pytest.raises(ValueError, match="No scenario draft available"):
@@ -153,6 +152,7 @@ class TestPresentForReview:
             "retry_count": 0,
             "feedback_history": [],
             "approval_status": None,
+            "mlflow_run_id": "",
         }
 
         with patch("summit_sim.graphs.teacher_review.interrupt") as mock_interrupt:
@@ -219,8 +219,14 @@ class TestTeacherReviewGraphFullCycle:
 
             with (
                 patch("summit_sim.graphs.teacher_review.interrupt") as mock_interrupt,
-                patch("summit_sim.graphs.teacher_review.mlflow.set_tag"),
+                patch(
+                    "summit_sim.graphs.teacher_review.mlflow.start_run"
+                ) as mock_start_run,
             ):
+                mock_run = MagicMock()
+                mock_run.info.run_id = "mock-run-id-123"
+                mock_start_run.return_value.__enter__ = MagicMock(return_value=mock_run)
+                mock_start_run.return_value.__exit__ = MagicMock(return_value=False)
                 mock_interrupt.return_value = {"decision": "approve"}
 
                 initial_state = {
@@ -231,6 +237,7 @@ class TestTeacherReviewGraphFullCycle:
                     "retry_count": 0,
                     "feedback_history": [],
                     "approval_status": None,
+                    "mlflow_run_id": "",
                 }
 
                 graph = create_teacher_review_graph()

@@ -109,17 +109,9 @@ async def process_turn(state: SimulationState) -> dict:
         msg = f"Turn {state['current_turn_id']} not found in scenario"
         raise ValueError(msg)
 
-    # Link trace to session metadata
-    mlflow.update_current_trace(
-        metadata={
-            "turn_id": str(current_turn.turn_id),
-            "choice_id": str(selected_choice.choice_id),
-        }
-    )
-
-    result = await process_choice(scenario, current_turn, selected_choice)
-
-    return {"simulation_result": result}
+    with mlflow.start_run(run_name="simulation-feedback") as run:
+        result = await process_choice(scenario, current_turn, selected_choice)
+        return {"simulation_result": result, "mlflow_run_id": run.info.run_id}
 
 
 def update_state(state: SimulationState) -> dict:
@@ -173,19 +165,13 @@ async def generate_debrief_node(state: SimulationState) -> dict:
     Calls the Debrief Agent to analyze the complete simulation transcript
     and generate a structured performance report.
     """
-    # Link trace to session metadata
-    mlflow.update_current_trace(
-        metadata={
-            "scenario_id": state["scenario_id"],
-        }
-    )
-
-    debrief_report = await generate_debrief(
-        transcript=state["transcript"],
-        scenario_draft=state["scenario_draft"],
-        scenario_id=state["scenario_id"],
-    )
-    return {"debrief_report": debrief_report}
+    with mlflow.start_run(run_name="debrief") as run:
+        debrief_report = await generate_debrief(
+            transcript=state["transcript"],
+            scenario_draft=state["scenario_draft"],
+            scenario_id=state["scenario_id"],
+        )
+        return {"debrief_report": debrief_report, "mlflow_run_id": run.info.run_id}
 
 
 def check_completion(state: SimulationState) -> str:

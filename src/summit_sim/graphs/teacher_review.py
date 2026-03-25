@@ -46,8 +46,9 @@ async def generate_scenario_node(state: TeacherReviewState) -> dict:
     Calls the scenario generator agent to create a complete scenario
     based on the teacher's configuration parameters.
     """
-    scenario = await generate_scenario(state["teacher_config"])
-    return {"scenario_draft": scenario}
+    with mlflow.start_run(run_name="generator-draft") as run:
+        scenario = await generate_scenario(state["teacher_config"])
+        return {"scenario_draft": scenario, "mlflow_run_id": run.info.run_id}
 
 
 def present_for_review(state: TeacherReviewState) -> dict:
@@ -76,9 +77,6 @@ def present_for_review(state: TeacherReviewState) -> dict:
     if decision != "approve":
         msg = f"Invalid decision: {decision}. Expected 'approve'"
         raise ValueError(msg)
-
-    # Tag the trace with SME approval
-    mlflow.set_tag("sme_approved", "true")
 
     return {"approval_status": "approved"}
 
