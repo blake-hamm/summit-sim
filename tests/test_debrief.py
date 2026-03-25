@@ -6,7 +6,7 @@ import pytest
 
 from summit_sim.agents import config as agent_config
 from summit_sim.agents.debrief import calculate_score, generate_debrief
-from summit_sim.graphs.shared import TranscriptEntry
+from summit_sim.graphs.utils import TranscriptEntry
 from summit_sim.schemas import (
     ChoiceOption,
     DebriefReport,

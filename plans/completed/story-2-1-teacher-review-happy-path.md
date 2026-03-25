@@ -15,7 +15,7 @@ Implement the teacher review workflow with human-in-the-loop (HITL) via LangGrap
 
 ## Success Criteria
 
-- [x] `TeacherReviewState` defined with full schema (including future-use fields)
+- [x] `TeacherState` defined with full schema (including future-use fields)
 - [x] Teacher graph executes: initialize → generate → interrupt → approve → END
 - [x] Notebook demonstrates full teacher flow end-to-end
 - [x] Chainlit renders config wizard (3-step) and review screen
@@ -100,7 +100,7 @@ The app will start on `http://localhost:8000`.
 Add to `src/summit_sim/graphs/state.py`:
 
 ```python
-class TeacherReviewState(TypedDict):
+class TeacherState(TypedDict):
     """LangGraph state for teacher review workflow."""
     teacher_config: TeacherConfig
     scenario_draft: ScenarioDraft | None
@@ -147,8 +147,8 @@ class TeacherReviewState(TypedDict):
 ### Graph Builder
 
 ```python
-def create_teacher_review_graph(checkpointer=None):
-    builder = StateGraph(TeacherReviewState)
+def create_teacher_graph(checkpointer=None):
+    builder = StateGraph(TeacherState)
     
     builder.add_node("initialize", initialize_teacher_session)
     builder.add_node("generate", generate_scenario_node)
@@ -170,26 +170,26 @@ def create_teacher_review_graph(checkpointer=None):
 
 ### 1. State Schema (`src/summit_sim/graphs/state.py`)
 
-Add the `TeacherReviewState` TypedDict with proper type annotations and reducers.
+Add the `TeacherState` TypedDict with proper type annotations and reducers.
 
 **Key Decisions**:
 - Include `feedback_history` with `append_reducer` even though unused in 2.1
 - Include `retry_count` initialized to 0
 - All fields type-annotated for mypy
 
-### 2. Teacher Review Graph (`src/summit_sim/graphs/teacher_review.py`)
+### 2. Teacher Review Graph (`src/summit_sim/graphs/teacher.py`)
 
 Create new module with:
 - Node functions (async where needed)
 - Graph builder function
-- Import patterns matching `simulation.py`
+- Import patterns matching `student.py`
 
 **Patterns to Follow**:
 - Use `@mlflow.trace(span_type=SpanType.AGENT)` decorator on agent calls
 - Post-process deterministic fields outside LLM calls
 - Clear docstrings (short summary only, no Args/Returns sections)
 
-### 3. Tests (`tests/test_teacher_review.py`)
+### 3. Tests (`tests/test_teacher.py`)
 
 **Test Coverage**:
 - `test_initialize_teacher_session`: Verify ID generation, state initialization
@@ -359,13 +359,13 @@ shareable_url = f"/scenario/{scenario_id}?class_id={class_id}"
 
 ### New Files
 ```
-src/summit_sim/graphs/teacher_review.py    # Graph implementation
-tests/test_teacher_review.py               # Unit + integration tests
+src/summit_sim/graphs/teacher.py    # Graph implementation
+tests/test_teacher.py               # Unit + integration tests
 ```
 
 ### Modified Files
 ```
-src/summit_sim/graphs/state.py             # Add TeacherReviewState
+src/summit_sim/graphs/state.py             # Add TeacherState
 src/summit_sim/app.py                      # Chainlit entry point
 notebooks/summit-sim-demo.ipynb            # Add teacher flow section
 ```
@@ -400,7 +400,7 @@ notebooks/summit-sim-demo.ipynb            # Add teacher flow section
 ```bash
 # After implementation
 ruff check --fix . && ruff format .
-coverage run -m pytest tests/test_teacher_review.py && coverage report
+coverage run -m pytest tests/test_teacher.py && coverage report
 ```
 
 ---
@@ -421,7 +421,7 @@ coverage run -m pytest tests/test_teacher_review.py && coverage report
 
 | Risk | Mitigation |
 |------|------------|
-| LangGraph interrupt complexity | Follow exact pattern from `simulation.py` and Epic 1 notebook |
+| LangGraph interrupt complexity | Follow exact pattern from `student.py` and Epic 1 notebook |
 | State management between Chainlit messages | Store graph config in `cl.user_session` |
 | MLflow context propagation | Use existing `simulation_session()` wrapper |
 | Interrupt payload structure changes | Version the payload type in interrupt data |
@@ -462,6 +462,6 @@ coverage run -m pytest tests/test_teacher_review.py && coverage report
 
 - Epic Plan: `plans/epic-2-web-poc.md`
 - Architecture: `plans/high-level-arch.md`
-- Existing Simulation Graph: `src/summit_sim/graphs/simulation.py`
+- Existing Simulation Graph: `src/summit_sim/graphs/student.py`
 - State Definitions: `src/summit_sim/graphs/state.py`
 - Demo Notebook: `notebooks/summit-sim-demo.ipynb`

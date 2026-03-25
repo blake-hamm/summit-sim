@@ -1,4 +1,4 @@
-"""LangGraph workflow for simulation orchestration.
+"""LangGraph workflow for student orchestration.
 
 This module implements a cyclic LangGraph workflow that:
 1. Presents turns to students with multiple choice options
@@ -17,9 +17,8 @@ from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import interrupt
 
-from summit_sim.agents.debrief import generate_debrief
 from summit_sim.agents.simulation import process_choice
-from summit_sim.graphs.shared import TranscriptEntry
+from summit_sim.graphs.utils import TranscriptEntry
 from summit_sim.schemas import ChoiceOption, ScenarioDraft, SimulationResult
 
 if TYPE_CHECKING:
@@ -27,10 +26,10 @@ if TYPE_CHECKING:
 
 
 @dataclass
-class SimulationState:
-    """LangGraph state for simulation workflow.
+class StudentState:
+    """LangGraph state for student workflow.
 
-    Maintains all state needed for the cyclic simulation graph,
+    Maintains all state needed for the cyclic student graph,
     including the scenario, current position, and accumulated history.
     """
 
@@ -46,15 +45,15 @@ class SimulationState:
     debrief_report: dict | None = None
 
     @classmethod
-    def from_graph_result(cls, result: dict[str, Any]) -> "SimulationState":
+    def from_graph_result(cls, result: dict[str, Any]) -> "StudentState":
         """Create state from LangGraph result, filtering extra fields."""
         valid_fields = {f.name for f in fields(cls)}
         filtered = {k: v for k, v in result.items() if k in valid_fields}
         return cls(**filtered)
 
 
-def initialize_state(state: SimulationState) -> SimulationState:
-    """Initialize simulation state from scenario draft.
+def initialize_student(state: StudentState) -> StudentState:
+    """Initialize student state from scenario draft.
 
     Validates that the starting turn ID exists in the scenario.
     """
@@ -68,7 +67,7 @@ def initialize_state(state: SimulationState) -> SimulationState:
     return state
 
 
-def present_turn(state: SimulationState) -> dict:
+def present_student_turn(state: StudentState) -> dict:
     """Present current turn to student and wait for choice selection.
 
     Uses LangGraph's interrupt() for human-in-the-loop interaction.
@@ -121,7 +120,7 @@ def _find_choice_by_id(choices: list[ChoiceOption], choice_id: str) -> ChoiceOpt
     raise ValueError(msg)
 
 
-async def process_turn(state: SimulationState) -> dict:
+async def process_student_turn(state: StudentState) -> dict:
     """Process student's choice and generate feedback.
 
     Calls the Simulation Feedback Agent to generate personalized
@@ -139,8 +138,8 @@ async def process_turn(state: SimulationState) -> dict:
     return {"simulation_result": result.model_dump()}
 
 
-def update_state(state: SimulationState) -> dict:
-    """Update simulation state after processing choice.
+def update_student_state(state: StudentState) -> dict:
+    """Update student state after processing choice.
 
     Appends transcript entry, updates learning moments, and advances
     to the next turn based on the selected choice.
@@ -184,12 +183,14 @@ def update_state(state: SimulationState) -> dict:
     }
 
 
-async def generate_debrief_node(state: SimulationState) -> dict:
-    """Generate debrief report after simulation completes.
+async def generate_debrief_report(state: StudentState) -> dict:
+    """Generate debrief report after student completes simulation.
 
     Calls the Debrief Agent to analyze the complete simulation transcript
     and generate a structured performance report.
     """
+    from summit_sim.agents.debrief import generate_debrief  # noqa: PLC0415
+
     debrief_report = await generate_debrief(
         transcript=state.transcript,
         scenario_draft=ScenarioDraft.model_validate(state.scenario_draft),
@@ -198,40 +199,40 @@ async def generate_debrief_node(state: SimulationState) -> dict:
     return {"debrief_report": debrief_report.model_dump()}
 
 
-def check_completion(state: SimulationState) -> str:
-    """Check if simulation should continue or end.
+def check_student_completion(state: StudentState) -> str:
+    """Check if student simulation should continue or end.
 
     Routes the graph to either continue presenting turns or generate
     debrief based on the is_complete flag.
     """
     if state.is_complete:
         return "generate_debrief"
-    return "present_turn"
+    return "present_student_turn"
 
 
-def create_simulation_graph(
+def create_student_graph(
     checkpointer: BaseCheckpointSaver | None = None,
 ) -> CompiledStateGraph:
-    """Create and configure the simulation LangGraph."""
-    workflow = StateGraph(SimulationState)
+    """Create and configure the student LangGraph."""
+    workflow = StateGraph(StudentState)
 
-    workflow.add_node("initialize", initialize_state)
-    workflow.add_node("present_turn", present_turn)
-    workflow.add_node("process_turn", process_turn)
-    workflow.add_node("update_state", update_state)
-    workflow.add_node("generate_debrief", generate_debrief_node)
+    workflow.add_node("initialize", initialize_student)
+    workflow.add_node("present_student_turn", present_student_turn)
+    workflow.add_node("process_student_turn", process_student_turn)
+    workflow.add_node("update_student_state", update_student_state)
+    workflow.add_node("generate_debrief", generate_debrief_report)
 
     workflow.set_entry_point("initialize")
-    workflow.add_edge("initialize", "present_turn")
-    workflow.add_edge("present_turn", "process_turn")
-    workflow.add_edge("process_turn", "update_state")
+    workflow.add_edge("initialize", "present_student_turn")
+    workflow.add_edge("present_student_turn", "process_student_turn")
+    workflow.add_edge("process_student_turn", "update_student_state")
 
     workflow.add_conditional_edges(
-        "update_state",
-        check_completion,
+        "update_student_state",
+        check_student_completion,
         {
             "generate_debrief": "generate_debrief",
-            "present_turn": "present_turn",
+            "present_student_turn": "present_student_turn",
         },
     )
 

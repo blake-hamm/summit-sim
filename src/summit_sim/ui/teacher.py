@@ -1,45 +1,21 @@
-"""Summit-Sim Chainlit web interface.
-
-Teacher Flow:
-1. Config form (3 fields) → Generate scenario
-2. Review screen with scenario details → Approve
-3. Shareable URL display
-
-Uses LangGraph state management with interrupt() for human-in-the-loop.
-"""
-
-from __future__ import annotations
+"""Teacher flow handlers for the Chainlit app."""
 
 from typing import TYPE_CHECKING
 
-import mlflow
 from langgraph.types import Command
 
-from summit_sim.graphs.teacher_review import (
-    TeacherReviewState,
-    create_teacher_review_graph,
+from summit_sim.graphs.teacher import (
+    TeacherState,
+    create_teacher_graph,
 )
 from summit_sim.schemas import ScenarioDraft, TeacherConfig
 from summit_sim.settings import settings
-
-# Initialize MLflow before any agent usage
-mlflow.set_tracking_uri(settings.mlflow_tracking_uri)
-mlflow.set_experiment(settings.mlflow_experiment_name)
-mlflow.pydantic_ai.autolog()
-mlflow.langchain.autolog(run_tracer_inline=True)
 
 if TYPE_CHECKING:
     import chainlit as cl
     from langchain_core.runnables import RunnableConfig
 else:
     import chainlit as cl
-
-
-@cl.on_chat_start
-async def start() -> None:
-    """Initialize chat session and start config flow."""
-    cl.user_session.set("mode", "teacher")
-    await ask_num_participants()
 
 
 async def ask_num_participants() -> None:
@@ -133,13 +109,13 @@ async def generate_scenario() -> None:
 
     await cl.Message(content="⏳ Generating your scenario...").send()
 
-    graph = create_teacher_review_graph()
+    graph = create_teacher_graph()
     cl.user_session.set("graph", graph)
 
     thread_id = cl.user_session.get("id")
     config_dict: RunnableConfig = {"configurable": {"thread_id": thread_id}}
 
-    initial_state: TeacherReviewState = TeacherReviewState(
+    initial_state: TeacherState = TeacherState(
         teacher_config=config.model_dump(),
         scenario_draft=None,
         scenario_id="",
@@ -156,22 +132,20 @@ async def generate_scenario() -> None:
         )
 
         if result.get("scenario_draft"):
-            state = TeacherReviewState.from_graph_result(result)
+            state = TeacherState.from_graph_result(result)
             await show_review_screen(state)
         else:
             await cl.Message(
                 content="❌ Error: Scenario generation failed. Please try again.",
             ).send()
-            await start()
 
     except Exception as e:
         await cl.Message(
             content=f"❌ Error during generation: {e!s}",
         ).send()
-        await start()
 
 
-async def show_review_screen(state: TeacherReviewState) -> None:
+async def show_review_screen(state: TeacherState) -> None:
     """Display the scenario review screen with approve button."""
     scenario_dict = state.scenario_draft
     scenario_id = state.scenario_id
@@ -222,12 +196,11 @@ async def show_review_screen(state: TeacherReviewState) -> None:
         await handle_approval(state)
 
 
-async def handle_approval(state: TeacherReviewState) -> None:
+async def handle_approval(state: TeacherState) -> None:
     """Handle scenario approval and generate shareable link."""
     graph = cl.user_session.get("graph")
     if graph is None:
         await cl.Message(content="❌ Error: Session expired. Please start over.").send()
-        await start()
         return
 
     thread_id = cl.user_session.get("id")
@@ -239,20 +212,20 @@ async def handle_approval(state: TeacherReviewState) -> None:
             config=config_dict,
         )
 
-        final_state = TeacherReviewState.from_graph_result(result)
+        final_state = TeacherState.from_graph_result(result)
         approval_status = final_state.approval_status or ""
 
         if approval_status == "approved":
             scenario_id = final_state.scenario_id or ""
             class_id = final_state.class_id or ""
-            shareable_url = f"/scenario/{scenario_id}?class_id={class_id}"
+            shareable_url = f"{settings.base_url}?scenario_id={scenario_id}"
 
             await cl.Message(
                 content=(
                     f"## ✅ Scenario Approved!\n\n"
                     f"**Scenario ID:** `{scenario_id}`\n"
                     f"**Class ID:** `{class_id}`\n\n"
-                    f"**Shareable URL:**\n`{shareable_url}`"
+                    f"**Shareable URL:**\n{shareable_url}"
                 ),
             ).send()
 
@@ -273,21 +246,3 @@ async def handle_approval(state: TeacherReviewState) -> None:
             content=f"❌ Error during approval: {e!s}",
         ).send()
         await show_review_screen(state)
-
-
-@cl.on_message
-async def main(_message: cl.Message) -> None:
-    """Handle incoming messages (fallback handler)."""
-    mode = cl.user_session.get("mode")
-
-    if mode == "teacher":
-        await cl.Message(
-            content=(
-                "Type **restart** to create a new scenario, or use the buttons above."
-            ),
-        ).send()
-    else:
-        await cl.Message(
-            content="Welcome! The scenario creator will start automatically.",
-        ).send()
-        await start()

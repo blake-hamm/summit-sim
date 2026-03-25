@@ -2,7 +2,7 @@
 
 ## Overview
 
-Implement the Debrief Agent that analyzes completed student simulation runs. The agent takes the final `SimulationState` (formerly AppState), generates a structured `DebriefReport` with performance analysis, and logs metrics to MLflow.
+Implement the Debrief Agent that analyzes completed student simulation runs. The agent takes the final `StudentState` (formerly AppState), generates a structured `DebriefReport` with performance analysis, and logs metrics to MLflow.
 
 **Scope**: Student simulation debrief only (not generator debrief).
 
@@ -38,7 +38,7 @@ Metrics      Caller         State
 ### Key Design Decisions
 
 1. **Separate debrief node**: Runs after simulation graph completes (check_completion → __end__)
-2. **State rename**: `AppState` → `SimulationState` (more accurate)
+2. **State rename**: `AppState` → `StudentState` (more accurate)
 3. **ID structure**: 
    - `scenario_id`: Unique per scenario run (primary link)
    - `class_id`: Optional grouping (e.g., for classes with multiple scenarios)
@@ -55,7 +55,7 @@ These changes must be completed **before** implementing the DebriefAgent. They e
 
 **File**: `src/summit_sim/graphs/state.py`
 
-Rename `AppState` → `SimulationState` for accuracy:
+Rename `AppState` → `StudentState` for accuracy:
 - Current name suggests it represents the entire application
 - Actually only represents simulation phase state
 - More descriptive and reduces confusion
@@ -87,9 +87,9 @@ class HostConfig(BaseModel):
     # scenario_id will be auto-generated during scenario creation
 ```
 
-#### Changes to `SimulationState` (`src/summit_sim/graphs/state.py`):
+#### Changes to `StudentState` (`src/summit_sim/graphs/state.py`):
 ```python
-class SimulationState(TypedDict):
+class StudentState(TypedDict):
     # ... existing fields ...
     
     scenario_id: str  # Required - unique per scenario run
@@ -114,7 +114,7 @@ class TranscriptEntry(TypedDict):
 
 ### Pre-Req 4: Scenario ID Generation
 
-**File**: `src/summit_sim/agents/generator.py` or `src/summit_sim/graphs/simulation.py`
+**File**: `src/summit_sim/agents/generator.py` or `src/summit_sim/graphs/student.py`
 
 Generate unique `scenario_id` when scenario is created:
 ```python
@@ -124,7 +124,7 @@ def generate_scenario_id() -> str:
 ```
 
 **Integration**:
-- Generation phase: Create scenario_id and pass to SimulationState
+- Generation phase: Create scenario_id and pass to StudentState
 - Simulation phase: Use scenario_id for MLflow tagging
 - Debrief phase: Use scenario_id for report correlation
 
@@ -166,21 +166,21 @@ def simulation_session(
 
 ### Pre-Req 6: Update Simulation Graph
 
-**File**: `src/summit_sim/graphs/simulation.py`
+**File**: `src/summit_sim/graphs/student.py`
 
 Update graph to accept and propagate scenario_id:
 1. Add scenario_id to initial state creation
 2. Ensure it's passed through graph state
-3. Update all state references from AppState to SimulationState
+3. Update all state references from AppState to StudentState
 
 ### Pre-Req Checklist
 
 Before starting Story 1.3 implementation:
 
-- [ ] Rename `AppState` → `SimulationState`
+- [ ] Rename `AppState` → `StudentState`
 - [ ] Add `was_correct` field to `TranscriptEntry`
 - [ ] Add `class_id` (optional) to `HostConfig`
-- [ ] Add `scenario_id` and `class_id` to `SimulationState`
+- [ ] Add `scenario_id` and `class_id` to `StudentState`
 - [ ] Implement `scenario_id` generation in generation phase
 - [ ] Update `simulation_session` to log both IDs
 - [ ] Update all imports and test files
@@ -196,7 +196,7 @@ Before starting Story 1.3 implementation:
 **File**: `src/summit_sim/schemas.py`
 
 #### 1.1 Rename AppState references
-- Rename `AppState` to `SimulationState` in `src/summit_sim/graphs/state.py`
+- Rename `AppState` to `StudentState` in `src/summit_sim/graphs/state.py`
 - Update all imports across codebase
 - Update tests
 
@@ -225,15 +225,15 @@ Update these schemas to include IDs:
 - Keep `class_id` (optional, for grouping)
 - Add `scenario_id` (auto-generated, unique per run)
 
-**SimulationState**:
+**StudentState**:
 - Add `scenario_id` field
 - Add `class_id` field (optional)
 
 ### Phase 2: State Rename
 
 **Files to update**:
-1. `src/summit_sim/graphs/state.py` - Rename `AppState` → `SimulationState`
-2. `src/summit_sim/graphs/simulation.py` - Update all references
+1. `src/summit_sim/graphs/state.py` - Rename `AppState` → `StudentState`
+2. `src/summit_sim/graphs/student.py` - Update all references
 3. `src/summit_sim/graphs/__init__.py` - Export new name
 4. All test files that import AppState
 
@@ -322,11 +322,11 @@ def calculate_score(transcript: list[TranscriptEntry]) -> float:
 
 ### Phase 4: Graph Integration
 
-**File**: `src/summit_sim/graphs/simulation.py`
+**File**: `src/summit_sim/graphs/student.py`
 
 #### 4.1 Add debrief node
 ```python
-async def generate_debrief_node(state: SimulationState) -> dict:
+async def generate_debrief_node(state: StudentState) -> dict:
     """Generate debrief report after simulation completes."""
     debrief_report = await generate_debrief(
         transcript=state["transcript"],
@@ -442,8 +442,8 @@ Create notebook `notebooks/story-1-3-debrief.ipynb`:
 ## Success Criteria
 
 - [ ] `DebriefReport` schema defined with all fields
-- [ ] `AppState` renamed to `SimulationState`
-- [ ] `scenario_id` added to HostConfig and SimulationState
+- [ ] `AppState` renamed to `StudentState`
+- [ ] `scenario_id` added to HostConfig and StudentState
 - [ ] `class_id` kept as optional grouping field
 - [ ] DebriefAgent implemented following `get_agent()` pattern
 - [ ] Score calculation: `(correct_choices / total_turns) * 100`
@@ -468,9 +468,9 @@ Create notebook `notebooks/story-1-3-debrief.ipynb`:
 
 ### Modified Files
 1. `src/summit_sim/schemas.py` - Add DebriefReport, update IDs
-2. `src/summit_sim/graphs/state.py` - Rename AppState → SimulationState, add IDs
-3. `src/summit_sim/graphs/simulation.py` - Update state references
-4. `src/summit_sim/graphs/__init__.py` - Export SimulationState
+2. `src/summit_sim/graphs/state.py` - Rename AppState → StudentState, add IDs
+3. `src/summit_sim/graphs/student.py` - Update state references
+4. `src/summit_sim/graphs/__init__.py` - Export StudentState
 5. `src/summit_sim/tracing.py` - Add debrief logging, scenario_id support
 6. `tests/test_simulation_graph.py` - Update state references
 7. `tests/test_schemas.py` - Add DebriefReport tests
@@ -550,7 +550,7 @@ def test_mlflow_logs_pass_fail_tag():
 
 1. Review and approve plan
 2. Implement schema changes (DebriefReport, ID fields)
-3. Rename AppState → SimulationState
+3. Rename AppState → StudentState
 4. Implement DebriefAgent
 5. Add MLflow logging
 6. Write tests (TDD approach)

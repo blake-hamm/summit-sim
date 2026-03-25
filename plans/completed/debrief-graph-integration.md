@@ -13,13 +13,13 @@ Move the debrief from a standalone function call to a terminal node in the simul
 
 ### 1. `src/summit_sim/graphs/state.py`
 - Import `DebriefReport` from `summit_sim.schemas`
-- Add `debrief_report: DebriefReport | None` to `SimulationState`
+- Add `debrief_report: DebriefReport | None` to `StudentState`
 
-### 2. `src/summit_sim/graphs/simulation.py`
+### 2. `src/summit_sim/graphs/student.py`
 - Import `generate_debrief` from `summit_sim.agents.debrief`
 - Add new node function:
   ```python
-  async def generate_debrief_node(state: SimulationState) -> dict:
+  async def generate_debrief_node(state: StudentState) -> dict:
       """Generate debrief report after simulation completes."""
       debrief_report = await generate_debrief(
           transcript=state["transcript"],
@@ -30,12 +30,12 @@ Move the debrief from a standalone function call to a terminal node in the simul
   ```
 - Update `check_completion` to route to `"generate_debrief"` instead of `END` when complete:
   ```python
-  def check_completion(state: SimulationState) -> str:
+  def check_completion(state: StudentState) -> str:
       if state["is_complete"]:
           return "generate_debrief"
       return "present_turn"
   ```
-- Wire the new node in `create_simulation_graph`:
+- Wire the new node in `create_student_graph`:
   ```python
   workflow.add_node("generate_debrief", generate_debrief_node)
   # Update conditional edges
