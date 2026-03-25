@@ -209,7 +209,7 @@ scenario = await generate_scenario(config)
 
 ### 6. Simulation Feedback Agent
 
-**File**: `src/summit_sim/agents/simulation.py`
+**File**: `src/summit_sim/agents/student.py`
 
 Purpose: Provides AI-generated feedback when students make choices
 
@@ -249,7 +249,7 @@ result = await process_choice(
 
 **Files**: 
 - `tests/test_generator.py` - Scenario generator tests
-- `tests/test_simulation.py` - Simulation feedback agent tests  
+- `tests/test_student.py` - Simulation feedback agent tests  
 - `tests/test_schemas.py` - Schema validation tests
 
 **Test Suite** (22 tests):
@@ -305,10 +305,10 @@ tests/test_generator.py::TestGeneratorAgent::test_generate_scenario_different_ac
 tests/test_generator.py::TestGeneratorAgent::test_generate_scenario_different_difficulties[low] PASSED
 tests/test_generator.py::TestGeneratorAgent::test_generate_scenario_different_difficulties[med] PASSED
 tests/test_generator.py::TestGeneratorAgent::test_generate_scenario_different_difficulties[high] PASSED
-tests/test_simulation.py::TestSimulationAgent::test_process_choice_with_next_turn PASSED
-tests/test_simulation.py::TestSimulationAgent::test_process_choice_ends_scenario PASSED
-tests/test_simulation.py::TestSimulationAgent::test_process_choice_incorrect_selection PASSED
-tests/test_simulation.py::TestSimulationAgent::test_process_choice_learning_moments PASSED
+tests/test_student.py::TestSimulationAgent::test_process_choice_with_next_turn PASSED
+tests/test_student.py::TestSimulationAgent::test_process_choice_ends_scenario PASSED
+tests/test_student.py::TestSimulationAgent::test_process_choice_incorrect_selection PASSED
+tests/test_student.py::TestSimulationAgent::test_process_choice_learning_moments PASSED
 ```
 
 ### Coverage Report
@@ -317,7 +317,7 @@ tests/test_simulation.py::TestSimulationAgent::test_process_choice_learning_mome
 Name                                  Stmts   Miss Branch BrPart  Cover   Missing
 ---------------------------------------------------------------------------------
 src/summit_sim/agents/generator.py       14      0      0      0   100%
-src/summit_sim/agents/simulation.py      23      0      2      0   100%
+src/summit_sim/agents/student.py      23      0      2      0   100%
 src/summit_sim/schemas.py                37      0      4      0   100%
 src/summit_sim/settings.py                8      0      0      0   100%
 ---------------------------------------------------------------------------------
@@ -367,9 +367,9 @@ To verify MLflow tracing:
 3. `src/summit_sim/schemas.py` - Complete schema hierarchy
 4. `src/summit_sim/agents/config.py` - **NEW**: Shared provider and agent factory
 5. `src/summit_sim/agents/generator.py` - Scenario generator agent (uses `get_agent()`)
-6. `src/summit_sim/agents/simulation.py` - Simulation feedback agent (uses `get_agent()`)
+6. `src/summit_sim/agents/student.py` - Simulation feedback agent (uses `get_agent()`)
 7. `tests/test_generator.py` - Generator agent tests (7 tests)
-8. `tests/test_simulation.py` - Simulation agent tests (4 tests)
+8. `tests/test_student.py` - Simulation agent tests (4 tests)
 9. `tests/test_schemas.py` - Schema validation tests (9 tests)
 10. `.env.example` - Environment template
 11. `plans/story-1-1-implementation.md` - This document

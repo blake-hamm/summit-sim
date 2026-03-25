@@ -1,4 +1,4 @@
-"""LangGraph workflow for teacher review orchestration.
+"""LangGraph workflow for teacher orchestration.
 
 This module implements a linear LangGraph workflow that:
 1. Initializes a teacher session with generated IDs
@@ -34,10 +34,10 @@ if TYPE_CHECKING:
 
 
 @dataclass
-class TeacherReviewState:
-    """LangGraph state for teacher review workflow.
+class TeacherState:
+    """LangGraph state for teacher workflow.
 
-    Maintains all state needed for the teacher review graph,
+    Maintains all state needed for the teacher graph,
     including the teacher configuration, generated scenario draft,
     and review metadata.
     """
@@ -52,20 +52,20 @@ class TeacherReviewState:
     current_trace_id: str | None = None
 
     @classmethod
-    def from_graph_result(cls, result: dict[str, Any]) -> "TeacherReviewState":
+    def from_graph_result(cls, result: dict[str, Any]) -> "TeacherState":
         """Create state from LangGraph result, filtering extra fields."""
         valid_fields = {f.name for f in fields(cls)}
         filtered = {k: v for k, v in result.items() if k in valid_fields}
         return cls(**filtered)
 
 
-def initialize_teacher_session(state: TeacherReviewState) -> TeacherReviewState:
+def initialize_teacher(state: TeacherState) -> TeacherState:
     """Initialize teacher session with generated IDs.
 
     Generates scenario_id and class_id, initializes retry_count to 0,
     and creates empty feedback_history.
     """
-    return TeacherReviewState(
+    return TeacherState(
         teacher_config=state.teacher_config,
         scenario_id=generate_scenario_id(),
         class_id=generate_class_id(),
@@ -74,7 +74,7 @@ def initialize_teacher_session(state: TeacherReviewState) -> TeacherReviewState:
     )
 
 
-async def generate_scenario_node(state: TeacherReviewState) -> dict:
+async def generate_scenario_node(state: TeacherState) -> dict:
     """Generate scenario from teacher configuration.
 
     Calls the scenario generator agent to create a complete scenario
@@ -90,7 +90,7 @@ async def generate_scenario_node(state: TeacherReviewState) -> dict:
     }
 
 
-def present_for_review(state: TeacherReviewState) -> dict:
+def present_for_teacher(state: TeacherState) -> dict:
     """Present scenario for teacher review and wait for approval.
 
     Uses LangGraph's interrupt() for human-in-the-loop interaction.
@@ -131,17 +131,28 @@ def present_for_review(state: TeacherReviewState) -> dict:
     return {"approval_status": "approved"}
 
 
-def create_teacher_review_graph(
+def save_scenario(state: TeacherState) -> dict:
+    """Save approved scenario to LangGraph store."""
+    if state.scenario_draft and state.scenario_id:
+        scenario_store.put(
+            ("scenarios",),
+            state.scenario_id,
+            {"scenario_draft": state.scenario_draft, "class_id": state.class_id},
+        )
+    return {}
+
+
+def create_teacher_graph(
     checkpointer: BaseCheckpointSaver | None = None,
     store: BaseStore | None = None,
 ) -> CompiledStateGraph:
-    """Create and configure the teacher review LangGraph."""
-    workflow = StateGraph(TeacherReviewState)
+    """Create and configure the teacher LangGraph."""
+    workflow = StateGraph(TeacherState)
 
-    workflow.add_node("initialize", initialize_teacher_session)
+    workflow.add_node("initialize", initialize_teacher)
     workflow.add_node("generate", generate_scenario_node)
-    workflow.add_node("review", present_for_review)
-    workflow.add_node("save", save_scenario_to_store)
+    workflow.add_node("review", present_for_teacher)
+    workflow.add_node("save", save_scenario)
 
     workflow.set_entry_point("initialize")
     workflow.add_edge("initialize", "generate")
@@ -155,14 +166,3 @@ def create_teacher_review_graph(
     used_store = store if store is not None else scenario_store
 
     return workflow.compile(checkpointer=checkpointer, store=used_store)
-
-
-def save_scenario_to_store(state: TeacherReviewState) -> dict:
-    """Save approved scenario to LangGraph store."""
-    if state.scenario_draft and state.scenario_id:
-        scenario_store.put(
-            ("scenarios",),
-            state.scenario_id,
-            {"scenario_draft": state.scenario_draft, "class_id": state.class_id},
-        )
-    return {}

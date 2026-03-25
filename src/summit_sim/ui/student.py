@@ -5,9 +5,9 @@ from typing import TYPE_CHECKING
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import Command
 
-from summit_sim.graphs.simulation import (
-    SimulationState,
-    create_simulation_graph,
+from summit_sim.graphs.student import (
+    StudentState,
+    create_student_graph,
 )
 from summit_sim.graphs.utils import scenario_store
 from summit_sim.schemas import DebriefReport, ScenarioDraft
@@ -89,13 +89,13 @@ async def run_simulation() -> None:
 
     await cl.Message(content="⏳ Starting simulation...").send()
 
-    graph = create_simulation_graph()
+    graph = create_student_graph()
     cl.user_session.set("simulation_graph", graph)
 
     thread_id = cl.user_session.get("id")
     config: RunnableConfig = {"configurable": {"thread_id": thread_id}}
 
-    initial_state = SimulationState(
+    initial_state = StudentState(
         scenario_draft=scenario.model_dump(),
         current_turn_id=scenario.starting_turn_id,
         transcript=[],
@@ -115,13 +115,13 @@ async def run_simulation() -> None:
 
 
 async def handle_simulation_loop(
-    state: SimulationState | dict,
+    state: StudentState | dict,
     graph: CompiledStateGraph,
     config: RunnableConfig,
 ) -> None:
     """Handle simulation interrupts and student choices."""
     if isinstance(state, dict):
-        state = SimulationState.from_graph_result(state)
+        state = StudentState.from_graph_result(state)
 
     while True:
         if state.simulation_result:
@@ -180,10 +180,10 @@ async def handle_simulation_loop(
             config=config,
         )
 
-        state = SimulationState.from_graph_result(result)
+        state = StudentState.from_graph_result(result)
 
 
-async def show_debrief(state: SimulationState) -> None:
+async def show_debrief(state: StudentState) -> None:
     """Display the final debrief report."""
     if state.debrief_report is None:
         await cl.Message(content="❌ Error: No debrief available.").send()

@@ -6,14 +6,14 @@ from unittest.mock import patch
 import pytest
 
 from summit_sim.agents import config as agent_config
-from summit_sim.graphs.simulation import (
-    SimulationState,
+from summit_sim.graphs.student import (
+    StudentState,
     TranscriptEntry,
-    check_completion,
-    create_simulation_graph,
-    initialize_state,
-    present_turn,
-    update_state,
+    check_student_completion,
+    create_student_graph,
+    initialize_student,
+    present_student_turn,
+    update_student_state,
 )
 from summit_sim.schemas import (
     ChoiceOption,
@@ -99,7 +99,7 @@ def sample_scenario():
 @pytest.fixture
 def initial_state(sample_scenario):
     """Create initial state for testing."""
-    return SimulationState(
+    return StudentState(
         scenario_draft=sample_scenario.model_dump(),
         current_turn_id=sample_scenario.starting_turn_id,
         transcript=[],
@@ -115,7 +115,7 @@ def initial_state(sample_scenario):
 
 def create_test_state(sample_scenario, **overrides):
     """Create a test state with required fields."""
-    base = SimulationState(
+    base = StudentState(
         scenario_draft=sample_scenario.model_dump(),
         current_turn_id=sample_scenario.starting_turn_id,
         transcript=[],
@@ -133,18 +133,18 @@ def create_test_state(sample_scenario, **overrides):
 
 
 class TestInitializeState:
-    """Tests for initialize_state node."""
+    """Tests for initialize_student node."""
 
-    def test_initialize_state_valid(self, initial_state, sample_scenario):
+    def test_initialize_student_valid(self, initial_state, sample_scenario):
         """Test initialization with valid starting turn."""
-        result = initialize_state(initial_state)
+        result = initialize_student(initial_state)
 
         assert result.scenario_draft == sample_scenario.model_dump()
         assert result.current_turn_id == 0
 
-    def test_initialize_state_invalid_turn(self, sample_scenario):
+    def test_initialize_student_invalid_turn(self, sample_scenario):
         """Test initialization with invalid starting turn raises error."""
-        state = SimulationState(
+        state = StudentState(
             scenario_draft=sample_scenario.model_dump(),
             current_turn_id=999,
             transcript=[],
@@ -158,36 +158,36 @@ class TestInitializeState:
         )
 
         with pytest.raises(ValueError, match="Starting turn 999 not found"):
-            initialize_state(state)
+            initialize_student(state)
 
 
 class TestPresentTurn:
-    """Tests for present_turn node."""
+    """Tests for present_student_turn node."""
 
-    def test_present_turn_valid(self, initial_state):
+    def test_present_student_turn_valid(self, initial_state):
         """Test presenting a valid turn."""
-        with patch("summit_sim.graphs.simulation.interrupt") as mock_interrupt:
+        with patch("summit_sim.graphs.student.interrupt") as mock_interrupt:
             mock_interrupt.return_value = {"choice_id": "check_airway"}
-            result = present_turn(initial_state)
+            result = present_student_turn(initial_state)
 
         assert result["last_selected_choice"] is not None
         choice_dict = result["last_selected_choice"]
         assert choice_dict["choice_id"] == "check_airway"
         assert choice_dict["is_correct"] is True
 
-    def test_present_turn_invalid_choice(self, initial_state):
+    def test_present_student_turn_invalid_choice(self, initial_state):
         """Test presenting turn with invalid choice raises error."""
-        with patch("summit_sim.graphs.simulation.interrupt") as mock_interrupt:
+        with patch("summit_sim.graphs.student.interrupt") as mock_interrupt:
             mock_interrupt.return_value = {"choice_id": "invalid_choice"}
             with pytest.raises(ValueError, match="Invalid choice_id"):
-                present_turn(initial_state)
+                present_student_turn(initial_state)
 
 
 class TestUpdateState:
-    """Tests for update_state node."""
+    """Tests for update_student_state node."""
 
-    def test_update_state_appends_transcript(self, initial_state):
-        """Test that update_state appends to transcript."""
+    def test_update_student_state_appends_transcript(self, initial_state):
+        """Test that update_student_state appends to transcript."""
         selected_choice = ChoiceOption(
             choice_id="test_choice",
             description="Test description",
@@ -203,7 +203,7 @@ class TestUpdateState:
             is_complete=False,
         )
 
-        state = SimulationState(
+        state = StudentState(
             scenario_draft=initial_state.scenario_draft,
             current_turn_id=initial_state.current_turn_id,
             transcript=[],
@@ -216,7 +216,7 @@ class TestUpdateState:
             debrief_report=None,
         )
 
-        updated = update_state(state)
+        updated = update_student_state(state)
 
         assert len(updated["transcript"]) == 1
         entry = updated["transcript"][0]
@@ -227,8 +227,8 @@ class TestUpdateState:
         assert entry.learning_moments == ["Learn this"]
         assert entry.next_turn_id == 1
 
-    def test_update_state_advances_turn(self, initial_state):
-        """Test that update_state advances to next turn."""
+    def test_update_student_state_advances_turn(self, initial_state):
+        """Test that update_student_state advances to next turn."""
         selected_choice = ChoiceOption(
             choice_id="test",
             description="Test",
@@ -244,7 +244,7 @@ class TestUpdateState:
             is_complete=False,
         )
 
-        state = SimulationState(
+        state = StudentState(
             scenario_draft=initial_state.scenario_draft,
             current_turn_id=initial_state.current_turn_id,
             transcript=[],
@@ -257,13 +257,13 @@ class TestUpdateState:
             debrief_report=None,
         )
 
-        updated = update_state(state)
+        updated = update_student_state(state)
 
         assert updated["current_turn_id"] == 1
         assert updated["is_complete"] is False
 
-    def test_update_state_completes_scenario(self, initial_state):
-        """Test that update_state marks scenario complete when next_turn_id is None."""
+    def test_update_student_state_completes_scenario(self, initial_state):
+        """Test that update_student_state marks complete when next_turn_id is None."""
         selected_choice = ChoiceOption(
             choice_id="final_choice",
             description="Final",
@@ -279,7 +279,7 @@ class TestUpdateState:
             is_complete=True,
         )
 
-        state = SimulationState(
+        state = StudentState(
             scenario_draft=initial_state.scenario_draft,
             current_turn_id=initial_state.current_turn_id,
             transcript=[],
@@ -292,13 +292,13 @@ class TestUpdateState:
             debrief_report=None,
         )
 
-        updated = update_state(state)
+        updated = update_student_state(state)
 
         assert updated["is_complete"] is True
         assert updated["current_turn_id"] == 0
 
-    def test_update_state_returns_learning_moments(self, initial_state):
-        """Test that update_state returns learning moments from result."""
+    def test_update_student_state_returns_learning_moments(self, initial_state):
+        """Test that update_student_state returns learning moments from result."""
         selected_choice = ChoiceOption(
             choice_id="test",
             description="Test",
@@ -314,7 +314,7 @@ class TestUpdateState:
             is_complete=False,
         )
 
-        state = SimulationState(
+        state = StudentState(
             scenario_draft=initial_state.scenario_draft,
             current_turn_id=initial_state.current_turn_id,
             transcript=[],
@@ -327,19 +327,19 @@ class TestUpdateState:
             debrief_report=None,
         )
 
-        updated = update_state(state)
+        updated = update_student_state(state)
 
         assert updated["key_learning_moments"] == ["New lesson"]
 
 
 class TestCheckCompletion:
-    """Tests for check_completion routing."""
+    """Tests for check_student_completion routing."""
 
-    def test_check_completion_returns_generate_debrief_when_complete(
+    def test_check_student_completion_returns_generate_debrief_when_complete(
         self, initial_state
     ):
         """Test routing to generate_debrief when complete."""
-        state = SimulationState(
+        state = StudentState(
             scenario_draft=initial_state.scenario_draft,
             current_turn_id=initial_state.current_turn_id,
             transcript=initial_state.transcript,
@@ -351,14 +351,14 @@ class TestCheckCompletion:
             class_id=initial_state.class_id,
             debrief_report=initial_state.debrief_report,
         )
-        result = check_completion(state)
+        result = check_student_completion(state)
         assert result == "generate_debrief"
 
-    def test_check_completion_returns_present_turn_when_not_complete(
+    def test_check_student_completion_returns_present_student_turn_when_not_complete(
         self, initial_state
     ):
-        """Test routing back to present_turn when not complete."""
-        state = SimulationState(
+        """Test routing back to present_student_turn when not complete."""
+        state = StudentState(
             scenario_draft=initial_state.scenario_draft,
             current_turn_id=initial_state.current_turn_id,
             transcript=initial_state.transcript,
@@ -370,11 +370,11 @@ class TestCheckCompletion:
             class_id=initial_state.class_id,
             debrief_report=initial_state.debrief_report,
         )
-        result = check_completion(state)
-        assert result == "present_turn"
+        result = check_student_completion(state)
+        assert result == "present_student_turn"
 
 
-class TestSimulationGraphFullCycle:
+class TestStudentGraphFullCycle:
     """Integration tests for full simulation cycle."""
 
     @pytest.fixture(autouse=True)
@@ -430,17 +430,15 @@ class TestSimulationGraphFullCycle:
             final_score=100.0,
         )
 
-        with patch(
-            "summit_sim.graphs.simulation.process_choice"
-        ) as mock_process_choice:
+        with patch("summit_sim.graphs.student.process_choice") as mock_process_choice:
             mock_process_choice.side_effect = mock_process_impl
 
             with patch(
-                "summit_sim.graphs.simulation.generate_debrief"
+                "summit_sim.agents.debrief.generate_debrief"
             ) as mock_generate_debrief:
                 mock_generate_debrief.return_value = mock_debrief_report
 
-                with patch("summit_sim.graphs.simulation.interrupt") as mock_interrupt:
+                with patch("summit_sim.graphs.student.interrupt") as mock_interrupt:
                     interrupt_returns = [
                         {"choice_id": "check_airway"},
                         {"choice_id": "call_help"},
@@ -448,7 +446,7 @@ class TestSimulationGraphFullCycle:
                     ]
                     mock_interrupt.side_effect = interrupt_returns
 
-                    initial_state = SimulationState(
+                    initial_state = StudentState(
                         scenario_draft=sample_scenario.model_dump(),
                         current_turn_id=0,
                         transcript=[],
@@ -461,7 +459,7 @@ class TestSimulationGraphFullCycle:
                         debrief_report=None,
                     )
 
-                    graph = create_simulation_graph()
+                    graph = create_student_graph()
                     config: Any = {"configurable": {"thread_id": "test-thread"}}
 
                     result = await graph.ainvoke(initial_state, config)
@@ -497,5 +495,5 @@ class TestSimulationGraphFullCycle:
 
     def test_graph_creation(self):
         """Test that graph can be created successfully."""
-        graph = create_simulation_graph()
+        graph = create_student_graph()
         assert graph is not None

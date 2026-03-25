@@ -7,11 +7,11 @@ import pytest
 from langgraph.types import Command
 
 from summit_sim.agents import config as agent_config
-from summit_sim.graphs.teacher_review import (
-    TeacherReviewState,
-    create_teacher_review_graph,
-    initialize_teacher_session,
-    present_for_review,
+from summit_sim.graphs.teacher import (
+    TeacherState,
+    create_teacher_graph,
+    initialize_teacher,
+    present_for_teacher,
 )
 from summit_sim.schemas import (
     ChoiceOption,
@@ -68,7 +68,7 @@ def sample_scenario():
 @pytest.fixture
 def initial_state(sample_teacher_config):
     """Create initial state for testing."""
-    return TeacherReviewState(
+    return TeacherState(
         teacher_config=sample_teacher_config.model_dump(),
         scenario_draft=None,
         scenario_id="",
@@ -80,11 +80,11 @@ def initial_state(sample_teacher_config):
 
 
 class TestInitializeTeacherSession:
-    """Tests for initialize_teacher_session node."""
+    """Tests for initialize_teacher node."""
 
     def test_initialize_generates_ids(self, initial_state):
         """Test that initialization generates scenario_id and class_id."""
-        result = initialize_teacher_session(initial_state)
+        result = initialize_teacher(initial_state)
 
         assert result.scenario_id.startswith("scn-")
         assert len(result.class_id) == 6
@@ -93,17 +93,17 @@ class TestInitializeTeacherSession:
 
     def test_initialize_preserves_teacher_config(self, initial_state):
         """Test that initialization preserves the teacher config."""
-        result = initialize_teacher_session(initial_state)
+        result = initialize_teacher(initial_state)
 
         assert result.teacher_config == initial_state.teacher_config
 
 
 class TestPresentForReview:
-    """Tests for present_for_review node."""
+    """Tests for present_for_teacher node."""
 
-    def test_present_for_review_valid(self, sample_scenario):
+    def test_present_for_teacher_valid(self, sample_scenario):
         """Test presenting a valid scenario for review."""
-        state = TeacherReviewState(
+        state = TeacherState(
             teacher_config=TeacherConfig(
                 num_participants=3, activity_type="hiking", difficulty="med"
             ).model_dump(),
@@ -117,18 +117,18 @@ class TestPresentForReview:
         )
 
         with (
-            patch("summit_sim.graphs.teacher_review.interrupt") as mock_interrupt,
-            patch("summit_sim.graphs.teacher_review.mlflow") as mock_mlflow,
+            patch("summit_sim.graphs.teacher.interrupt") as mock_interrupt,
+            patch("summit_sim.graphs.teacher.mlflow") as mock_mlflow,
         ):
             mock_interrupt.return_value = {"decision": "approve"}
             mock_mlflow.get_last_active_trace_id.return_value = "trace-123"
-            result = present_for_review(state)
+            result = present_for_teacher(state)
 
         assert result["approval_status"] == "approved"
 
-    def test_present_for_review_no_scenario(self):
+    def test_present_for_teacher_no_scenario(self):
         """Test presenting with no scenario raises error."""
-        state = TeacherReviewState(
+        state = TeacherState(
             teacher_config=TeacherConfig(
                 num_participants=3, activity_type="hiking", difficulty="med"
             ).model_dump(),
@@ -141,11 +141,11 @@ class TestPresentForReview:
         )
 
         with pytest.raises(ValueError, match="No scenario draft available"):
-            present_for_review(state)
+            present_for_teacher(state)
 
-    def test_present_for_review_invalid_decision(self, sample_scenario):
+    def test_present_for_teacher_invalid_decision(self, sample_scenario):
         """Test presenting with invalid decision raises error."""
-        state = TeacherReviewState(
+        state = TeacherState(
             teacher_config=TeacherConfig(
                 num_participants=3, activity_type="hiking", difficulty="med"
             ).model_dump(),
@@ -157,10 +157,10 @@ class TestPresentForReview:
             approval_status=None,
         )
 
-        with patch("summit_sim.graphs.teacher_review.interrupt") as mock_interrupt:
+        with patch("summit_sim.graphs.teacher.interrupt") as mock_interrupt:
             mock_interrupt.return_value = {"decision": "decline"}
             with pytest.raises(ValueError, match="Invalid decision: decline"):
-                present_for_review(state)
+                present_for_teacher(state)
 
 
 class TestTeacherReviewGraphFullCycle:
@@ -180,11 +180,11 @@ class TestTeacherReviewGraphFullCycle:
         mock_span = type("MockSpan", (), {"trace_id": "test-trace-123"})()
         with (
             patch(
-                "summit_sim.graphs.teacher_review.mlflow.get_current_active_span",
+                "summit_sim.graphs.teacher.mlflow.get_current_active_span",
                 return_value=mock_span,
             ),
             patch(
-                "summit_sim.graphs.teacher_review.mlflow.log_feedback",
+                "summit_sim.graphs.teacher.mlflow.log_feedback",
             ),
         ):
             yield
@@ -229,15 +229,13 @@ class TestTeacherReviewGraphFullCycle:
             """Mock implementation that returns the sample scenario."""
             return sample_scenario
 
-        with patch(
-            "summit_sim.graphs.teacher_review.generate_scenario"
-        ) as mock_generate:
+        with patch("summit_sim.graphs.teacher.generate_scenario") as mock_generate:
             mock_generate.side_effect = mock_generate_impl
 
-            with patch("summit_sim.graphs.teacher_review.interrupt") as mock_interrupt:
+            with patch("summit_sim.graphs.teacher.interrupt") as mock_interrupt:
                 mock_interrupt.return_value = {"decision": "approve"}
 
-                initial_state = TeacherReviewState(
+                initial_state = TeacherState(
                     teacher_config=sample_teacher_config.model_dump(),
                     scenario_draft=None,
                     scenario_id="",
@@ -247,7 +245,7 @@ class TestTeacherReviewGraphFullCycle:
                     approval_status=None,
                 )
 
-                graph = create_teacher_review_graph()
+                graph = create_teacher_graph()
                 config: Any = {"configurable": {"thread_id": "test-thread"}}
 
                 # Run to interrupt point
@@ -268,5 +266,5 @@ class TestTeacherReviewGraphFullCycle:
 
     def test_graph_creation(self):
         """Test that graph can be created successfully."""
-        graph = create_teacher_review_graph()
+        graph = create_teacher_graph()
         assert graph is not None

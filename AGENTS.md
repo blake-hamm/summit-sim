@@ -99,7 +99,7 @@ That's it. If those pass, you're good. Ruff config is in `pyproject.toml` -- let
 ### Adding a New Graph Node
 1. Define any new state fields in `graphs/state.py` (use `append_reducer` for lists)
 2. Add the node function in the appropriate graph module
-3. Wire it into the graph builder in `create_simulation_graph()`
+3. Wire it into the graph builder in `create_student_graph()`
 4. Test the node in isolation, then test the full graph flow
 
 ### Architecture Decisions

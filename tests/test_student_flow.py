@@ -2,9 +2,9 @@
 
 import pytest
 
-from summit_sim.graphs.simulation import (
-    SimulationState,
-    create_simulation_graph,
+from summit_sim.graphs.student import (
+    StudentState,
+    create_student_graph,
 )
 from summit_sim.schemas import (
     ChoiceOption,
@@ -86,12 +86,12 @@ def sample_scenario():
     )
 
 
-class TestSimulationState:
-    """Tests for SimulationState."""
+class TestStudentState:
+    """Tests for StudentState."""
 
     def test_simulation_state_creation(self, sample_scenario):
         """Test creating simulation state."""
-        state = SimulationState(
+        state = StudentState(
             scenario_draft=sample_scenario.model_dump(),
             current_turn_id=0,
             transcript=[],
@@ -117,15 +117,15 @@ class TestSimulationState:
             "debrief_report": None,
         }
 
-        state = SimulationState.from_graph_result(result)
+        state = StudentState.from_graph_result(result)
         assert state.current_turn_id == 1
         assert state.scenario_id == "scn-123"
 
 
-class TestSimulationGraph:
+class TestStudentGraph:
     """Tests for simulation graph creation and nodes."""
 
-    def test_create_simulation_graph(self):
+    def test_create_student_graph(self):
         """Test that simulation graph can be created."""
-        graph = create_simulation_graph()
+        graph = create_student_graph()
         assert graph is not None

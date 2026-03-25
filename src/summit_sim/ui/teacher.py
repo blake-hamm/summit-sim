@@ -4,9 +4,9 @@ from typing import TYPE_CHECKING, Awaitable, Callable
 
 from langgraph.types import Command
 
-from summit_sim.graphs.teacher_review import (
-    TeacherReviewState,
-    create_teacher_review_graph,
+from summit_sim.graphs.teacher import (
+    TeacherState,
+    create_teacher_graph,
 )
 from summit_sim.schemas import ScenarioDraft, TeacherConfig
 from summit_sim.settings import settings
@@ -124,13 +124,13 @@ async def generate_scenario() -> None:
 
     await cl.Message(content="⏳ Generating your scenario...").send()
 
-    graph = create_teacher_review_graph()
+    graph = create_teacher_graph()
     cl.user_session.set("graph", graph)
 
     thread_id = cl.user_session.get("id")
     config_dict: RunnableConfig = {"configurable": {"thread_id": thread_id}}
 
-    initial_state: TeacherReviewState = TeacherReviewState(
+    initial_state: TeacherState = TeacherState(
         teacher_config=config.model_dump(),
         scenario_draft=None,
         scenario_id="",
@@ -147,7 +147,7 @@ async def generate_scenario() -> None:
         )
 
         if result.get("scenario_draft"):
-            state = TeacherReviewState.from_graph_result(result)
+            state = TeacherState.from_graph_result(result)
             await show_review_screen(state)
         else:
             await cl.Message(
@@ -162,7 +162,7 @@ async def generate_scenario() -> None:
         await _restart()
 
 
-async def show_review_screen(state: TeacherReviewState) -> None:
+async def show_review_screen(state: TeacherState) -> None:
     """Display the scenario review screen with approve button."""
     scenario_dict = state.scenario_draft
     scenario_id = state.scenario_id
@@ -213,7 +213,7 @@ async def show_review_screen(state: TeacherReviewState) -> None:
         await handle_approval(state)
 
 
-async def handle_approval(state: TeacherReviewState) -> None:
+async def handle_approval(state: TeacherState) -> None:
     """Handle scenario approval and generate shareable link."""
     graph = cl.user_session.get("graph")
     if graph is None:
@@ -230,7 +230,7 @@ async def handle_approval(state: TeacherReviewState) -> None:
             config=config_dict,
         )
 
-        final_state = TeacherReviewState.from_graph_result(result)
+        final_state = TeacherState.from_graph_result(result)
         approval_status = final_state.approval_status or ""
 
         if approval_status == "approved":

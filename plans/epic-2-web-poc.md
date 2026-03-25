@@ -196,7 +196,7 @@ Views debrief: score, pass/fail, key mistakes, teaching points
 - Resume via `Command(resume={...})`
 
 **2. Unified State Management**
-- `TeacherReviewState` (TypedDict):
+- `TeacherState` (TypedDict):
   - `teacher_config: TeacherConfig`
   - `scenario_draft: ScenarioDraft | None`
   - `scenario_id: str`
@@ -301,7 +301,7 @@ Views debrief: score, pass/fail, key mistakes, teaching points
 
 **Status**: Fully implemented and tested.
 
-**Architecture**: Use existing `create_simulation_graph()` from `src/summit_sim/graphs/simulation.py`
+**Architecture**: Use existing `create_student_graph()` from `src/summit_sim/graphs/student.py`
 
 **Flow**:
 - Student joins with class_id
@@ -454,7 +454,7 @@ metrics = {
 **Goal**: Working happy path end-to-end
 
 **Deliverables**:
-- TeacherReviewState schema
+- TeacherState schema
 - Teacher review graph (3 nodes, 2 edges)
 - Chainlit teacher UI (config form → review → approval)
 - Chainlit student UI (join → simulate → debrief)
@@ -550,7 +550,7 @@ metrics = {
 - [x] Tests cover happy paths (≥80% coverage)
 
 ### Story 2.1 Complete When:
-- [x] TeacherReviewState defined with full schema
+- [x] TeacherState defined with full schema
 - [x] Teacher graph runs: initialize → generate → interrupt → approve → END
 - [x] Notebook expanded with teacher flow demonstration
 - [x] Chainlit renders config wizard and review screen
@@ -586,17 +586,17 @@ src/summit_sim/
     teacher.py              # Teacher flow handlers
     student.py              # Student flow handlers
   graphs/
-    teacher_review.py      # Teacher review LangGraph
-    simulation.py          # Student simulation LangGraph
+    teacher.py      # Teacher review LangGraph
+    student.py          # Student simulation LangGraph
     utils.py               # Shared utilities (InMemoryStore, TranscriptEntry)
   agents/
     config.py              # Agent factory
     generator.py           # Scenario generation agent
-    simulation.py          # Feedback generation agent
+    student.py          # Feedback generation agent
     debrief.py             # Debrief generation agent
 
 tests/
-  test_teacher_review.py   # Teacher flow tests
+  test_teacher.py   # Teacher flow tests
   test_student_flow.py     # Student flow tests
   test_debrief.py          # Debrief agent tests
 

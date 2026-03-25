@@ -101,7 +101,7 @@ class AppState(TypedDict):
 
 ### Phase 4: Graph Implementation
 
-**File**: `src/summit_sim/graphs/simulation.py`
+**File**: `src/summit_sim/graphs/student.py`
 
 #### Nodes
 
@@ -187,7 +187,7 @@ async def test_full_simulation_cycle():
    - Display generated turns
 
 3. **Run Simulation**
-   - Initialize graph: `graph = create_simulation_graph()`
+   - Initialize graph: `graph = create_student_graph()`
    - Configure checkpointing (if needed)
    - Start with: `state = await graph.ainvoke(initial_state)`
    - Handle interrupts:
@@ -239,7 +239,7 @@ async def test_full_simulation_cycle():
 ### New Files
 1. ✅ `src/summit_sim/graphs/__init__.py` - Package init
 2. ✅ `src/summit_sim/graphs/state.py` - AppState and TranscriptEntry (TypedDict)
-3. ✅ `src/summit_sim/graphs/simulation.py` - LangGraph implementation with 5 nodes
+3. ✅ `src/summit_sim/graphs/student.py` - LangGraph implementation with 5 nodes
 4. ✅ `src/summit_sim/tracing.py` - MLflow tracing utilities with session management
 5. ✅ `tests/test_simulation_graph.py` - Graph unit tests (12 tests)
 6. ✅ `notebooks/story-1-2-simulation-graph.ipynb` - E2E integration test
