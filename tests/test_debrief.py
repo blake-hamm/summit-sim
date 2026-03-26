@@ -64,23 +64,84 @@ class TestDebriefAgent:
     def sample_scenario(self):
         """Create a sample scenario for testing."""
         turn1 = ScenarioTurn(
-            turn_id=1,
+            turn_id=0,
             narrative_text="Patient is bleeding.",
             choices=[
                 ChoiceOption(
                     choice_id="treat",
                     description="Treat patient",
                     is_correct=True,
-                    next_turn_id=2,
+                    next_turn_id=1,
                 ),
                 ChoiceOption(
                     choice_id="wait",
                     description="Wait",
                     is_correct=False,
+                    next_turn_id=1,
+                ),
+                ChoiceOption(
+                    choice_id="panic",
+                    description="Panic",
+                    is_correct=False,
+                    next_turn_id=1,
+                ),
+                ChoiceOption(
+                    choice_id="panic",
+                    description="Panic",
+                    is_correct=False,
+                    next_turn_id=1,
+                ),
+            ],
+        )
+
+        turn2 = ScenarioTurn(
+            turn_id=1,
+            narrative_text="Bleeding controlled.",
+            choices=[
+                ChoiceOption(
+                    choice_id="monitor",
+                    description="Monitor patient",
+                    is_correct=True,
+                    next_turn_id=2,
+                ),
+                ChoiceOption(
+                    choice_id="evac",
+                    description="Evacuate immediately",
+                    is_correct=False,
+                    next_turn_id=2,
+                ),
+                ChoiceOption(
+                    choice_id="panic",
+                    description="Panic",
+                    is_correct=False,
                     next_turn_id=2,
                 ),
             ],
-            is_starting_turn=True,
+        )
+
+        turn3 = ScenarioTurn(
+            turn_id=2,
+            narrative_text="Patient stable for transport.",
+            choices=[
+                ChoiceOption(
+                    choice_id="package",
+                    description="Package for transport",
+                    is_correct=True,
+                    next_turn_id=None,
+                ),
+                ChoiceOption(
+                    choice_id="wait",
+                    description="Wait for more help",
+                    is_correct=False,
+                    next_turn_id=None,
+                ),
+                ChoiceOption(
+                    choice_id="panic",
+                    description="Panic",
+                    is_correct=False,
+                    next_turn_id=None,
+                ),
+            ],
         )
 
         return ScenarioDraft(
@@ -89,8 +150,7 @@ class TestDebriefAgent:
             patient_summary="Patient with bleeding",
             hidden_truth="Arterial bleeding",
             learning_objectives=["Control bleeding", "Assess severity"],
-            turns=[turn1],
-            starting_turn_id=1,
+            turns=[turn1, turn2, turn3],
         )
 
     @pytest.fixture

@@ -79,11 +79,63 @@ def sample_scenario():
                         is_correct=False,
                         next_turn_id=1,
                     ),
+                    ChoiceOption(
+                        choice_id="panic",
+                        description="Panic",
+                        is_correct=False,
+                        next_turn_id=1,
+                    ),
                 ],
-                is_starting_turn=True,
-            )
+            ),
+            ScenarioTurn(
+                turn_id=1,
+                narrative_text="Airway is clear but breathing is shallow.",
+                choices=[
+                    ChoiceOption(
+                        choice_id="check_breathing",
+                        description="Check breathing rate",
+                        is_correct=True,
+                        next_turn_id=2,
+                    ),
+                    ChoiceOption(
+                        choice_id="move_patient",
+                        description="Move patient to shade",
+                        is_correct=False,
+                        next_turn_id=2,
+                    ),
+                    ChoiceOption(
+                        choice_id="give_water",
+                        description="Give water",
+                        is_correct=False,
+                        next_turn_id=2,
+                    ),
+                ],
+            ),
+            ScenarioTurn(
+                turn_id=2,
+                narrative_text="Patient has weak pulse.",
+                choices=[
+                    ChoiceOption(
+                        choice_id="call_911",
+                        description="Call emergency services",
+                        is_correct=True,
+                        next_turn_id=None,
+                    ),
+                    ChoiceOption(
+                        choice_id="wait",
+                        description="Wait and observe",
+                        is_correct=False,
+                        next_turn_id=None,
+                    ),
+                    ChoiceOption(
+                        choice_id="cpr",
+                        description="Begin CPR",
+                        is_correct=False,
+                        next_turn_id=None,
+                    ),
+                ],
+            ),
         ],
-        starting_turn_id=0,
     )
 
 
@@ -948,8 +1000,8 @@ class TestAskScenarioConfig:
         """Test successful scenario configuration with form submission."""
         mock_response = {
             "submitted": True,
-            "participants": "4",
-            "activity": "Skiing",
+            "num_participants": "4",
+            "activity_type": "Skiing",
             "difficulty": "High",
         }
 
@@ -991,8 +1043,8 @@ class TestAskScenarioConfig:
         """Test that 6+ participants is converted to 6."""
         mock_response = {
             "submitted": True,
-            "participants": "6+",
-            "activity": "Hiking",
+            "num_participants": "6+",
+            "activity_type": "Hiking",
             "difficulty": "Medium",
         }
 

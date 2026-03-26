@@ -40,8 +40,13 @@ def sample_scenario():
                         is_correct=False,
                         next_turn_id=1,
                     ),
+                    ChoiceOption(
+                        choice_id="panic",
+                        description="Panic",
+                        is_correct=False,
+                        next_turn_id=1,
+                    ),
                 ],
-                is_starting_turn=True,
             ),
             ScenarioTurn(
                 turn_id=1,
@@ -57,6 +62,12 @@ def sample_scenario():
                     ChoiceOption(
                         choice_id="wait",
                         description="Wait and see if he improves",
+                        is_correct=False,
+                        next_turn_id=2,
+                    ),
+                    ChoiceOption(
+                        choice_id="panic",
+                        description="Panic",
                         is_correct=False,
                         next_turn_id=2,
                     ),
@@ -79,10 +90,15 @@ def sample_scenario():
                         is_correct=False,
                         next_turn_id=None,
                     ),
+                    ChoiceOption(
+                        choice_id="panic",
+                        description="Panic",
+                        is_correct=False,
+                        next_turn_id=None,
+                    ),
                 ],
             ),
         ],
-        starting_turn_id=0,
     )
 
 

@@ -24,13 +24,42 @@ class TeacherConfig(BaseModel):
     """
 
     num_participants: int = Field(
-        ..., ge=1, le=20, description="Number of participants involved (1-20)"
+        ...,
+        ge=1,
+        le=20,
+        description="Number of participants involved (1-20)",
+        json_schema_extra={
+            "ui": {
+                "type": "select",
+                "label": "Number of Participants",
+                "options": ["1", "2", "3", "4", "5", "6+"],
+                "value": "3",
+            }
+        },
     )
     activity_type: Literal["canyoneering", "skiing", "hiking"] = Field(
-        ..., description="Type of outdoor activity"
+        ...,
+        description="Type of outdoor activity",
+        json_schema_extra={
+            "ui": {
+                "type": "select",
+                "label": "Activity Type",
+                "options": ["Canyoneering", "Skiing", "Hiking"],
+                "value": "Skiing",
+            }
+        },
     )
     difficulty: Literal["low", "med", "high"] = Field(
-        ..., description="Scenario difficulty level"
+        ...,
+        description="Scenario difficulty level",
+        json_schema_extra={
+            "ui": {
+                "type": "select",
+                "label": "Difficulty Level",
+                "options": ["Low", "Medium", "High"],
+                "value": "High",
+            }
+        },
     )
     class_id: str | None = Field(
         default=None,
@@ -76,12 +105,9 @@ class ScenarioTurn(BaseModel):
     )
     choices: list[ChoiceOption] = Field(
         ...,
-        description="2-3 multiple choice actions available",
-        min_length=2,
-        max_length=3,
-    )
-    is_starting_turn: bool = Field(
-        default=False, description="Whether this is the first turn"
+        description="3-5 multiple choice actions available",
+        min_length=3,
+        max_length=5,
     )
 
 
@@ -103,9 +129,8 @@ class ScenarioDraft(BaseModel):
         ..., description="List of skills students should practice"
     )
     turns: list[ScenarioTurn] = Field(
-        ..., description="All turns in this scenario", min_length=1
+        ..., description="All turns in this scenario (at least 3)", min_length=3
     )
-    starting_turn_id: int = Field(..., description="ID of the first turn")
 
     def get_turn(self, turn_id: int) -> ScenarioTurn | None:
         """Get a turn by its ID."""
@@ -113,6 +138,10 @@ class ScenarioDraft(BaseModel):
             if turn.turn_id == turn_id:
                 return turn
         return None
+
+    def get_starting_turn(self) -> ScenarioTurn | None:
+        """Get the starting turn (turn_id=0)."""
+        return self.get_turn(0)
 
 
 class SimulationResult(BaseModel):
