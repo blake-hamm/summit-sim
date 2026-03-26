@@ -20,70 +20,54 @@ else:
     import chainlit as cl
 
 
-async def ask_num_participants() -> None:
-    """Ask for number of participants."""
-    res = await cl.AskActionMessage(
-        content=(
-            "**Step 1/3: Number of Participants**\n\n"
-            "How many people are in the rescue group?"
-        ),
-        actions=[
-            cl.Action(name="p1", payload={"value": "1"}, label="1"),
-            cl.Action(name="p2", payload={"value": "2"}, label="2"),
-            cl.Action(name="p3", payload={"value": "3"}, label="3"),
-            cl.Action(name="p4", payload={"value": "4"}, label="4"),
-            cl.Action(name="p5", payload={"value": "5"}, label="5"),
-            cl.Action(name="p6", payload={"value": "6"}, label="6+"),
-        ],
+async def ask_scenario_config() -> None:
+    """Ask for scenario configuration using a form."""
+    element = cl.CustomElement(
+        name="ScenarioConfigForm",
+        display="inline",
+        props={
+            "fields": [
+                {
+                    "id": "participants",
+                    "label": "Number of Participants",
+                    "type": "select",
+                    "options": ["1", "2", "3", "4", "5", "6+"],
+                    "required": True,
+                },
+                {
+                    "id": "activity",
+                    "label": "Activity Type",
+                    "type": "select",
+                    "options": ["Hiking", "Skiing", "Canyoneering"],
+                    "required": True,
+                },
+                {
+                    "id": "difficulty",
+                    "label": "Difficulty Level",
+                    "type": "select",
+                    "options": ["Low", "Medium", "High"],
+                    "required": True,
+                },
+            ],
+        },
+    )
+
+    res = await cl.AskElementMessage(
+        content="**Configure Your Scenario**\n\nSet up your rescue simulation:",
+        element=element,
     ).send()
 
-    if res and res.get("payload"):
-        value = res.get("payload", {}).get("value", "3")
-        if value == "6+":
-            value = "6"
-        cl.user_session.set("num_participants", int(value))
-        await ask_activity_type()
+    if res and res.get("submitted"):
+        participants = res.get("participants", "3")
+        activity = res.get("activity", "Hiking")
+        difficulty = res.get("difficulty", "Medium")
 
+        if participants == "6+":
+            participants = "6"
 
-async def ask_activity_type() -> None:
-    """Ask for activity type."""
-    res = await cl.AskActionMessage(
-        content="**Step 2/3: Activity Type**\n\nWhat activity is the group engaged in?",
-        actions=[
-            cl.Action(name="hiking", payload={"value": "hiking"}, label="Hiking"),
-            cl.Action(name="skiing", payload={"value": "skiing"}, label="Skiing"),
-            cl.Action(
-                name="canyoneering",
-                payload={"value": "canyoneering"},
-                label="Canyoneering",
-            ),
-        ],
-    ).send()
-
-    if res and res.get("payload"):
-        value = res.get("payload", {}).get("value", "hiking")
-        cl.user_session.set("activity_type", value)
-        await ask_difficulty()
-
-
-async def ask_difficulty() -> None:
-    """Ask for difficulty level."""
-    res = await cl.AskActionMessage(
-        content=(
-            "**Step 3/3: Difficulty Level**\n\nHow challenging should this scenario be?"
-        ),
-        actions=[
-            cl.Action(
-                name="low", payload={"value": "low"}, label="Low - Basic first aid"
-            ),
-            cl.Action(name="med", payload={"value": "med"}, label="Medium - WFA level"),
-            cl.Action(name="high", payload={"value": "high"}, label="High - WFR level"),
-        ],
-    ).send()
-
-    if res and res.get("payload"):
-        value = res.get("payload", {}).get("value", "med")
-        cl.user_session.set("difficulty", value)
+        cl.user_session.set("num_participants", int(participants))
+        cl.user_session.set("activity_type", activity.lower())  # type: ignore[arg-type]
+        cl.user_session.set("difficulty", difficulty.lower())  # type: ignore[arg-type]
         await generate_scenario()
 
 

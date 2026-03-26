@@ -1,7 +1,7 @@
 """Tests for the teacher review graph workflow."""
 
 from typing import Any
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from langgraph.types import Command
@@ -20,6 +20,27 @@ from summit_sim.schemas import (
     ScenarioTurn,
     TeacherConfig,
 )
+from summit_sim.ui import teacher as teacher_ui
+
+
+def _session_get_participants(key: str) -> str | None:
+    return {
+        "num_participants": 3,
+        "activity_type": "hiking",
+        "difficulty": "med",
+    }.get(key)
+
+
+def _session_get_thread(key: str) -> Any:
+    return {"id": "test-thread", "graph": None}.get(key)
+
+
+def _session_get(key: str, data: dict) -> Any:
+    return data.get(key)
+
+
+def _session_get_for_rating(key: str, mock_graph: AsyncMock | None = None) -> Any:
+    return {"id": "test-thread", "graph": mock_graph}.get(key)
 
 
 @pytest.fixture
@@ -471,3 +492,587 @@ class TestTeacherReviewGraphFullCycle:
         """Test that graph can be created successfully."""
         graph = create_teacher_graph()
         assert graph is not None
+
+
+class TestGenerateScenario:
+    """Tests for the generate_scenario UI function."""
+
+    @pytest.mark.asyncio
+    async def test_generate_scenario_success(self, sample_teacher_config):
+        """Test successful scenario generation flow."""
+        mock_graph = AsyncMock()
+        mock_message = AsyncMock()
+
+        with (
+            patch.object(
+                teacher_ui.cl.user_session,
+                "get",
+                side_effect=_session_get_participants,
+            ),
+            patch.object(teacher_ui.cl.user_session, "set"),
+            patch.object(teacher_ui.cl, "Message", return_value=mock_message),
+            patch.object(
+                teacher_ui, "create_teacher_graph", return_value=mock_graph
+            ) as mock_create_graph,
+            patch.object(teacher_ui, "show_review_screen", new_callable=AsyncMock),
+        ):
+            mock_graph.ainvoke = AsyncMock(
+                return_value={
+                    "teacher_config": sample_teacher_config.model_dump(),
+                    "scenario_draft": {
+                        "title": "Test",
+                        "setting": "Mountain",
+                        "patient_summary": "Test patient",
+                        "hidden_truth": "truth",
+                        "learning_objectives": [],
+                        "turns": [],
+                        "starting_turn_id": 0,
+                    },
+                    "scenario_id": "scn-test",
+                    "class_id": "cls-123",
+                    "retry_count": 0,
+                }
+            )
+
+            await teacher_ui.generate_scenario()
+
+            mock_create_graph.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_generate_scenario_with_defaults(self):
+        """Test scenario generation uses defaults when session values are None."""
+        mock_graph = AsyncMock()
+        mock_message = AsyncMock()
+
+        with (
+            patch.object(teacher_ui.cl.user_session, "get", return_value=None),
+            patch.object(teacher_ui.cl.user_session, "set"),
+            patch.object(teacher_ui.cl, "Message", return_value=mock_message),
+            patch.object(teacher_ui, "create_teacher_graph", return_value=mock_graph),
+            patch.object(teacher_ui, "show_review_screen", new_callable=AsyncMock),
+        ):
+            mock_graph.ainvoke = AsyncMock(
+                return_value={
+                    "scenario_draft": {
+                        "title": "Test",
+                        "setting": "Mountain",
+                        "patient_summary": "Test patient",
+                        "hidden_truth": "truth",
+                        "learning_objectives": [],
+                        "turns": [],
+                        "starting_turn_id": 0,
+                    },
+                    "scenario_id": "scn-test",
+                    "class_id": "cls-123",
+                    "retry_count": 0,
+                }
+            )
+
+            await teacher_ui.generate_scenario()
+
+    @pytest.mark.asyncio
+    async def test_generate_scenario_failure_no_draft(self):
+        """Test scenario generation handles missing draft."""
+        mock_graph = AsyncMock()
+        mock_message = AsyncMock()
+
+        with (
+            patch.object(
+                teacher_ui.cl.user_session,
+                "get",
+                side_effect=_session_get_participants,
+            ),
+            patch.object(teacher_ui.cl.user_session, "set"),
+            patch.object(teacher_ui.cl, "Message", return_value=mock_message),
+            patch.object(teacher_ui, "create_teacher_graph", return_value=mock_graph),
+        ):
+            mock_graph.ainvoke = AsyncMock(return_value={})
+
+            await teacher_ui.generate_scenario()
+
+    @pytest.mark.asyncio
+    async def test_generate_scenario_exception(self):
+        """Test scenario generation handles exceptions."""
+        mock_graph = AsyncMock()
+        mock_message = AsyncMock()
+
+        with (
+            patch.object(
+                teacher_ui.cl.user_session,
+                "get",
+                side_effect=_session_get_participants,
+            ),
+            patch.object(teacher_ui.cl.user_session, "set"),
+            patch.object(teacher_ui.cl, "Message", return_value=mock_message),
+            patch.object(teacher_ui, "create_teacher_graph", return_value=mock_graph),
+        ):
+            mock_graph.ainvoke = AsyncMock(side_effect=Exception("API Error"))
+
+            await teacher_ui.generate_scenario()
+
+
+class TestShowReviewScreen:
+    """Tests for the show_review_screen UI function."""
+
+    @pytest.mark.asyncio
+    async def test_show_review_screen_success(self, sample_scenario):
+        """Test successful review screen display."""
+        state = TeacherState(
+            teacher_config=TeacherConfig(
+                num_participants=3, activity_type="hiking", difficulty="med"
+            ).model_dump(),
+            scenario_draft=sample_scenario.model_dump(),
+            scenario_id="scn-test123",
+            class_id="abc123",
+            retry_count=0,
+            approval_status=None,
+        )
+
+        mock_response = {"payload": {"value": 4}}
+        mock_message = AsyncMock()
+
+        with (
+            patch.object(teacher_ui.cl, "Message", return_value=mock_message),
+            patch.object(
+                teacher_ui.cl,
+                "AskActionMessage",
+                return_value=AsyncMock(send=AsyncMock(return_value=mock_response)),
+            ) as mock_ask,
+            patch.object(teacher_ui, "handle_rating", new_callable=AsyncMock),
+        ):
+            await teacher_ui.show_review_screen(state)
+
+            mock_message.send.assert_called()
+            mock_ask.assert_called()
+
+    @pytest.mark.asyncio
+    async def test_show_review_screen_with_retry(self, sample_scenario):
+        """Test review screen shows retry attempt text."""
+        state = TeacherState(
+            teacher_config=TeacherConfig(
+                num_participants=3, activity_type="hiking", difficulty="med"
+            ).model_dump(),
+            scenario_draft=sample_scenario.model_dump(),
+            scenario_id="scn-test123",
+            class_id="abc123",
+            retry_count=1,
+            approval_status=None,
+        )
+        mock_message = AsyncMock()
+
+        with (
+            patch.object(teacher_ui.cl, "Message", return_value=mock_message),
+            patch.object(
+                teacher_ui.cl,
+                "AskActionMessage",
+                return_value=AsyncMock(send=AsyncMock(return_value=None)),
+            ),
+        ):
+            await teacher_ui.show_review_screen(state)
+
+            mock_message.send.assert_called()
+
+    @pytest.mark.asyncio
+    async def test_show_review_screen_no_scenario(self):
+        """Test review screen handles no scenario."""
+        state = TeacherState(
+            teacher_config=TeacherConfig(
+                num_participants=3, activity_type="hiking", difficulty="med"
+            ).model_dump(),
+            scenario_draft=None,
+            scenario_id="scn-test123",
+            class_id="abc123",
+            retry_count=0,
+            approval_status=None,
+        )
+        mock_message = AsyncMock()
+
+        with patch.object(teacher_ui.cl, "Message", return_value=mock_message):
+            await teacher_ui.show_review_screen(state)
+
+            mock_message.send.assert_called()
+
+    @pytest.mark.asyncio
+    async def test_show_review_screen_no_rating(self, sample_scenario):
+        """Test review screen handles no rating response."""
+        state = TeacherState(
+            teacher_config=TeacherConfig(
+                num_participants=3, activity_type="hiking", difficulty="med"
+            ).model_dump(),
+            scenario_draft=sample_scenario.model_dump(),
+            scenario_id="scn-test123",
+            class_id="abc123",
+            retry_count=0,
+            approval_status=None,
+        )
+        mock_message = AsyncMock()
+
+        with (
+            patch.object(teacher_ui.cl, "Message", return_value=mock_message),
+            patch.object(
+                teacher_ui.cl,
+                "AskActionMessage",
+                return_value=AsyncMock(send=AsyncMock(return_value={})),
+            ),
+            patch.object(teacher_ui, "handle_rating", new_callable=AsyncMock),
+        ):
+            await teacher_ui.show_review_screen(state)
+
+
+class TestHandleRating:
+    """Tests for the handle_rating UI function."""
+
+    @pytest.mark.asyncio
+    async def test_handle_rating_approved(self, sample_scenario):
+        """Test rating >= 3 leads to completion."""
+        state = TeacherState(
+            teacher_config=TeacherConfig(
+                num_participants=3, activity_type="hiking", difficulty="med"
+            ).model_dump(),
+            scenario_draft=sample_scenario.model_dump(),
+            scenario_id="scn-test123",
+            class_id="abc123",
+            retry_count=0,
+            approval_status=None,
+            teacher_rating=4,
+        )
+
+        mock_graph = AsyncMock()
+
+        with (
+            patch.object(
+                teacher_ui.cl.user_session,
+                "get",
+                side_effect=lambda k: _session_get_for_rating(k, mock_graph),
+            ),
+            patch.object(teacher_ui, "show_completion", new_callable=AsyncMock),
+        ):
+            mock_graph.ainvoke = AsyncMock(
+                return_value={
+                    "teacher_config": state.teacher_config,
+                    "scenario_draft": sample_scenario.model_dump(),
+                    "scenario_id": "scn-test123",
+                    "class_id": "abc123",
+                    "retry_count": 0,
+                    "approval_status": "approved",
+                    "teacher_rating": 4,
+                }
+            )
+
+            await teacher_ui.handle_rating(state, 4)
+
+    @pytest.mark.asyncio
+    async def test_handle_rating_retry(self, sample_scenario):
+        """Test rating < 3 triggers regeneration."""
+        state = TeacherState(
+            teacher_config=TeacherConfig(
+                num_participants=3, activity_type="hiking", difficulty="med"
+            ).model_dump(),
+            scenario_draft=sample_scenario.model_dump(),
+            scenario_id="scn-test123",
+            class_id="abc123",
+            retry_count=0,
+            approval_status=None,
+            teacher_rating=2,
+        )
+
+        mock_graph = AsyncMock()
+        mock_message = AsyncMock()
+
+        with (
+            patch.object(
+                teacher_ui.cl.user_session,
+                "get",
+                side_effect=lambda k: _session_get_for_rating(k, mock_graph),
+            ),
+            patch.object(teacher_ui.cl, "Message", return_value=mock_message),
+            patch.object(teacher_ui, "show_review_screen", new_callable=AsyncMock),
+        ):
+            mock_graph.ainvoke = AsyncMock(
+                side_effect=[
+                    {
+                        "teacher_config": state.teacher_config,
+                        "scenario_draft": sample_scenario.model_dump(),
+                        "scenario_id": "scn-test123",
+                        "class_id": "abc123",
+                        "retry_count": 1,
+                        "approval_status": "rejected",
+                        "teacher_rating": 2,
+                    },
+                    {
+                        "teacher_config": state.teacher_config,
+                        "scenario_draft": sample_scenario.model_dump(),
+                        "scenario_id": "scn-test123",
+                        "class_id": "abc123",
+                        "retry_count": 1,
+                    },
+                ]
+            )
+
+            await teacher_ui.handle_rating(state, 2)
+
+            mock_message.send.assert_called()
+
+    @pytest.mark.asyncio
+    async def test_handle_rating_max_retries(self, sample_scenario):
+        """Test rating < 3 at max retries proceeds anyway."""
+        state = TeacherState(
+            teacher_config=TeacherConfig(
+                num_participants=3, activity_type="hiking", difficulty="med"
+            ).model_dump(),
+            scenario_draft=sample_scenario.model_dump(),
+            scenario_id="scn-test123",
+            class_id="abc123",
+            retry_count=2,
+            approval_status=None,
+            teacher_rating=2,
+        )
+
+        mock_graph = AsyncMock()
+        mock_message = AsyncMock()
+
+        with (
+            patch.object(
+                teacher_ui.cl.user_session,
+                "get",
+                side_effect=lambda k: _session_get_for_rating(k, mock_graph),
+            ),
+            patch.object(teacher_ui.cl, "Message", return_value=mock_message),
+            patch.object(teacher_ui, "show_completion", new_callable=AsyncMock),
+        ):
+            mock_graph.ainvoke = AsyncMock(
+                return_value={
+                    "teacher_config": state.teacher_config,
+                    "scenario_draft": sample_scenario.model_dump(),
+                    "scenario_id": "scn-test123",
+                    "class_id": "abc123",
+                    "retry_count": 3,
+                    "approval_status": "rejected",
+                    "teacher_rating": 2,
+                }
+            )
+
+            await teacher_ui.handle_rating(state, 2)
+
+            mock_message.send.assert_called()
+
+    @pytest.mark.asyncio
+    async def test_handle_rating_no_graph(self, sample_scenario):
+        """Test handling when graph is missing from session."""
+        state = TeacherState(
+            teacher_config=TeacherConfig(
+                num_participants=3, activity_type="hiking", difficulty="med"
+            ).model_dump(),
+            scenario_draft=sample_scenario.model_dump(),
+            scenario_id="scn-test123",
+            class_id="abc123",
+            retry_count=0,
+            approval_status=None,
+        )
+
+        mock_message = AsyncMock()
+
+        with (
+            patch.object(teacher_ui.cl.user_session, "get", return_value=None),
+            patch.object(teacher_ui.cl, "Message", return_value=mock_message),
+        ):
+            await teacher_ui.handle_rating(state, 4)
+
+            mock_message.send.assert_called()
+
+    @pytest.mark.asyncio
+    async def test_handle_rating_exception(self, sample_scenario):
+        """Test handling exceptions during rating."""
+        state = TeacherState(
+            teacher_config=TeacherConfig(
+                num_participants=3, activity_type="hiking", difficulty="med"
+            ).model_dump(),
+            scenario_draft=sample_scenario.model_dump(),
+            scenario_id="scn-test123",
+            class_id="abc123",
+            retry_count=0,
+            approval_status=None,
+        )
+
+        mock_graph = AsyncMock()
+        mock_message = AsyncMock()
+
+        with (
+            patch.object(
+                teacher_ui.cl.user_session,
+                "get",
+                side_effect=lambda k: _session_get_for_rating(k, mock_graph),
+            ),
+            patch.object(teacher_ui.cl, "Message", return_value=mock_message),
+            patch.object(teacher_ui, "show_review_screen", new_callable=AsyncMock),
+        ):
+            mock_graph.ainvoke = AsyncMock(side_effect=Exception("API Error"))
+
+            await teacher_ui.handle_rating(state, 4)
+
+            mock_message.send.assert_called()
+
+
+class TestShowCompletion:
+    """Tests for the show_completion UI function."""
+
+    @pytest.mark.asyncio
+    async def test_show_completion(self):
+        """Test completion screen displays shareable link."""
+        state = TeacherState(
+            teacher_config=TeacherConfig(
+                num_participants=3, activity_type="hiking", difficulty="med"
+            ).model_dump(),
+            scenario_draft=None,
+            scenario_id="scn-test123",
+            class_id="cls-abc",
+            retry_count=0,
+            approval_status="approved",
+        )
+        mock_message = AsyncMock()
+
+        with (
+            patch.object(teacher_ui.settings, "base_url", "https://example.com"),
+            patch.object(teacher_ui.cl, "Message", return_value=mock_message),
+        ):
+            await teacher_ui.show_completion(state)
+
+            mock_message.send.assert_called()
+
+
+class TestAskScenarioConfig:
+    """Tests for the ask_scenario_config UI function."""
+
+    @pytest.mark.asyncio
+    async def test_ask_scenario_config_success(self):
+        """Test successful scenario configuration with form submission."""
+        mock_response = {
+            "submitted": True,
+            "participants": "4",
+            "activity": "Skiing",
+            "difficulty": "High",
+        }
+
+        mock_element = type("MockElement", (), {"name": "ScenarioConfigForm"})()
+
+        with (
+            patch.object(
+                teacher_ui.cl,
+                "CustomElement",
+                return_value=mock_element,
+            ),
+            patch.object(
+                teacher_ui.cl,
+                "AskElementMessage",
+                return_value=AsyncMock(send=AsyncMock(return_value=mock_response)),
+            ) as mock_ask,
+            patch.object(teacher_ui.cl.user_session, "set") as mock_set,
+            patch.object(
+                teacher_ui, "generate_scenario", new_callable=AsyncMock
+            ) as mock_generate,
+        ):
+            await teacher_ui.ask_scenario_config()
+
+            # Verify the form was displayed
+            mock_ask.assert_called_once()
+            call_args = mock_ask.call_args
+            assert "Configure Your Scenario" in call_args.kwargs["content"]
+
+            # Verify session values were set
+            mock_set.assert_any_call("num_participants", 4)
+            mock_set.assert_any_call("activity_type", "skiing")
+            mock_set.assert_any_call("difficulty", "high")
+
+            # Verify scenario generation was called
+            mock_generate.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_ask_scenario_config_with_six_plus(self):
+        """Test that 6+ participants is converted to 6."""
+        mock_response = {
+            "submitted": True,
+            "participants": "6+",
+            "activity": "Hiking",
+            "difficulty": "Medium",
+        }
+
+        mock_element = type("MockElement", (), {"name": "ScenarioConfigForm"})()
+
+        with (
+            patch.object(
+                teacher_ui.cl,
+                "CustomElement",
+                return_value=mock_element,
+            ),
+            patch.object(
+                teacher_ui.cl,
+                "AskElementMessage",
+                return_value=AsyncMock(send=AsyncMock(return_value=mock_response)),
+            ),
+            patch.object(teacher_ui.cl.user_session, "set") as mock_set,
+            patch.object(teacher_ui, "generate_scenario", new_callable=AsyncMock),
+        ):
+            await teacher_ui.ask_scenario_config()
+
+            # Verify 6+ was converted to 6
+            mock_set.assert_any_call("num_participants", 6)
+
+    @pytest.mark.asyncio
+    async def test_ask_scenario_config_cancelled(self):
+        """Test that cancelled form does not proceed."""
+        mock_response = {
+            "submitted": False,
+        }
+
+        mock_element = type("MockElement", (), {"name": "ScenarioConfigForm"})()
+
+        with (
+            patch.object(
+                teacher_ui.cl,
+                "CustomElement",
+                return_value=mock_element,
+            ),
+            patch.object(
+                teacher_ui.cl,
+                "AskElementMessage",
+                return_value=AsyncMock(send=AsyncMock(return_value=mock_response)),
+            ),
+            patch.object(teacher_ui.cl.user_session, "set") as mock_set,
+            patch.object(
+                teacher_ui, "generate_scenario", new_callable=AsyncMock
+            ) as mock_generate,
+        ):
+            await teacher_ui.ask_scenario_config()
+
+            # Verify no session values were set
+            mock_set.assert_not_called()
+            # Verify scenario generation was not called
+            mock_generate.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_ask_scenario_config_no_response(self):
+        """Test that no response (None) does not proceed."""
+        mock_element = type("MockElement", (), {"name": "ScenarioConfigForm"})()
+
+        with (
+            patch.object(
+                teacher_ui.cl,
+                "CustomElement",
+                return_value=mock_element,
+            ),
+            patch.object(
+                teacher_ui.cl,
+                "AskElementMessage",
+                return_value=AsyncMock(send=AsyncMock(return_value=None)),
+            ),
+            patch.object(teacher_ui.cl.user_session, "set") as mock_set,
+            patch.object(
+                teacher_ui, "generate_scenario", new_callable=AsyncMock
+            ) as mock_generate,
+        ):
+            await teacher_ui.ask_scenario_config()
+
+            # Verify no session values were set
+            mock_set.assert_not_called()
+            # Verify scenario generation was not called
+            mock_generate.assert_not_called()

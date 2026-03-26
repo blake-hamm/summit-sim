@@ -48,7 +48,7 @@ async def start() -> None:
         return
 
     cl.user_session.set("mode", "teacher")
-    await teacher.ask_num_participants()
+    await teacher.ask_scenario_config()
 
 
 @on_message
