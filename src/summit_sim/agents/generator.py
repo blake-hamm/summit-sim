@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import mlflow
-from mlflow.entities import SpanType
 
 from summit_sim.agents.config import get_agent
 from summit_sim.schemas import ScenarioDraft, TeacherConfig
@@ -66,7 +65,6 @@ Create a complete scenario with:
 The scenario should be challenging but educational for wilderness first responders."""
 
 
-@mlflow.trace(span_type=SpanType.AGENT)
 async def generate_scenario(teacher_config: TeacherConfig) -> ScenarioDraft:
     """Generate a complete scenario from minimal teacher configuration."""
     agent = get_agent(

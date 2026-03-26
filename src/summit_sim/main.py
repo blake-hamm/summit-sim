@@ -16,7 +16,6 @@ from summit_sim.ui import student, teacher
 mlflow.set_tracking_uri(settings.mlflow_tracking_uri)
 mlflow.set_experiment(settings.mlflow_experiment_name)
 mlflow.pydantic_ai.autolog()
-mlflow.langchain.autolog(run_tracer_inline=True)
 
 
 @on_chat_start

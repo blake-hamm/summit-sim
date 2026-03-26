@@ -18,7 +18,7 @@ from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.store.base import BaseStore
 from langgraph.types import interrupt
-from mlflow.entities import AssessmentSource, AssessmentSourceType
+from mlflow.entities import AssessmentSource, AssessmentSourceType, SpanType
 
 from summit_sim.agents.generator import generate_scenario
 from summit_sim.graphs.utils import scenario_store
@@ -35,6 +35,7 @@ ACCEPTABLE_RATING_THRESHOLD = 3
 MAX_RETRY_ATTEMPTS = 3
 
 if TYPE_CHECKING:
+    from langchain_core.runnables import RunnableConfig
     from langgraph.checkpoint.base import BaseCheckpointSaver
 
 
@@ -78,7 +79,8 @@ def initialize_teacher(state: TeacherState) -> TeacherState:
     )
 
 
-async def generate_scenario_node(state: TeacherState) -> dict:
+@mlflow.trace(span_type=SpanType.AGENT)
+async def generate_scenario_node(state: TeacherState, config: RunnableConfig) -> dict:
     """Generate scenario from teacher configuration.
 
     Calls the scenario generator agent to create a complete scenario
@@ -87,11 +89,21 @@ async def generate_scenario_node(state: TeacherState) -> dict:
     """
     teacher_config = TeacherConfig.model_validate(state.teacher_config)
 
-    retry_count = state.retry_count + 1 if state.teacher_rating is not None else 0
+    is_retry = state.teacher_rating is not None
+    retry_count = state.retry_count + 1 if is_retry else 0
 
+    # First generation - let MLflow create a new trace
     scenario = await generate_scenario(teacher_config)
     active_span = mlflow.get_current_active_span()
     current_trace_id = active_span.trace_id if active_span else None
+
+    # Tag trace with session ID for correlation
+    thread_id = config.get("configurable", {}).get("thread_id")
+    if thread_id and current_trace_id:
+        mlflow.update_current_trace(
+            metadata={"mlflow.trace.session": thread_id},
+            tags={"session_id": thread_id},
+        )
 
     return {
         "scenario_draft": scenario.model_dump(),
@@ -147,9 +159,9 @@ def present_for_teacher(state: TeacherState) -> dict:
 
     return {
         "teacher_rating": rating,
-        "approval_status": "approved"
-        if rating >= ACCEPTABLE_RATING_THRESHOLD
-        else "rejected",
+        "approval_status": (
+            "approved" if rating >= ACCEPTABLE_RATING_THRESHOLD else "rejected"
+        ),
     }
 
 

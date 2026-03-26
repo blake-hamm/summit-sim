@@ -7,22 +7,12 @@ from pydantic import BaseModel, Field
 
 
 def generate_scenario_id() -> str:
-    """Generate unique scenario identifier.
-
-    Returns:
-        Scenario ID in format 'scn-{8-char hex}' (e.g., 'scn-a3f8d2e9').
-
-    """
+    """Generate unique scenario identifier."""
     return f"scn-{uuid.uuid4().hex[:8]}"
 
 
 def generate_class_id() -> str:
-    """Generate a short, human-readable class ID.
-
-    Returns:
-        6-character alphanumeric string (e.g., 'a3f8d2').
-
-    """
+    """Generate a short, human-readable class ID."""
     return uuid.uuid4().hex[:6]
 
 
