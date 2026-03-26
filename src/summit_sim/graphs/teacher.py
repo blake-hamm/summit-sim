@@ -9,7 +9,7 @@ This module implements a linear LangGraph workflow that:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field, fields
+from dataclasses import dataclass, fields
 from typing import TYPE_CHECKING, Any
 
 import mlflow
@@ -29,6 +29,11 @@ from summit_sim.schemas import (
     generate_scenario_id,
 )
 
+MIN_RATING = 1
+MAX_RATING = 5
+ACCEPTABLE_RATING_THRESHOLD = 3
+MAX_RETRY_ATTEMPTS = 3
+
 if TYPE_CHECKING:
     from langgraph.checkpoint.base import BaseCheckpointSaver
 
@@ -47,9 +52,9 @@ class TeacherState:
     scenario_id: str = ""
     class_id: str = ""
     retry_count: int = 0
-    feedback_history: list[str] = field(default_factory=list)
     approval_status: str | None = None
     current_trace_id: str | None = None
+    teacher_rating: int | None = None
 
     @classmethod
     def from_graph_result(cls, result: dict[str, Any]) -> "TeacherState":
@@ -70,7 +75,6 @@ def initialize_teacher(state: TeacherState) -> TeacherState:
         scenario_id=generate_scenario_id(),
         class_id=generate_class_id(),
         retry_count=0,
-        feedback_history=[],
     )
 
 
@@ -79,22 +83,29 @@ async def generate_scenario_node(state: TeacherState) -> dict:
 
     Calls the scenario generator agent to create a complete scenario
     based on the teacher's configuration parameters.
+    On retry, increments retry_count.
     """
     teacher_config = TeacherConfig.model_validate(state.teacher_config)
+
+    retry_count = state.retry_count + 1 if state.teacher_rating is not None else 0
+
     scenario = await generate_scenario(teacher_config)
     active_span = mlflow.get_current_active_span()
-    current_trace_id = active_span.trace_id
+    current_trace_id = active_span.trace_id if active_span else None
+
     return {
         "scenario_draft": scenario.model_dump(),
         "current_trace_id": current_trace_id,
+        "retry_count": retry_count,
     }
 
 
 def present_for_teacher(state: TeacherState) -> dict:
-    """Present scenario for teacher review and wait for approval.
+    """Present scenario for teacher review and capture rating.
 
     Uses LangGraph's interrupt() for human-in-the-loop interaction.
-    Displays the generated scenario and waits for teacher decision.
+    Displays the generated scenario and captures teacher rating (1-5).
+    Automatically retries if rating < 3 (up to 3 attempts).
     """
     scenario = state.scenario_draft
 
@@ -109,26 +120,55 @@ def present_for_teacher(state: TeacherState) -> dict:
             "scenario": scenario_obj,
             "scenario_id": state.scenario_id,
             "class_id": state.class_id,
+            "retry_count": state.retry_count,
         }
     )
 
-    decision = choice_data.get("decision")
+    rating = choice_data.get("rating")
 
-    if decision != "approve":
-        msg = f"Invalid decision: {decision}. Expected 'approve'"
+    if (
+        rating is None
+        or not isinstance(rating, int)
+        or not MIN_RATING <= rating <= MAX_RATING
+    ):
+        msg = f"Invalid rating: {rating}. Expected integer 1-5"
         raise ValueError(msg)
 
     if current_trace_id := state.current_trace_id:
         mlflow.log_feedback(
             trace_id=current_trace_id,
-            name="teacher_approved",
-            value=True,
-            rationale="Teacher approved",
+            name="teacher_rating",
+            value=rating,
+            rationale=f"Teacher rated {rating}/5",
             source=AssessmentSource(
                 source_type=AssessmentSourceType.HUMAN, source_id=state.scenario_id
             ),
         )
-    return {"approval_status": "approved"}
+
+    return {
+        "teacher_rating": rating,
+        "approval_status": "approved"
+        if rating >= ACCEPTABLE_RATING_THRESHOLD
+        else "rejected",
+    }
+
+
+def should_retry(state: TeacherState) -> str:
+    """Determine if scenario should be regenerated based on rating.
+
+    Routes to "generate" if rating < 3 and retry_count < 3.
+    Otherwise routes to "save".
+    """
+    rating = state.teacher_rating
+    retry_count = state.retry_count
+
+    if (
+        rating is not None
+        and rating < ACCEPTABLE_RATING_THRESHOLD
+        and retry_count < MAX_RETRY_ATTEMPTS
+    ):
+        return "generate"
+    return "save"
 
 
 def save_scenario(state: TeacherState) -> dict:
@@ -157,7 +197,9 @@ def create_teacher_graph(
     workflow.set_entry_point("initialize")
     workflow.add_edge("initialize", "generate")
     workflow.add_edge("generate", "review")
-    workflow.add_edge("review", "save")
+    workflow.add_conditional_edges(
+        "review", should_retry, {"generate": "generate", "save": "save"}
+    )
     workflow.add_edge("save", END)
 
     if checkpointer is None:

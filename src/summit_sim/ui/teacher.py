@@ -5,6 +5,8 @@ from typing import TYPE_CHECKING
 from langgraph.types import Command
 
 from summit_sim.graphs.teacher import (
+    ACCEPTABLE_RATING_THRESHOLD,
+    MAX_RETRY_ATTEMPTS,
     TeacherState,
     create_teacher_graph,
 )
@@ -121,7 +123,6 @@ async def generate_scenario() -> None:
         scenario_id="",
         class_id="",
         retry_count=0,
-        feedback_history=[],
         approval_status=None,
     )
 
@@ -146,9 +147,10 @@ async def generate_scenario() -> None:
 
 
 async def show_review_screen(state: TeacherState) -> None:
-    """Display the scenario review screen with approve button."""
+    """Display the scenario review screen with 1-5 rating buttons."""
     scenario_dict = state.scenario_draft
     scenario_id = state.scenario_id
+    retry_count = state.retry_count
 
     if scenario_dict is None:
         await cl.Message(
@@ -157,8 +159,10 @@ async def show_review_screen(state: TeacherState) -> None:
         return
 
     scenario = ScenarioDraft.model_validate(scenario_dict)
+
+    attempt_text = f" (Attempt {retry_count + 1}/3)" if retry_count > 0 else ""
     await cl.Message(
-        content=f"## 📋 Scenario Review\n\n**ID:** `{scenario_id}`",
+        content=f"## 📋 Scenario Review{attempt_text}\n\n**ID:** `{scenario_id}`",
     ).send()
 
     await cl.Message(
@@ -180,24 +184,34 @@ async def show_review_screen(state: TeacherState) -> None:
 
     res = await cl.AskActionMessage(
         content=(
-            "Review the scenario above. "
-            "Click **Approve** when ready to share with students."
+            "**Rate this scenario (1-5):**\n\n"
+            "⭐ Poor - Unacceptable\n"
+            "⭐⭐ Below Average - Major issues\n"
+            "⭐⭐⭐ Acceptable - Safe to use\n"
+            "⭐⭐⭐⭐ Good - Quality scenario\n"
+            "⭐⭐⭐⭐⭐ Excellent - Outstanding"
         ),
         actions=[
+            cl.Action(name="rate_1", payload={"value": 1}, label="⭐ (1) Poor"),
+            cl.Action(name="rate_2", payload={"value": 2}, label="⭐⭐ (2) Below Avg"),
             cl.Action(
-                name="approve",
-                payload={"value": "approve"},
-                label="✅ Approve & Generate Link",
+                name="rate_3", payload={"value": 3}, label="⭐⭐⭐ (3) Acceptable"
+            ),
+            cl.Action(name="rate_4", payload={"value": 4}, label="⭐⭐⭐⭐ (4) Good"),
+            cl.Action(
+                name="rate_5", payload={"value": 5}, label="⭐⭐⭐⭐⭐ (5) Excellent"
             ),
         ],
     ).send()
 
-    if res and res.get("payload", {}).get("value") == "approve":
-        await handle_approval(state)
+    if res and res.get("payload"):
+        rating = res.get("payload", {}).get("value")
+        if rating is not None:
+            await handle_rating(state, int(rating))
 
 
-async def handle_approval(state: TeacherState) -> None:
-    """Handle scenario approval and generate shareable link."""
+async def handle_rating(state: TeacherState, rating: int) -> None:
+    """Handle teacher rating and manage retry/approval flow."""
     graph = cl.user_session.get("graph")
     if graph is None:
         await cl.Message(content="❌ Error: Session expired. Please start over.").send()
@@ -208,41 +222,75 @@ async def handle_approval(state: TeacherState) -> None:
 
     try:
         result = await graph.ainvoke(
-            Command(resume={"decision": "approve"}),
+            Command(resume={"rating": rating}),
             config=config_dict,
         )
 
         final_state = TeacherState.from_graph_result(result)
-        approval_status = final_state.approval_status or ""
+        new_retry_count = final_state.retry_count or 0
 
-        if approval_status == "approved":
-            scenario_id = final_state.scenario_id or ""
-            class_id = final_state.class_id or ""
-            shareable_url = f"{settings.base_url}?scenario_id={scenario_id}"
-
+        if (
+            rating < ACCEPTABLE_RATING_THRESHOLD
+            and new_retry_count < MAX_RETRY_ATTEMPTS
+        ):
             await cl.Message(
                 content=(
-                    f"## ✅ Scenario Approved!\n\n"
-                    f"**Scenario ID:** `{scenario_id}`\n"
-                    f"**Class ID:** `{class_id}`\n\n"
-                    f"**Shareable URL:**\n{shareable_url}"
+                    f"🔄 Regenerating scenario "
+                    f"(attempt {new_retry_count + 1}/{MAX_RETRY_ATTEMPTS})..."
                 ),
             ).send()
 
+            result = await graph.ainvoke(
+                None,
+                config=config_dict,
+            )
+
+            if result.get("scenario_draft"):
+                new_state = TeacherState.from_graph_result(result)
+                await show_review_screen(new_state)
+            else:
+                await cl.Message(
+                    content="❌ Error: Regeneration failed. Please try again.",
+                ).send()
+        elif (
+            rating < ACCEPTABLE_RATING_THRESHOLD
+            and new_retry_count >= MAX_RETRY_ATTEMPTS
+        ):
             await cl.Message(
                 content=(
-                    "Students can join by visiting the URL above. "
-                    "The simulation is ready to run!"
+                    f"⚠️ Maximum retry attempts reached ({MAX_RETRY_ATTEMPTS}/"
+                    f"{MAX_RETRY_ATTEMPTS}). Proceeding with current scenario."
                 ),
             ).send()
+            await show_completion(final_state)
         else:
-            await cl.Message(
-                content="❌ Error: Approval failed. Please try again.",
-            ).send()
-            await show_review_screen(state)
+            await show_completion(final_state)
 
     except Exception as e:
         await cl.Message(
-            content=f"❌ Error during approval: {e!s}",
+            content=f"❌ Error during rating: {e!s}",
         ).send()
         await show_review_screen(state)
+
+
+async def show_completion(state: TeacherState) -> None:
+    """Display completion screen with shareable link."""
+    scenario_id = state.scenario_id or ""
+    class_id = state.class_id or ""
+    shareable_url = f"{settings.base_url}?scenario_id={scenario_id}"
+
+    await cl.Message(
+        content=(
+            f"## ✅ Scenario Approved!\n\n"
+            f"**Scenario ID:** `{scenario_id}`\n"
+            f"**Class ID:** `{class_id}`\n\n"
+            f"**Shareable URL:**\n{shareable_url}"
+        ),
+    ).send()
+
+    await cl.Message(
+        content=(
+            "Students can join by visiting the URL above. "
+            "The simulation is ready to run!"
+        ),
+    ).send()
