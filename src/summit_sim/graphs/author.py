@@ -19,7 +19,6 @@ from summit_sim.graphs.utils import scenario_store
 from summit_sim.schemas import (
     ScenarioConfig,
     ScenarioDraft,
-    generate_class_id,
     generate_scenario_id,
 )
 
@@ -47,7 +46,6 @@ class AuthorState:
     scenario_config: dict
     scenario_draft: dict | None = None
     scenario_id: str = ""
-    class_id: str = ""
     retry_count: int = 0
     approval_status: str | None = None
     current_trace_id: str | None = None
@@ -64,13 +62,11 @@ class AuthorState:
 def initialize_author(state: AuthorState) -> AuthorState:
     """Initialize author session with generated IDs.
 
-    Generates scenario_id and class_id, initializes retry_count to 0,
-    and creates empty feedback_history.
+    Generates scenario_id and initializes retry_count to 0.
     """
     return AuthorState(
         scenario_config=state.scenario_config,
         scenario_id=generate_scenario_id(),
-        class_id=generate_class_id(),
         retry_count=0,
     )
 
@@ -123,7 +119,6 @@ def present_for_author(state: AuthorState) -> dict:
             "type": "scenario_review",
             "scenario": scenario_obj,
             "scenario_id": state.scenario_id,
-            "class_id": state.class_id,
             "retry_count": state.retry_count,
         }
     )
@@ -181,7 +176,7 @@ def save_scenario(state: AuthorState) -> dict:
         scenario_store.put(
             ("scenarios",),
             state.scenario_id,
-            {"scenario_draft": state.scenario_draft, "class_id": state.class_id},
+            {"scenario_draft": state.scenario_draft},
         )
     return {}
 

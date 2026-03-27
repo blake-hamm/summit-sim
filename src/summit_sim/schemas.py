@@ -11,59 +11,94 @@ def generate_scenario_id() -> str:
     return f"scn-{uuid.uuid4().hex[:8]}"
 
 
-def generate_class_id() -> str:
-    """Generate a short, human-readable class ID."""
-    return uuid.uuid4().hex[:6]
-
-
 class ScenarioConfig(BaseModel):
-    """Minimal configuration provided by the author to generate a scenario.
+    """Configuration provided by the author to generate a targeted WFR scenario.
 
-    This is the starting point - the AI expands these 3 parameters
-    into a full wilderness rescue scenario with multiple turns.
+    Replaces generic inputs with dimensions that directly impact WFR decision-making:
+    patient assessment (Medical/Trauma/Environmental), resource management (group size),
+    and evacuation logistics (distance/environment).
     """
 
-    num_participants: int = Field(
+    primary_focus: Literal["Trauma", "Medical", "Environmental", "Mixed"] = Field(
         ...,
-        ge=1,
-        le=20,
-        description="Number of participants involved (1-20)",
+        description="The core WFR syllabus category to test.",
         json_schema_extra={
             "ui": {
                 "type": "select",
-                "label": "Number of Participants",
-                "options": ["1", "2", "3", "4", "5", "6+"],
-                "value": "3",
+                "label": "Curriculum Focus",
+                "options": ["Trauma", "Medical", "Environmental", "Mixed"],
+                "value": "Trauma",
             }
         },
     )
-    activity_type: Literal["canyoneering", "skiing", "hiking"] = Field(
+    environment: Literal[
+        "Alpine/Mountain", "Desert", "Forest/Trail", "Water/River", "Winter/Snow"
+    ] = Field(
         ...,
-        description="Type of outdoor activity",
+        description="The physical setting, driving MOI and weather risks.",
         json_schema_extra={
             "ui": {
                 "type": "select",
-                "label": "Activity Type",
-                "options": ["Canyoneering", "Skiing", "Hiking"],
-                "value": "Skiing",
+                "label": "Environment",
+                "options": [
+                    "Alpine/Mountain",
+                    "Desert",
+                    "Forest/Trail",
+                    "Water/River",
+                    "Winter/Snow",
+                ],
+                "value": "Alpine/Mountain",
             }
         },
     )
-    difficulty: Literal["low", "med", "high"] = Field(
+    available_personnel: Literal[
+        "Solo Rescuer (1)", "Partner (2)", "Small Group (3-5)", "Large Expedition (6+)"
+    ] = Field(
         ...,
-        description="Scenario difficulty level",
+        description="Total conscious people. Dictates litter carries or runners.",
         json_schema_extra={
             "ui": {
                 "type": "select",
-                "label": "Difficulty Level",
-                "options": ["Low", "Medium", "High"],
-                "value": "High",
+                "label": "Group Size / Resources",
+                "options": [
+                    "Solo Rescuer (1)",
+                    "Partner (2)",
+                    "Small Group (3-5)",
+                    "Large Expedition (6+)",
+                ],
+                "value": "Small Group (3-5)",
             }
         },
     )
-    class_id: str | None = Field(
-        default=None,
-        description="Optional class grouping ID (e.g., 'class-2024-wfa')",
+    evac_distance: Literal[
+        "Short (< 2 hours)", "Remote (1 day)", "Expedition (2+ days)"
+    ] = Field(
+        ...,
+        description="Distance to definitive care. Key for stay vs go decisions.",
+        json_schema_extra={
+            "ui": {
+                "type": "select",
+                "label": "Evacuation Distance",
+                "options": [
+                    "Short (< 2 hours)",
+                    "Remote (1 day)",
+                    "Expedition (2+ days)",
+                ],
+                "value": "Remote (1 day)",
+            }
+        },
+    )
+    complexity: Literal["Standard", "Complicated", "Critical"] = Field(
+        ...,
+        description="Complicated=underlying condition; Critical=deteriorating vitals.",
+        json_schema_extra={
+            "ui": {
+                "type": "select",
+                "label": "Patient Complexity",
+                "options": ["Standard", "Complicated", "Critical"],
+                "value": "Standard",
+            }
+        },
     )
 
 

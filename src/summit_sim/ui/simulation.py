@@ -76,7 +76,6 @@ async def run_simulation() -> None:
     """Run the simulation graph with player interactions."""
     scenario = cl.user_session.get("scenario")
     scenario_id = cl.user_session.get("scenario_id") or ""
-    class_id = cl.user_session.get("class_id")
 
     if scenario is None:
         await cl.Message(content="❌ Error: No scenario found.").send()
@@ -104,7 +103,6 @@ async def run_simulation() -> None:
         last_selected_choice=None,
         simulation_result=None,
         scenario_id=scenario_id,
-        class_id=class_id,
     )
 
     try:

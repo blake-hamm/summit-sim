@@ -25,9 +25,11 @@ from summit_sim.ui import author as author_ui
 
 def _session_get_participants(key: str) -> str | None:
     return {
-        "num_participants": 3,
-        "activity_type": "hiking",
-        "difficulty": "med",
+        "primary_focus": "Trauma",
+        "environment": "Alpine/Mountain",
+        "available_personnel": "Small Group (3-5)",
+        "evac_distance": "Remote (1 day)",
+        "complexity": "Standard",
     }.get(key)
 
 
@@ -47,9 +49,11 @@ def _session_get_for_rating(key: str, mock_graph: AsyncMock | None = None) -> An
 def sample_scenario_config():
     """Create a sample teacher configuration for testing."""
     return ScenarioConfig(
-        num_participants=3,
-        activity_type="hiking",
-        difficulty="med",
+        primary_focus="Trauma",
+        environment="Alpine/Mountain",
+        available_personnel="Small Group (3-5)",
+        evac_distance="Remote (1 day)",
+        complexity="Standard",
     )
 
 
@@ -146,7 +150,6 @@ def initial_state(sample_scenario_config):
         scenario_config=sample_scenario_config.model_dump(),
         scenario_draft=None,
         scenario_id="",
-        class_id="",
         retry_count=0,
         approval_status=None,
     )
@@ -156,11 +159,10 @@ class TestInitializeTeacherSession:
     """Tests for initialize_author node."""
 
     def test_initialize_generates_ids(self, initial_state):
-        """Test that initialization generates scenario_id and class_id."""
+        """Test that initialization generates scenario_id."""
         result = initialize_author(initial_state)
 
         assert result.scenario_id.startswith("scn-")
-        assert len(result.class_id) == 6
         assert result.retry_count == 0
 
     def test_initialize_preserves_scenario_config(self, initial_state):
@@ -177,11 +179,14 @@ class TestPresentForReview:
         """Test presenting a valid scenario with rating 5."""
         state = AuthorState(
             scenario_config=ScenarioConfig(
-                num_participants=3, activity_type="hiking", difficulty="med"
+                primary_focus="Trauma",
+                environment="Alpine/Mountain",
+                available_personnel="Small Group (3-5)",
+                evac_distance="Remote (1 day)",
+                complexity="Standard",
             ).model_dump(),
             scenario_draft=sample_scenario.model_dump(),
             scenario_id="scn-test123",
-            class_id="abc123",
             retry_count=0,
             approval_status=None,
             current_trace_id="trace-123",
@@ -202,11 +207,14 @@ class TestPresentForReview:
         """Test rating 3 is acceptable and approved."""
         state = AuthorState(
             scenario_config=ScenarioConfig(
-                num_participants=3, activity_type="hiking", difficulty="med"
+                primary_focus="Trauma",
+                environment="Alpine/Mountain",
+                available_personnel="Small Group (3-5)",
+                evac_distance="Remote (1 day)",
+                complexity="Standard",
             ).model_dump(),
             scenario_draft=sample_scenario.model_dump(),
             scenario_id="scn-test123",
-            class_id="abc123",
             retry_count=0,
             approval_status=None,
             current_trace_id="trace-123",
@@ -227,11 +235,14 @@ class TestPresentForReview:
         """Test rating 2 is rejected and should trigger retry."""
         state = AuthorState(
             scenario_config=ScenarioConfig(
-                num_participants=3, activity_type="hiking", difficulty="med"
+                primary_focus="Trauma",
+                environment="Alpine/Mountain",
+                available_personnel="Small Group (3-5)",
+                evac_distance="Remote (1 day)",
+                complexity="Standard",
             ).model_dump(),
             scenario_draft=sample_scenario.model_dump(),
             scenario_id="scn-test123",
-            class_id="abc123",
             retry_count=0,
             approval_status=None,
             current_trace_id="trace-123",
@@ -252,11 +263,14 @@ class TestPresentForReview:
         """Test presenting with no scenario raises error."""
         state = AuthorState(
             scenario_config=ScenarioConfig(
-                num_participants=3, activity_type="hiking", difficulty="med"
+                primary_focus="Trauma",
+                environment="Alpine/Mountain",
+                available_personnel="Small Group (3-5)",
+                evac_distance="Remote (1 day)",
+                complexity="Standard",
             ).model_dump(),
             scenario_draft=None,
             scenario_id="scn-test123",
-            class_id="abc123",
             retry_count=0,
             approval_status=None,
         )
@@ -268,11 +282,14 @@ class TestPresentForReview:
         """Test presenting with invalid rating raises error."""
         state = AuthorState(
             scenario_config=ScenarioConfig(
-                num_participants=3, activity_type="hiking", difficulty="med"
+                primary_focus="Trauma",
+                environment="Alpine/Mountain",
+                available_personnel="Small Group (3-5)",
+                evac_distance="Remote (1 day)",
+                complexity="Standard",
             ).model_dump(),
             scenario_draft=sample_scenario.model_dump(),
             scenario_id="scn-test123",
-            class_id="abc123",
             retry_count=0,
             approval_status=None,
         )
@@ -286,11 +303,14 @@ class TestPresentForReview:
         """Test presenting with missing rating raises error."""
         state = AuthorState(
             scenario_config=ScenarioConfig(
-                num_participants=3, activity_type="hiking", difficulty="med"
+                primary_focus="Trauma",
+                environment="Alpine/Mountain",
+                available_personnel="Small Group (3-5)",
+                evac_distance="Remote (1 day)",
+                complexity="Standard",
             ).model_dump(),
             scenario_draft=sample_scenario.model_dump(),
             scenario_id="scn-test123",
-            class_id="abc123",
             retry_count=0,
             approval_status=None,
         )
@@ -308,11 +328,14 @@ class TestShouldRetryLogic:
         """Test should_retry routes to generate when rating < 3 and retry_count < 3."""
         state = AuthorState(
             scenario_config=ScenarioConfig(
-                num_participants=3, activity_type="hiking", difficulty="med"
+                primary_focus="Trauma",
+                environment="Alpine/Mountain",
+                available_personnel="Small Group (3-5)",
+                evac_distance="Remote (1 day)",
+                complexity="Standard",
             ).model_dump(),
             scenario_draft=sample_scenario.model_dump(),
             scenario_id="scn-test123",
-            class_id="abc123",
             retry_count=1,
             approval_status=None,
             author_rating=2,
@@ -325,11 +348,14 @@ class TestShouldRetryLogic:
         """Test should_retry routes to save when rating < 3 but retry_count >= 3."""
         state = AuthorState(
             scenario_config=ScenarioConfig(
-                num_participants=3, activity_type="hiking", difficulty="med"
+                primary_focus="Trauma",
+                environment="Alpine/Mountain",
+                available_personnel="Small Group (3-5)",
+                evac_distance="Remote (1 day)",
+                complexity="Standard",
             ).model_dump(),
             scenario_draft=sample_scenario.model_dump(),
             scenario_id="scn-test123",
-            class_id="abc123",
             retry_count=3,
             approval_status=None,
             author_rating=2,
@@ -342,11 +368,14 @@ class TestShouldRetryLogic:
         """Test should_retry routes to save when rating >= 3."""
         state = AuthorState(
             scenario_config=ScenarioConfig(
-                num_participants=3, activity_type="hiking", difficulty="med"
+                primary_focus="Trauma",
+                environment="Alpine/Mountain",
+                available_personnel="Small Group (3-5)",
+                evac_distance="Remote (1 day)",
+                complexity="Standard",
             ).model_dump(),
             scenario_draft=sample_scenario.model_dump(),
             scenario_id="scn-test123",
-            class_id="abc123",
             retry_count=0,
             approval_status=None,
             author_rating=4,
@@ -440,7 +469,6 @@ class TestTeacherReviewGraphFullCycle:
                     scenario_config=sample_scenario_config.model_dump(),
                     scenario_draft=None,
                     scenario_id="",
-                    class_id="",
                     retry_count=0,
                     approval_status=None,
                 )
@@ -454,7 +482,7 @@ class TestTeacherReviewGraphFullCycle:
                 # Verify we reached the interrupt
                 assert result.get("scenario_draft") is not None
                 assert result.get("scenario_id", "").startswith("scn-")
-                assert len(result.get("class_id", "")) == 6
+                assert result.get("scenario_id", "").startswith("scn-")
 
                 # Resume with rating 5
                 final_result = await graph.ainvoke(
@@ -501,7 +529,6 @@ class TestTeacherReviewGraphFullCycle:
                     scenario_config=sample_scenario_config.model_dump(),
                     scenario_draft=None,
                     scenario_id="",
-                    class_id="",
                     retry_count=0,
                     approval_status=None,
                 )
@@ -671,11 +698,14 @@ class TestShowReviewScreen:
         """Test successful review screen display."""
         state = AuthorState(
             scenario_config=ScenarioConfig(
-                num_participants=3, activity_type="hiking", difficulty="med"
+                primary_focus="Trauma",
+                environment="Alpine/Mountain",
+                available_personnel="Small Group (3-5)",
+                evac_distance="Remote (1 day)",
+                complexity="Standard",
             ).model_dump(),
             scenario_draft=sample_scenario.model_dump(),
             scenario_id="scn-test123",
-            class_id="abc123",
             retry_count=0,
             approval_status=None,
         )
@@ -702,11 +732,14 @@ class TestShowReviewScreen:
         """Test review screen shows retry attempt text."""
         state = AuthorState(
             scenario_config=ScenarioConfig(
-                num_participants=3, activity_type="hiking", difficulty="med"
+                primary_focus="Trauma",
+                environment="Alpine/Mountain",
+                available_personnel="Small Group (3-5)",
+                evac_distance="Remote (1 day)",
+                complexity="Standard",
             ).model_dump(),
             scenario_draft=sample_scenario.model_dump(),
             scenario_id="scn-test123",
-            class_id="abc123",
             retry_count=1,
             approval_status=None,
         )
@@ -729,11 +762,14 @@ class TestShowReviewScreen:
         """Test review screen handles no scenario."""
         state = AuthorState(
             scenario_config=ScenarioConfig(
-                num_participants=3, activity_type="hiking", difficulty="med"
+                primary_focus="Trauma",
+                environment="Alpine/Mountain",
+                available_personnel="Small Group (3-5)",
+                evac_distance="Remote (1 day)",
+                complexity="Standard",
             ).model_dump(),
             scenario_draft=None,
             scenario_id="scn-test123",
-            class_id="abc123",
             retry_count=0,
             approval_status=None,
         )
@@ -749,11 +785,14 @@ class TestShowReviewScreen:
         """Test review screen handles no rating response."""
         state = AuthorState(
             scenario_config=ScenarioConfig(
-                num_participants=3, activity_type="hiking", difficulty="med"
+                primary_focus="Trauma",
+                environment="Alpine/Mountain",
+                available_personnel="Small Group (3-5)",
+                evac_distance="Remote (1 day)",
+                complexity="Standard",
             ).model_dump(),
             scenario_draft=sample_scenario.model_dump(),
             scenario_id="scn-test123",
-            class_id="abc123",
             retry_count=0,
             approval_status=None,
         )
@@ -779,11 +818,14 @@ class TestHandleRating:
         """Test rating >= 3 leads to completion."""
         state = AuthorState(
             scenario_config=ScenarioConfig(
-                num_participants=3, activity_type="hiking", difficulty="med"
+                primary_focus="Trauma",
+                environment="Alpine/Mountain",
+                available_personnel="Small Group (3-5)",
+                evac_distance="Remote (1 day)",
+                complexity="Standard",
             ).model_dump(),
             scenario_draft=sample_scenario.model_dump(),
             scenario_id="scn-test123",
-            class_id="abc123",
             retry_count=0,
             approval_status=None,
             author_rating=4,
@@ -818,11 +860,14 @@ class TestHandleRating:
         """Test rating < 3 triggers regeneration."""
         state = AuthorState(
             scenario_config=ScenarioConfig(
-                num_participants=3, activity_type="hiking", difficulty="med"
+                primary_focus="Trauma",
+                environment="Alpine/Mountain",
+                available_personnel="Small Group (3-5)",
+                evac_distance="Remote (1 day)",
+                complexity="Standard",
             ).model_dump(),
             scenario_draft=sample_scenario.model_dump(),
             scenario_id="scn-test123",
-            class_id="abc123",
             retry_count=0,
             approval_status=None,
             author_rating=2,
@@ -870,11 +915,14 @@ class TestHandleRating:
         """Test rating < 3 at max retries proceeds anyway."""
         state = AuthorState(
             scenario_config=ScenarioConfig(
-                num_participants=3, activity_type="hiking", difficulty="med"
+                primary_focus="Trauma",
+                environment="Alpine/Mountain",
+                available_personnel="Small Group (3-5)",
+                evac_distance="Remote (1 day)",
+                complexity="Standard",
             ).model_dump(),
             scenario_draft=sample_scenario.model_dump(),
             scenario_id="scn-test123",
-            class_id="abc123",
             retry_count=2,
             approval_status=None,
             author_rating=2,
@@ -913,11 +961,14 @@ class TestHandleRating:
         """Test handling when graph is missing from session."""
         state = AuthorState(
             scenario_config=ScenarioConfig(
-                num_participants=3, activity_type="hiking", difficulty="med"
+                primary_focus="Trauma",
+                environment="Alpine/Mountain",
+                available_personnel="Small Group (3-5)",
+                evac_distance="Remote (1 day)",
+                complexity="Standard",
             ).model_dump(),
             scenario_draft=sample_scenario.model_dump(),
             scenario_id="scn-test123",
-            class_id="abc123",
             retry_count=0,
             approval_status=None,
         )
@@ -937,11 +988,14 @@ class TestHandleRating:
         """Test handling exceptions during rating."""
         state = AuthorState(
             scenario_config=ScenarioConfig(
-                num_participants=3, activity_type="hiking", difficulty="med"
+                primary_focus="Trauma",
+                environment="Alpine/Mountain",
+                available_personnel="Small Group (3-5)",
+                evac_distance="Remote (1 day)",
+                complexity="Standard",
             ).model_dump(),
             scenario_draft=sample_scenario.model_dump(),
             scenario_id="scn-test123",
-            class_id="abc123",
             retry_count=0,
             approval_status=None,
         )
@@ -973,11 +1027,14 @@ class TestShowCompletion:
         """Test completion screen displays shareable link."""
         state = AuthorState(
             scenario_config=ScenarioConfig(
-                num_participants=3, activity_type="hiking", difficulty="med"
+                primary_focus="Trauma",
+                environment="Alpine/Mountain",
+                available_personnel="Small Group (3-5)",
+                evac_distance="Remote (1 day)",
+                complexity="Standard",
             ).model_dump(),
             scenario_draft=None,
             scenario_id="scn-test123",
-            class_id="cls-abc",
             retry_count=0,
             approval_status="approved",
         )
@@ -1000,9 +1057,11 @@ class TestAskScenarioConfig:
         """Test successful scenario configuration with form submission."""
         mock_response = {
             "submitted": True,
-            "num_participants": "4",
-            "activity_type": "Skiing",
-            "difficulty": "High",
+            "primary_focus": "Trauma",
+            "environment": "Alpine/Mountain",
+            "available_personnel": "Small Group (3-5)",
+            "evac_distance": "Remote (1 day)",
+            "complexity": "Standard",
         }
 
         mock_element = type("MockElement", (), {"name": "ScenarioConfigForm"})()
@@ -1031,43 +1090,12 @@ class TestAskScenarioConfig:
             assert "Configure Your Scenario" in call_args.kwargs["content"]
 
             # Verify session values were set
-            mock_set.assert_any_call("num_participants", 4)
-            mock_set.assert_any_call("activity_type", "skiing")
-            mock_set.assert_any_call("difficulty", "high")
+            mock_set.assert_any_call("primary_focus", "Trauma")
+            mock_set.assert_any_call("environment", "Alpine/Mountain")
+            mock_set.assert_any_call("available_personnel", "Small Group (3-5)")
 
             # Verify scenario generation was called
             mock_generate.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_ask_scenario_config_with_six_plus(self):
-        """Test that 6+ participants is converted to 6."""
-        mock_response = {
-            "submitted": True,
-            "num_participants": "6+",
-            "activity_type": "Hiking",
-            "difficulty": "Medium",
-        }
-
-        mock_element = type("MockElement", (), {"name": "ScenarioConfigForm"})()
-
-        with (
-            patch.object(
-                author_ui.cl,
-                "CustomElement",
-                return_value=mock_element,
-            ),
-            patch.object(
-                author_ui.cl,
-                "AskElementMessage",
-                return_value=AsyncMock(send=AsyncMock(return_value=mock_response)),
-            ),
-            patch.object(author_ui.cl.user_session, "set") as mock_set,
-            patch.object(author_ui, "generate_scenario", new_callable=AsyncMock),
-        ):
-            await author_ui.ask_scenario_config()
-
-            # Verify 6+ was converted to 6
-            mock_set.assert_any_call("num_participants", 6)
 
     @pytest.mark.asyncio
     async def test_ask_scenario_config_cancelled(self):

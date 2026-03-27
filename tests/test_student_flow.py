@@ -129,7 +129,6 @@ class TestSimulationState:
             "last_selected_choice": None,
             "simulation_result": None,
             "scenario_id": "scn-123",
-            "class_id": "abc123",
             "debrief_report": None,
         }
 

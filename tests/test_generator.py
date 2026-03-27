@@ -30,7 +30,8 @@ class TestGeneratorAgent:
     def mock_prompts(self):
         """Mock MLflow prompt loading."""
         user_prompt = (
-            "Test user prompt with {num_participants} {activity_type} {difficulty}"
+            "Test user prompt with {primary_focus} {environment} {available_personnel} "
+            "{evac_distance} {complexity}"
         )
 
         class MockPrompt:
@@ -57,7 +58,11 @@ class TestGeneratorAgent:
     async def test_generate_scenario(self):
         """Test scenario generation from teacher config."""
         teacher_config = ScenarioConfig(
-            num_participants=4, activity_type="hiking", difficulty="med"
+            primary_focus="Trauma",
+            environment="Alpine/Mountain",
+            available_personnel="Small Group (3-5)",
+            evac_distance="Remote (1 day)",
+            complexity="Standard",
         )
 
         mock_result = AsyncMock()
@@ -154,18 +159,22 @@ class TestGeneratorAgent:
         assert len(result.turns) >= 1
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("activity", ["canyoneering", "skiing", "hiking"])
-    async def test_generate_scenario_different_activities(
-        self, activity: Literal["canyoneering", "skiing", "hiking"]
+    @pytest.mark.parametrize("focus", ["Trauma", "Medical", "Environmental", "Mixed"])
+    async def test_generate_scenario_different_focus(
+        self, focus: Literal["Trauma", "Medical", "Environmental", "Mixed"]
     ):
-        """Test scenario generation for different activity types."""
+        """Test scenario generation for different WFR curriculum focus."""
         teacher_config = ScenarioConfig(
-            num_participants=3, activity_type=activity, difficulty="low"
+            primary_focus=focus,
+            environment="Forest/Trail",
+            available_personnel="Partner (2)",
+            evac_distance="Short (< 2 hours)",
+            complexity="Standard",
         )
 
         mock_result = AsyncMock()
         mock_result.output = ScenarioDraft(
-            title=f"{activity.title()} Emergency",
+            title=f"{focus} Emergency",
             setting="Test setting",
             patient_summary="Test patient",
             hidden_truth="Test truth",
@@ -253,21 +262,25 @@ class TestGeneratorAgent:
             result = await generate_scenario(teacher_config)
 
         assert isinstance(result, ScenarioDraft)
-        assert activity in result.title.lower()
+        assert focus.lower() in result.title.lower()
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("difficulty", ["low", "med", "high"])
-    async def test_generate_scenario_different_difficulties(
-        self, difficulty: Literal["low", "med", "high"]
+    @pytest.mark.parametrize("complexity", ["Standard", "Complicated", "Critical"])
+    async def test_generate_scenario_different_complexity(
+        self, complexity: Literal["Standard", "Complicated", "Critical"]
     ):
-        """Test scenario generation for different difficulty levels."""
+        """Test scenario generation for different complexity levels."""
         teacher_config = ScenarioConfig(
-            num_participants=5, activity_type="hiking", difficulty=difficulty
+            primary_focus="Medical",
+            environment="Winter/Snow",
+            available_personnel="Large Expedition (6+)",
+            evac_distance="Expedition (2+ days)",
+            complexity=complexity,
         )
 
         mock_result = AsyncMock()
         mock_result.output = ScenarioDraft(
-            title=f"{difficulty.title()} Difficulty Scenario",
+            title=f"{complexity} Complexity Scenario",
             setting="Test setting",
             patient_summary="Test patient",
             hidden_truth="Test truth",
@@ -355,4 +368,4 @@ class TestGeneratorAgent:
             result = await generate_scenario(teacher_config)
 
         assert isinstance(result, ScenarioDraft)
-        assert difficulty in result.title.lower()
+        assert complexity.lower() in result.title.lower()

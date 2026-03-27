@@ -70,16 +70,21 @@ not from lengthy turn narratives."""
 USER_PROMPT_TEMPLATE = """\
 Generate a wilderness rescue scenario with the following parameters:
 
-Number of Participants: {{num_participants}}
-Activity Type: {{activity_type}}
-Difficulty Level: {{difficulty}}
+Primary Focus (WFR curriculum): {{primary_focus}}
+Environment: {{environment}}
+Available Personnel: {{available_personnel}}
+Evacuation Distance: {{evac_distance}}
+Complexity: {{complexity}}
 
 Create a complete scenario with:
-- Compelling title and setting appropriate for {{activity_type}}
-- Realistic patient case matching the {{difficulty}} difficulty
+- Compelling title and setting appropriate for {{environment}}
+- Realistic patient case matching the {{complexity}} complexity
 - 3-5 turns with multiple choice decision points
 - Medically accurate content
 - Clear learning objectives
+        - Consider {{available_personnel}} for resource-based decisions
+          (litter carries, runners)
+        - Account for {{evac_distance}} in stay-and-play vs load-and-go decisions
 
 The scenario should be challenging but educational for wilderness first responders."""
 
@@ -87,10 +92,13 @@ The scenario should be challenging but educational for wilderness first responde
 async def generate_scenario(scenario_config: ScenarioConfig) -> ScenarioDraft:
     """Generate a complete scenario from minimal author configuration."""
     logger.info(
-        "Generating scenario: participants=%s, activity=%s, difficulty=%s",
-        scenario_config.num_participants,
-        scenario_config.activity_type,
-        scenario_config.difficulty,
+        "Generating scenario: primary_focus=%s, environment=%s, personnel=%s, "
+        "evac=%s, complexity=%s",
+        scenario_config.primary_focus,
+        scenario_config.environment,
+        scenario_config.available_personnel,
+        scenario_config.evac_distance,
+        scenario_config.complexity,
     )
     agent = get_agent(
         agent_name=AGENT_NAME,
@@ -102,10 +110,14 @@ async def generate_scenario(scenario_config: ScenarioConfig) -> ScenarioDraft:
     user_prompt = mlflow.genai.load_prompt(  # type: ignore[attr-defined]
         f"prompts:/{AGENT_NAME}-user@latest"
     )
-    prompt = user_prompt.format(
-        num_participants=scenario_config.num_participants,
-        activity_type=scenario_config.activity_type,
-        difficulty=scenario_config.difficulty,
+    prompt = str(
+        user_prompt.format(
+            primary_focus=scenario_config.primary_focus,
+            environment=scenario_config.environment,
+            available_personnel=scenario_config.available_personnel,
+            evac_distance=scenario_config.evac_distance,
+            complexity=scenario_config.complexity,
+        )
     )
 
     result = await agent.run(prompt)

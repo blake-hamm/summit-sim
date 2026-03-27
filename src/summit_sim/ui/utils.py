@@ -45,9 +45,6 @@ def get_author_form_fields() -> list[dict]:
     fields = []
 
     for name, field in ScenarioConfig.model_fields.items():
-        if name == "class_id":
-            continue  # Skip internal fields not shown in form
-
         ui = (
             field.json_schema_extra.get("ui", {})  # type: ignore[union-attr]
             if field.json_schema_extra

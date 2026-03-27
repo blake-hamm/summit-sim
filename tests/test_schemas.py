@@ -17,23 +17,39 @@ class TestScenarioConfig:
     def test_scenario_config_creation(self):
         """Test creating minimal scenario configuration."""
         config = ScenarioConfig(
-            num_participants=4, activity_type="hiking", difficulty="med"
+            primary_focus="Trauma",
+            environment="Alpine/Mountain",
+            available_personnel="Small Group (3-5)",
+            evac_distance="Remote (1 day)",
+            complexity="Standard",
         )
-        assert config.num_participants == 4
-        assert config.activity_type == "hiking"
-        assert config.difficulty == "med"
+        assert config.primary_focus == "Trauma"
+        assert config.environment == "Alpine/Mountain"
+        assert config.complexity == "Standard"
 
-    def test_scenario_config_validation_min(self):
-        """Test minimum participant validation."""
-        with pytest.raises(ValueError, match="greater than or equal to 1"):
-            ScenarioConfig(num_participants=0, activity_type="skiing", difficulty="low")
-
-    def test_scenario_config_validation_max(self):
-        """Test maximum participant validation."""
-        with pytest.raises(ValueError, match="less than or equal to 20"):
-            ScenarioConfig(
-                num_participants=21, activity_type="canyoneering", difficulty="high"
+    def test_scenario_config_all_focus_areas(self):
+        """Test valid primary focus values."""
+        for focus in ["Trauma", "Medical", "Environmental", "Mixed"]:
+            config = ScenarioConfig(
+                primary_focus=focus,
+                environment="Forest/Trail",
+                available_personnel="Partner (2)",
+                evac_distance="Short (< 2 hours)",
+                complexity="Standard",
             )
+            assert config.primary_focus == focus
+
+    def test_scenario_config_all_complexity_levels(self):
+        """Test valid complexity values."""
+        for complexity in ["Standard", "Complicated", "Critical"]:
+            config = ScenarioConfig(
+                primary_focus="Medical",
+                environment="Winter/Snow",
+                available_personnel="Large Expedition (6+)",
+                evac_distance="Expedition (2+ days)",
+                complexity=complexity,
+            )
+            assert config.complexity == complexity
 
 
 class TestScenarioTurn:

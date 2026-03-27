@@ -124,7 +124,6 @@ def initial_state(sample_scenario):
         last_selected_choice=None,
         simulation_result=None,
         scenario_id="test-scenario-123",
-        class_id=None,
         debrief_report=None,
     )
 
@@ -140,7 +139,6 @@ def create_test_state(sample_scenario, **overrides):
         last_selected_choice=None,
         simulation_result=None,
         scenario_id="test-scenario-123",
-        class_id=None,
         debrief_report=None,
     )
     for key, value in overrides.items():
@@ -169,7 +167,6 @@ class TestInitializeState:
             last_selected_choice=None,
             simulation_result=None,
             scenario_id="test-scenario-123",
-            class_id=None,
             debrief_report=None,
         )
 
@@ -228,7 +225,6 @@ class TestUpdateState:
             last_selected_choice=selected_choice.model_dump(),
             simulation_result=result.model_dump(),
             scenario_id="test-scenario-123",
-            class_id=None,
             debrief_report=None,
         )
 
@@ -269,7 +265,6 @@ class TestUpdateState:
             last_selected_choice=selected_choice.model_dump(),
             simulation_result=result.model_dump(),
             scenario_id="test-scenario-123",
-            class_id=None,
             debrief_report=None,
         )
 
@@ -304,7 +299,6 @@ class TestUpdateState:
             last_selected_choice=selected_choice.model_dump(),
             simulation_result=result.model_dump(),
             scenario_id="test-scenario-123",
-            class_id=None,
             debrief_report=None,
         )
 
@@ -339,7 +333,6 @@ class TestUpdateState:
             last_selected_choice=selected_choice.model_dump(),
             simulation_result=result.model_dump(),
             scenario_id="test-scenario-123",
-            class_id=None,
             debrief_report=None,
         )
 
@@ -364,7 +357,6 @@ class TestCheckCompletion:
             last_selected_choice=initial_state.last_selected_choice,
             simulation_result=initial_state.simulation_result,
             scenario_id=initial_state.scenario_id,
-            class_id=initial_state.class_id,
             debrief_report=initial_state.debrief_report,
         )
         result = check_simulation_completion(state)
@@ -383,7 +375,6 @@ class TestCheckCompletion:
             last_selected_choice=initial_state.last_selected_choice,
             simulation_result=initial_state.simulation_result,
             scenario_id=initial_state.scenario_id,
-            class_id=initial_state.class_id,
             debrief_report=initial_state.debrief_report,
         )
         result = check_simulation_completion(state)
@@ -473,7 +464,6 @@ class TestStudentGraphFullCycle:
                         last_selected_choice=None,
                         simulation_result=None,
                         scenario_id="test-scenario-123",
-                        class_id=None,
                         debrief_report=None,
                     )
 

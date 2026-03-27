@@ -42,40 +42,27 @@ async def ask_scenario_config() -> None:
     ).send()
 
     if res and res.get("submitted"):
-        participants = res.get("num_participants", "3")
-        activity = res.get("activity_type", "Hiking")
-        difficulty_map = {"low": "low", "medium": "med", "high": "high"}
-        difficulty_raw = res.get("difficulty", "High")
-        difficulty = difficulty_map.get(difficulty_raw.lower(), "high")
-
-        if participants == "6+":
-            participants = "6"
-
-        cl.user_session.set("num_participants", int(participants))
-        cl.user_session.set("activity_type", activity.lower())  # type: ignore[arg-type]
-        cl.user_session.set("difficulty", difficulty)  # type: ignore[arg-type]
+        cl.user_session.set("primary_focus", res.get("primary_focus", "Trauma"))
+        cl.user_session.set("environment", res.get("environment", "Alpine/Mountain"))
+        cl.user_session.set(
+            "available_personnel", res.get("available_personnel", "Small Group (3-5)")
+        )
+        cl.user_session.set("evac_distance", res.get("evac_distance", "Remote (1 day)"))
+        cl.user_session.set("complexity", res.get("complexity", "Standard"))
         await generate_scenario()
 
 
 async def generate_scenario() -> None:
     """Generate scenario with collected config."""
     logger.info("Starting scenario generation")
-    num_participants_val = cl.user_session.get("num_participants")
-    activity_type_val = cl.user_session.get("activity_type")
-    difficulty_val = cl.user_session.get("difficulty")
-
-    num_participants = (
-        int(num_participants_val) if num_participants_val is not None else 3
-    )
-    activity_type = (
-        str(activity_type_val) if activity_type_val is not None else "hiking"
-    )
-    difficulty = str(difficulty_val) if difficulty_val is not None else "med"
 
     config = ScenarioConfig(
-        num_participants=num_participants,
-        activity_type=activity_type,  # type: ignore[arg-type]
-        difficulty=difficulty,  # type: ignore[arg-type]
+        primary_focus=cl.user_session.get("primary_focus") or "Trauma",
+        environment=cl.user_session.get("environment") or "Alpine/Mountain",
+        available_personnel=cl.user_session.get("available_personnel")
+        or "Small Group (3-5)",
+        evac_distance=cl.user_session.get("evac_distance") or "Remote (1 day)",
+        complexity=cl.user_session.get("complexity") or "Standard",
     )
 
     cl.user_session.set("scenario_config", config)
@@ -92,7 +79,6 @@ async def generate_scenario() -> None:
         scenario_config=config.model_dump(),
         scenario_draft=None,
         scenario_id="",
-        class_id="",
         retry_count=0,
         approval_status=None,
     )
@@ -105,7 +91,12 @@ async def generate_scenario() -> None:
 
         if result.get("scenario_draft"):
             state = AuthorState.from_graph_result(result)
-            loading_msg.content = "✅ *Scenario ready for review!*"
+            params_text = (
+                f"**Focus:** {config.primary_focus} | **Env:** {config.environment} | "
+                f"**Team:** {config.available_personnel} | **Evac:** "
+                f"{config.evac_distance} | **Complexity:** {config.complexity}"
+            )
+            loading_msg.content = f"✅ *Scenario ready for review!*\n\n{params_text}"
             await loading_msg.update()
             await show_review_screen(state)
         else:
