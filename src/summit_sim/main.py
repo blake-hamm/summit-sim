@@ -3,6 +3,7 @@
 Entry point for the Chainlit application.
 """
 
+import logging
 from urllib.parse import parse_qs, urlparse
 
 import chainlit as cl  # noqa: E402
@@ -13,6 +14,8 @@ from summit_sim.graphs.utils import scenario_store
 from summit_sim.settings import settings
 from summit_sim.ui import author, simulation
 
+logger = logging.getLogger(__name__)
+
 mlflow.set_tracking_uri(settings.mlflow_tracking_uri)
 mlflow.set_experiment(settings.mlflow_experiment_name)
 mlflow.pydantic_ai.autolog()
@@ -21,6 +24,7 @@ mlflow.pydantic_ai.autolog()
 @on_chat_start
 async def start() -> None:
     """Initialize chat session - routes to author or player flow."""
+    logger.info("New chat session started")
     query_string = ""
     environ = cl.context.session.environ if hasattr(cl.context, "session") else {}
     http_referer = environ.get("HTTP_REFERER", "")
@@ -33,12 +37,14 @@ async def start() -> None:
     scenario_id = params.get("scenario_id", [""])[0]
 
     if scenario_id and scenario_store.get(("scenarios",), scenario_id) is not None:
+        logger.info("Player joined session, scenario_id=%s", scenario_id)
         cl.user_session.set("mode", "player")
         cl.user_session.set("scenario_id", scenario_id)
         await simulation.start_simulation_session()
         return
 
     if scenario_id:
+        logger.warning("Scenario not found, scenario_id=%s", scenario_id)
         await cl.Message(
             content=(
                 "❌ Scenario not found. "
@@ -47,6 +53,7 @@ async def start() -> None:
         ).send()
         return
 
+    logger.info("Starting author flow")
     cl.user_session.set("mode", "author")
     await author.ask_scenario_config()
 

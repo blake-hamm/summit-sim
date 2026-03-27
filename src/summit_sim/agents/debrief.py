@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+import logging
+
 import mlflow
 from mlflow.entities import SpanType
 
 from summit_sim.agents.config import get_agent
 from summit_sim.graphs.utils import TranscriptEntry
 from summit_sim.schemas import DebriefReport, ScenarioDraft
+
+logger = logging.getLogger(__name__)
 
 AGENT_NAME = "debrief"
 
@@ -61,17 +65,10 @@ async def generate_debrief(
     scenario_draft: ScenarioDraft,
     scenario_id: str,
 ) -> DebriefReport:
-    """Generate debrief report from completed simulation.
-
-    Args:
-        transcript: Complete simulation transcript
-        scenario_draft: Original scenario for context
-        scenario_id: Unique scenario identifier
-
-    Returns:
-        Structured debrief report with score and analysis
-
-    """
+    """Generate debrief report from completed simulation."""
+    logger.info(
+        "Generating debrief: scenario_id=%s, turns=%d", scenario_id, len(transcript)
+    )
     agent = get_agent(
         agent_name=AGENT_NAME,
         output_type=DebriefReport,
@@ -82,6 +79,7 @@ async def generate_debrief(
     prompt = _build_debrief_prompt(transcript, scenario_draft, scenario_id)
 
     result = await agent.run(prompt)
+    logger.info("Debrief generated: scenario_id=%s", scenario_id)
     return result.output
 
 

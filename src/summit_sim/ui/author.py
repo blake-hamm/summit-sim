@@ -1,5 +1,6 @@
 """Author flow handlers for the Chainlit app."""
 
+import logging
 from typing import TYPE_CHECKING
 
 from langgraph.types import Command
@@ -17,6 +18,8 @@ from summit_sim.ui.utils import (
     get_rating_actions,
     get_rating_content,
 )
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     import chainlit as cl
@@ -56,6 +59,7 @@ async def ask_scenario_config() -> None:
 
 async def generate_scenario() -> None:
     """Generate scenario with collected config."""
+    logger.info("Starting scenario generation")
     num_participants_val = cl.user_session.get("num_participants")
     activity_type_val = cl.user_session.get("activity_type")
     difficulty_val = cl.user_session.get("difficulty")

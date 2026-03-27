@@ -1,5 +1,6 @@
 """Simulation flow handlers for the Chainlit app."""
 
+import logging
 from typing import TYPE_CHECKING
 
 from langgraph.graph.state import CompiledStateGraph
@@ -11,6 +12,8 @@ from summit_sim.graphs.simulation import (
 )
 from summit_sim.graphs.utils import scenario_store
 from summit_sim.schemas import DebriefReport, ScenarioDraft
+
+logger = logging.getLogger(__name__)
 
 PASS_SCORE_THRESHOLD = 70
 
@@ -24,6 +27,7 @@ else:
 
 async def start_simulation_session() -> None:
     """Start player session by loading scenario from store."""
+    logger.info("Starting simulation session")
     scenario_id = cl.user_session.get("scenario_id")
 
     result = scenario_store.get(("scenarios",), scenario_id)

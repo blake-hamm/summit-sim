@@ -1,14 +1,8 @@
-"""LangGraph workflow for author orchestration.
-
-This module implements a linear LangGraph workflow that:
-1. Initializes an author session with generated IDs
-2. Generates a scenario from author configuration
-3. Uses interrupt() for human-in-the-loop review and approval
-4. Completes with approval status for sharing
-"""
+"""LangGraph workflow for author orchestration."""
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, fields
 from typing import TYPE_CHECKING, Any
 
@@ -28,6 +22,8 @@ from summit_sim.schemas import (
     generate_class_id,
     generate_scenario_id,
 )
+
+logger = logging.getLogger(__name__)
 
 MIN_RATING = 1
 MAX_RATING = 5
@@ -81,12 +77,8 @@ def initialize_author(state: AuthorState) -> AuthorState:
 
 @mlflow.trace(span_type=SpanType.AGENT)
 async def generate_scenario_node(state: AuthorState, config: RunnableConfig) -> dict:
-    """Generate scenario from author configuration.
-
-    Calls the scenario generator agent to create a complete scenario
-    based on the author's configuration parameters.
-    On retry, increments retry_count.
-    """
+    """Generate scenario from author configuration."""
+    logger.info("Generating scenario: retry_count=%d", state.retry_count)
     scenario_config = ScenarioConfig.model_validate(state.scenario_config)
 
     is_retry = state.author_rating is not None
@@ -113,12 +105,7 @@ async def generate_scenario_node(state: AuthorState, config: RunnableConfig) -> 
 
 
 def present_for_author(state: AuthorState) -> dict:
-    """Present scenario for author review and capture rating.
-
-    Uses LangGraph's interrupt() for human-in-the-loop interaction.
-    Displays the generated scenario and captures author rating (1-5).
-    Automatically retries if rating < 3 (up to 3 attempts).
-    """
+    """Present scenario for author review and capture rating."""
     scenario = state.scenario_draft
 
     if scenario is None:
@@ -126,6 +113,11 @@ def present_for_author(state: AuthorState) -> dict:
         raise ValueError(msg)
 
     scenario_obj = ScenarioDraft.model_validate(scenario)
+    logger.info(
+        "Scenario ready for review: scenario_id=%s, retry_count=%d",
+        state.scenario_id,
+        state.retry_count,
+    )
     choice_data = interrupt(
         {
             "type": "scenario_review",
