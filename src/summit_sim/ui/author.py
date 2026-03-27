@@ -42,13 +42,22 @@ async def ask_scenario_config() -> None:
     ).send()
 
     if res and res.get("submitted"):
-        cl.user_session.set("primary_focus", res.get("primary_focus", "Trauma"))
-        cl.user_session.set("environment", res.get("environment", "Alpine/Mountain"))
-        cl.user_session.set(
-            "available_personnel", res.get("available_personnel", "Small Group (3-5)")
-        )
-        cl.user_session.set("evac_distance", res.get("evac_distance", "Remote (1 day)"))
-        cl.user_session.set("complexity", res.get("complexity", "Standard"))
+        primary_focus = res.get("primary_focus")
+        environment = res.get("environment")
+        available_personnel = res.get("available_personnel")
+        evac_distance = res.get("evac_distance")
+        complexity = res.get("complexity")
+
+        if not all(
+            [primary_focus, environment, available_personnel, evac_distance, complexity]
+        ):
+            raise ValueError("Missing required scenario configuration values")
+
+        cl.user_session.set("primary_focus", primary_focus)
+        cl.user_session.set("environment", environment)
+        cl.user_session.set("available_personnel", available_personnel)
+        cl.user_session.set("evac_distance", evac_distance)
+        cl.user_session.set("complexity", complexity)
         await generate_scenario()
 
 
@@ -56,13 +65,28 @@ async def generate_scenario() -> None:
     """Generate scenario with collected config."""
     logger.info("Starting scenario generation")
 
-    config = ScenarioConfig(
-        primary_focus=cl.user_session.get("primary_focus") or "Trauma",
-        environment=cl.user_session.get("environment") or "Alpine/Mountain",
-        available_personnel=cl.user_session.get("available_personnel")
-        or "Small Group (3-5)",
-        evac_distance=cl.user_session.get("evac_distance") or "Remote (1 day)",
-        complexity=cl.user_session.get("complexity") or "Standard",
+    primary_focus = cl.user_session.get("primary_focus")
+    environment = cl.user_session.get("environment")
+    available_personnel = cl.user_session.get("available_personnel")
+    evac_distance = cl.user_session.get("evac_distance")
+    complexity = cl.user_session.get("complexity")
+
+    if not all(
+        [primary_focus, environment, available_personnel, evac_distance, complexity]
+    ):
+        raise ValueError(
+            "Missing required scenario config in session. "
+            "Did you navigate to this page without completing the form?"
+        )
+
+    config = ScenarioConfig.model_validate(
+        {
+            "primary_focus": primary_focus,
+            "environment": environment,
+            "available_personnel": available_personnel,
+            "evac_distance": evac_distance,
+            "complexity": complexity,
+        }
     )
 
     cl.user_session.set("scenario_config", config)
@@ -127,10 +151,8 @@ async def show_review_screen(state: AuthorState) -> None:
     learning_obj_text = "\n".join(f"• {obj}" for obj in scenario.learning_objectives)
     attempt_text = f" (Attempt {retry_count + 1}/3)" if retry_count > 0 else ""
 
-    # Build detailed turns display
     turns_sections = []
     for i, turn in enumerate(scenario.turns, 1):
-        # Format choices with correctness indicators
         choices_lines = []
         for j, choice in enumerate(turn.choices, 1):
             correct_indicator = "✅" if choice.is_correct else "❌"
@@ -143,7 +165,6 @@ async def show_review_screen(state: AuthorState) -> None:
                 f"   {j}. {correct_indicator} {choice.description} ({next_info})"
             )
 
-        # Format scene state
         scene_lines = []
         if turn.scene_state:
             for key, value in turn.scene_state.items():
@@ -152,14 +173,12 @@ async def show_review_screen(state: AuthorState) -> None:
             "\n".join(scene_lines) if scene_lines else "   *No special conditions*"
         )
 
-        # Format hidden state (author-only view)
         hidden_lines = []
         if turn.hidden_state:
             for key, value in turn.hidden_state.items():
                 hidden_lines.append(f"   • {key.replace('_', ' ').title()}: {value}")
         hidden_display = "\n".join(hidden_lines) if hidden_lines else "   *None*"
 
-        # Build turn section
         turn_section = (
             f"**Turn {i}** (ID: {turn.turn_id})\n"
             f"{turn.narrative_text}\n\n"

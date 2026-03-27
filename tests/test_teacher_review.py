@@ -618,8 +618,8 @@ class TestGenerateScenario:
             mock_create_graph.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_generate_scenario_with_defaults(self):
-        """Test scenario generation uses defaults when session values are None."""
+    async def test_generate_scenario_missing_config_raises(self):
+        """Test scenario generation raises when session values are missing."""
         mock_graph = AsyncMock()
         mock_message = AsyncMock()
 
@@ -628,26 +628,9 @@ class TestGenerateScenario:
             patch.object(author_ui.cl.user_session, "set"),
             patch.object(author_ui.cl, "Message", return_value=mock_message),
             patch.object(author_ui, "create_author_graph", return_value=mock_graph),
-            patch.object(author_ui, "show_review_screen", new_callable=AsyncMock),
         ):
-            mock_graph.ainvoke = AsyncMock(
-                return_value={
-                    "scenario_draft": {
-                        "title": "Test",
-                        "setting": "Mountain",
-                        "patient_summary": "Test patient",
-                        "hidden_truth": "truth",
-                        "learning_objectives": [],
-                        "turns": [],
-                        "starting_turn_id": 0,
-                    },
-                    "scenario_id": "scn-test",
-                    "class_id": "cls-123",
-                    "retry_count": 0,
-                }
-            )
-
-            await author_ui.generate_scenario()
+            with pytest.raises(ValueError, match="Missing required scenario config"):
+                await author_ui.generate_scenario()
 
     @pytest.mark.asyncio
     async def test_generate_scenario_failure_no_draft(self):
