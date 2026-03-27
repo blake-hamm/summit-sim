@@ -1,5 +1,7 @@
 """Application settings configuration."""
 
+import logging
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -11,6 +13,7 @@ class Settings(BaseSettings):
     default_model: str = "google/gemini-3.1-flash-lite-preview"
     mlflow_experiment_name: str = "summit-sim"
     base_url: str = "http://localhost:8000"
+    log_level: str = "INFO"
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -20,3 +23,9 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+logging.basicConfig(
+    level=settings.log_level,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)

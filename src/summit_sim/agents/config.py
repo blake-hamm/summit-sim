@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from functools import lru_cache
 from typing import Any, Literal
 
@@ -14,6 +15,8 @@ from pydantic_ai.models.openrouter import (
 from pydantic_ai.providers.openrouter import OpenRouterProvider
 
 from summit_sim.settings import settings
+
+logger = logging.getLogger(__name__)
 
 
 @lru_cache(maxsize=1)

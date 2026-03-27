@@ -1,14 +1,8 @@
-"""LangGraph workflow for simulation orchestration.
-
-This module implements a cyclic LangGraph workflow that:
-1. Presents turns to players with multiple choice options
-2. Uses interrupt() for human-in-the-loop choice selection
-3. Calls the Simulation Feedback Agent for personalized feedback
-4. Advances through turns until scenario completion
-"""
+"""LangGraph workflow for simulation orchestration."""
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field, fields
 from typing import TYPE_CHECKING, Any
 
@@ -20,6 +14,8 @@ from langgraph.types import interrupt
 from summit_sim.agents.simulation import process_choice
 from summit_sim.graphs.utils import TranscriptEntry
 from summit_sim.schemas import ChoiceOption, ScenarioDraft, SimulationResult
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from langgraph.checkpoint.base import BaseCheckpointSaver
@@ -53,10 +49,12 @@ class SimulationState:
 
 
 def initialize_simulation(state: SimulationState) -> SimulationState:
-    """Initialize simulation state from scenario draft.
-
-    Validates that the starting turn ID exists in the scenario.
-    """
+    """Initialize simulation state from scenario draft."""
+    logger.info(
+        "Initializing simulation: scenario_id=%s, starting_turn_id=%d",
+        state.scenario_id,
+        state.current_turn_id,
+    )
     scenario = ScenarioDraft.model_validate(state.scenario_draft)
     starting_turn = scenario.get_turn(state.current_turn_id)
 
@@ -139,11 +137,7 @@ async def process_player_turn(state: SimulationState) -> dict:
 
 
 def update_simulation_state(state: SimulationState) -> dict:
-    """Update simulation state after processing choice.
-
-    Appends transcript entry, updates learning moments, and advances
-    to the next turn based on the selected choice.
-    """
+    """Update simulation state after processing choice."""
     scenario = ScenarioDraft.model_validate(state.scenario_draft)
     current_turn = scenario.get_turn(state.current_turn_id)
     result = SimulationResult.model_validate(state.simulation_result)
@@ -173,6 +167,13 @@ def update_simulation_state(state: SimulationState) -> dict:
             msg = f"Next turn {next_turn_id} not found in scenario"
             raise ValueError(msg)
 
+    logger.info(
+        "Turn processed: turn_id=%s, choice=%s, correct=%s, complete=%s",
+        current_turn.turn_id,
+        selected_choice.choice_id,
+        selected_choice.is_correct,
+        is_complete,
+    )
     return {
         "transcript": state.transcript + [transcript_entry],
         "key_learning_moments": state.key_learning_moments + result.learning_moments,

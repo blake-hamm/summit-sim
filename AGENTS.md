@@ -59,8 +59,8 @@ docker-compose down
 Every change must pass these two checks before declaring a task complete:
 
 ```bash
-ruff check --fix . && ruff format .     # Lint + format (use Nix-provided ruff)
-coverage run -m pytest && coverage report  # Tests + coverage (must be >=80%)
+nix develop -c 'ruff check --fix && ruff format'   # Lint + format (use Nix-provided ruff)
+nix develop -c 'coverage run && coverage report'  # Tests + coverage (must be >=80%)
 ```
 
 That's it. If those pass, you're good. Ruff config is in `pyproject.toml` -- let ruff teach you the rules rather than memorizing them.
@@ -92,25 +92,11 @@ That's it. If those pass, you're good. Ruff config is in `pyproject.toml` -- let
 ### Adding a New Agent
 1. Define the output schema in `schemas.py`
 2. Create the agent module in `agents/` using `get_agent()` from `config.py`
-3. Write a clear system prompt; use a user prompt template for variable data
+3. Write system prompt in the module, register user prompt template in MLflow as `prompts:/{AGENT_NAME}-user@latest`
 4. Post-process deterministic fields outside the LLM (see `agents/simulation.py` for example)
 5. Test with mocked LLM calls; verify with a notebook for live E2E
 
-### Adding a New Graph Node
-1. Define any new state fields in `graphs/state.py` (use `append_reducer` for lists)
-2. Add the node function in the appropriate graph module
-3. Wire it into the graph builder in `create_student_graph()`
-4. Test the node in isolation, then test the full graph flow
-
-### Architecture Decisions
+## Architecture Decisions
 - **Prioritize features**: Get new functionality working first, polish later
-- **Happy path focus**: Build testable, verifiable features without over-engineering
 - **Keep it simple**: Avoid premature abstraction and security overthinking
-- **Monolithic app**: One Python app, no frontend/backend split
-- **Use existing patterns**: Follow conventions from similar files
-- **One module per domain**: Group related functionality
-- **Agent-based design**: Embrace Chainlit + LangGraph + PydanticAI architecture
-- **Anonymous users**: No user management, focus on collaborative learning
-- **Read the plan first**: Check `plans/` for a story plan before starting implementation
-- **Happy path first**: Focus on the main flow, then edge cases
-- **Use `pytest -x`** for fast feedback during development
+- **Read the plan first**: Check `plans/` for context before implementation

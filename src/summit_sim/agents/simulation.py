@@ -8,6 +8,8 @@ In the hybrid model:
 
 from __future__ import annotations
 
+import logging
+
 import mlflow
 from mlflow.entities import SpanType
 
@@ -18,6 +20,8 @@ from summit_sim.schemas import (
     ScenarioTurn,
     SimulationResult,
 )
+
+logger = logging.getLogger(__name__)
 
 AGENT_NAME = "simulation-feedback"
 
@@ -75,21 +79,12 @@ async def process_choice(
     current_turn: ScenarioTurn,
     selected_choice: ChoiceOption,
 ) -> SimulationResult:
-    """Process a student's choice and generate personalized feedback.
-
-    In the hybrid model, scenarios have pre-written turns with multiple choice
-    options. This agent generates personalized feedback when a student selects
-    a choice, then returns the next turn (or marks complete).
-
-    Args:
-        scenario: The complete scenario
-        current_turn: The current turn the student is on
-        selected_choice: The choice option the student selected
-
-    Returns:
-        SimulationResult with personalized feedback and next state
-
-    """
+    """Process a student's choice and generate personalized feedback."""
+    logger.info(
+        "Processing choice: turn_id=%s, choice_id=%s",
+        current_turn.turn_id,
+        selected_choice.choice_id,
+    )
     agent = get_agent(
         agent_name=AGENT_NAME,
         output_type=SimulationResult,
