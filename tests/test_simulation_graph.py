@@ -43,8 +43,13 @@ def sample_scenario():
                 is_correct=False,
                 next_turn_id=1,
             ),
+            ChoiceOption(
+                choice_id="panic",
+                description="Panic",
+                is_correct=False,
+                next_turn_id=1,
+            ),
         ],
-        is_starting_turn=True,
     )
 
     turn1 = ScenarioTurn(
@@ -60,6 +65,12 @@ def sample_scenario():
             ChoiceOption(
                 choice_id="wait",
                 description="Wait to see if they wake up",
+                is_correct=False,
+                next_turn_id=2,
+            ),
+            ChoiceOption(
+                choice_id="panic",
+                description="Panic",
                 is_correct=False,
                 next_turn_id=2,
             ),
@@ -82,6 +93,12 @@ def sample_scenario():
                 is_correct=False,
                 next_turn_id=None,
             ),
+            ChoiceOption(
+                choice_id="panic",
+                description="Panic",
+                is_correct=False,
+                next_turn_id=None,
+            ),
         ],
     )
 
@@ -92,7 +109,6 @@ def sample_scenario():
         hidden_truth="Severe dehydration",
         learning_objectives=["Assess ABCs", "Call for help"],
         turns=[turn0, turn1, turn2],
-        starting_turn_id=0,
     )
 
 
@@ -101,7 +117,7 @@ def initial_state(sample_scenario):
     """Create initial state for testing."""
     return StudentState(
         scenario_draft=sample_scenario.model_dump(),
-        current_turn_id=sample_scenario.starting_turn_id,
+        current_turn_id=sample_scenario.get_starting_turn().turn_id,
         transcript=[],
         is_complete=False,
         key_learning_moments=[],
@@ -117,7 +133,7 @@ def create_test_state(sample_scenario, **overrides):
     """Create a test state with required fields."""
     base = StudentState(
         scenario_draft=sample_scenario.model_dump(),
-        current_turn_id=sample_scenario.starting_turn_id,
+        current_turn_id=sample_scenario.get_starting_turn().turn_id,
         transcript=[],
         is_complete=False,
         key_learning_moments=[],

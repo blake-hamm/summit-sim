@@ -63,39 +63,81 @@ class TestSimulationAgent:
     def sample_scenario(self):
         """Create a sample scenario for testing."""
         turn1 = ScenarioTurn(
-            turn_id=1,
+            turn_id=0,
             narrative_text="Patient is bleeding.",
             choices=[
                 ChoiceOption(
                     choice_id="treat",
                     description="Treat patient",
                     is_correct=True,
-                    next_turn_id=2,
+                    next_turn_id=1,
                 ),
                 ChoiceOption(
                     choice_id="wait",
                     description="Wait",
                     is_correct=False,
-                    next_turn_id=2,
+                    next_turn_id=1,
+                ),
+                ChoiceOption(
+                    choice_id="panic",
+                    description="Panic",
+                    is_correct=False,
+                    next_turn_id=1,
+                ),
+                ChoiceOption(
+                    choice_id="panic",
+                    description="Panic",
+                    is_correct=False,
+                    next_turn_id=1,
                 ),
             ],
-            is_starting_turn=True,
         )
 
         turn2 = ScenarioTurn(
-            turn_id=2,
+            turn_id=1,
             narrative_text="Treatment complete.",
             choices=[
                 ChoiceOption(
                     choice_id="monitor",
                     description="Monitor",
                     is_correct=True,
-                    next_turn_id=None,
+                    next_turn_id=2,
                 ),
                 ChoiceOption(
                     choice_id="evac",
                     description="Evacuate",
                     is_correct=True,
+                    next_turn_id=2,
+                ),
+                ChoiceOption(
+                    choice_id="panic",
+                    description="Panic",
+                    is_correct=False,
+                    next_turn_id=2,
+                ),
+            ],
+        )
+
+        turn3 = ScenarioTurn(
+            turn_id=2,
+            narrative_text="Patient ready for transport.",
+            choices=[
+                ChoiceOption(
+                    choice_id="package",
+                    description="Package for transport",
+                    is_correct=True,
+                    next_turn_id=None,
+                ),
+                ChoiceOption(
+                    choice_id="wait",
+                    description="Wait",
+                    is_correct=False,
+                    next_turn_id=None,
+                ),
+                ChoiceOption(
+                    choice_id="panic",
+                    description="Panic",
+                    is_correct=False,
                     next_turn_id=None,
                 ),
             ],
@@ -107,8 +149,7 @@ class TestSimulationAgent:
             patient_summary="Patient",
             hidden_truth="Truth",
             learning_objectives=["Objective"],
-            turns=[turn1, turn2],
-            starting_turn_id=1,
+            turns=[turn1, turn2, turn3],
         )
 
     @pytest.mark.asyncio
@@ -152,7 +193,7 @@ class TestSimulationAgent:
             feedback="Scenario complete!",
             learning_moments=["Final learning"],
             next_turn=None,
-            is_complete=False,
+            is_complete=True,
         )
 
         with patch("summit_sim.agents.config.Agent") as mock_agent_class:

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import mlflow
-from mlflow.entities import SpanType
 
 from summit_sim.agents.config import get_agent
 from summit_sim.schemas import ScenarioDraft, TeacherConfig
@@ -20,33 +19,48 @@ turns pre-written.
 Guidelines for scenario generation:
 
 1. Create 3-5 turns total for a cohesive learning experience
-2. Each turn must have 2-3 multiple choice options:
+2. Each turn must have 3-5 multiple choice options:
    - One medically optimal choice (is_correct=true)
-   - One or two suboptimal but plausible choices (is_correct=false)
+   - Others suboptimal but plausible choices (is_correct=false)
    - Choices should be realistic first-responder decisions
 
 3. Turn structure:
-   - First turn: is_starting_turn=true
+   - First turn has turn_id=0
    - Middle turns: branch based on choices
    - Final turns: end the scenario (next_turn_id=null)
 
-4. Content requirements:
+4. TURN NARRATIVES: Keep them SHORT and ACTIONABLE
+   - Each turn's narrative_text: 1-3 sentences max
+   - Focus on the immediate decision point, not scene-setting
+   - Students already know the context from previous turns
+   - Example GOOD: "Patient grimaces when you touch their forearm.
+     Swelling increased. What do you do?"
+   - Example BAD: Multi-paragraph description of location, weather,
+     patient history, etc.
+
+5. STATE TRACKING: Use hidden_state and scene_state meaningfully
+   - hidden_state: Patient condition details that emerge through assessment
+     (e.g., "given aspirin 30min ago", "pulse irregularity", "breath sounds diminished")
+   - scene_state: Environmental changes (weather deteriorating, new hazards
+     appearing, time passing)
+   - These add depth for teachers reviewing the scenario
+
+6. SCENARIO-LEVEL CONTENT (can be rich and detailed):
    - Setting: Specific location with environmental details
    - Patient: Age, relevant medical history, visible injuries
    - Hidden truth: The actual medical condition students must discover
    - Learning objectives: 2-3 specific wilderness first aid skills
-   - Narrative: Immersive, medically accurate descriptions
 
-5. Turn IDs should be sequential integers starting from 0
-    (e.g., 0, 1, 2, 3, 4). Use 0 for the starting turn.
+7. Turn IDs: Sequential integers starting from 0 (e.g., 0, 1, 2, 3, 4).
+   Use 0 for the starting turn.
 
-6. Medical accuracy:
+8. Medical accuracy:
    - Base scenarios on common wilderness emergencies
    - Ensure correct symptoms for the condition
    - Treatment options should reflect actual wilderness protocols
 
-Generate a complete, coherent scenario that teaches proper wilderness first aid
-through decision-making."""
+Complexity comes from the branching choices and cumulative patient state,
+not from lengthy turn narratives."""
 
 
 USER_PROMPT_TEMPLATE = """\
@@ -66,7 +80,6 @@ Create a complete scenario with:
 The scenario should be challenging but educational for wilderness first responders."""
 
 
-@mlflow.trace(span_type=SpanType.AGENT)
 async def generate_scenario(teacher_config: TeacherConfig) -> ScenarioDraft:
     """Generate a complete scenario from minimal teacher configuration."""
     agent = get_agent(

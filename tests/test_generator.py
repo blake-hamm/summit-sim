@@ -84,11 +84,63 @@ class TestGeneratorAgent:
                             is_correct=False,
                             next_turn_id=1,
                         ),
+                        ChoiceOption(
+                            choice_id="panic",
+                            description="Panic",
+                            is_correct=False,
+                            next_turn_id=1,
+                        ),
                     ],
-                    is_starting_turn=True,
-                )
+                ),
+                ScenarioTurn(
+                    turn_id=1,
+                    narrative_text="Patient is now stable.",
+                    choices=[
+                        ChoiceOption(
+                            choice_id="monitor",
+                            description="Monitor vitals",
+                            is_correct=True,
+                            next_turn_id=2,
+                        ),
+                        ChoiceOption(
+                            choice_id="evac",
+                            description="Evacuate immediately",
+                            is_correct=True,
+                            next_turn_id=2,
+                        ),
+                        ChoiceOption(
+                            choice_id="panic",
+                            description="Panic",
+                            is_correct=False,
+                            next_turn_id=2,
+                        ),
+                    ],
+                ),
+                ScenarioTurn(
+                    turn_id=2,
+                    narrative_text="Transport arriving.",
+                    choices=[
+                        ChoiceOption(
+                            choice_id="prepare",
+                            description="Prepare for transport",
+                            is_correct=True,
+                            next_turn_id=None,
+                        ),
+                        ChoiceOption(
+                            choice_id="wait",
+                            description="Wait for instructions",
+                            is_correct=False,
+                            next_turn_id=None,
+                        ),
+                        ChoiceOption(
+                            choice_id="panic",
+                            description="Panic",
+                            is_correct=False,
+                            next_turn_id=None,
+                        ),
+                    ],
+                ),
             ],
-            starting_turn_id=0,
         )
 
         with patch("summit_sim.agents.config.Agent") as mock_agent_class:
@@ -127,19 +179,71 @@ class TestGeneratorAgent:
                             choice_id="choice_1",
                             description="Option 1",
                             is_correct=True,
-                            next_turn_id=None,
+                            next_turn_id=1,
                         ),
                         ChoiceOption(
                             choice_id="choice_2",
                             description="Option 2",
                             is_correct=False,
+                            next_turn_id=1,
+                        ),
+                        ChoiceOption(
+                            choice_id="panic",
+                            description="Panic",
+                            is_correct=False,
+                            next_turn_id=1,
+                        ),
+                    ],
+                ),
+                ScenarioTurn(
+                    turn_id=1,
+                    narrative_text="Next turn.",
+                    choices=[
+                        ChoiceOption(
+                            choice_id="continue",
+                            description="Continue",
+                            is_correct=True,
+                            next_turn_id=2,
+                        ),
+                        ChoiceOption(
+                            choice_id="stop",
+                            description="Stop",
+                            is_correct=False,
+                            next_turn_id=2,
+                        ),
+                        ChoiceOption(
+                            choice_id="panic",
+                            description="Panic",
+                            is_correct=False,
+                            next_turn_id=2,
+                        ),
+                    ],
+                ),
+                ScenarioTurn(
+                    turn_id=2,
+                    narrative_text="Final turn.",
+                    choices=[
+                        ChoiceOption(
+                            choice_id="finish",
+                            description="Finish",
+                            is_correct=True,
+                            next_turn_id=None,
+                        ),
+                        ChoiceOption(
+                            choice_id="continue",
+                            description="Continue",
+                            is_correct=True,
+                            next_turn_id=None,
+                        ),
+                        ChoiceOption(
+                            choice_id="panic",
+                            description="Panic",
+                            is_correct=False,
                             next_turn_id=None,
                         ),
                     ],
-                    is_starting_turn=True,
-                )
+                ),
             ],
-            starting_turn_id=0,
         )
 
         with patch("summit_sim.agents.config.Agent") as mock_agent_class:
@@ -177,19 +281,71 @@ class TestGeneratorAgent:
                             choice_id="choice_1",
                             description="Option 1",
                             is_correct=True,
-                            next_turn_id=None,
+                            next_turn_id=1,
                         ),
                         ChoiceOption(
                             choice_id="choice_2",
                             description="Option 2",
                             is_correct=False,
+                            next_turn_id=1,
+                        ),
+                        ChoiceOption(
+                            choice_id="panic",
+                            description="Panic",
+                            is_correct=False,
+                            next_turn_id=1,
+                        ),
+                    ],
+                ),
+                ScenarioTurn(
+                    turn_id=1,
+                    narrative_text="Next turn.",
+                    choices=[
+                        ChoiceOption(
+                            choice_id="continue",
+                            description="Continue",
+                            is_correct=True,
+                            next_turn_id=2,
+                        ),
+                        ChoiceOption(
+                            choice_id="stop",
+                            description="Stop",
+                            is_correct=False,
+                            next_turn_id=2,
+                        ),
+                        ChoiceOption(
+                            choice_id="panic",
+                            description="Panic",
+                            is_correct=False,
+                            next_turn_id=2,
+                        ),
+                    ],
+                ),
+                ScenarioTurn(
+                    turn_id=2,
+                    narrative_text="Final turn.",
+                    choices=[
+                        ChoiceOption(
+                            choice_id="finish",
+                            description="Finish",
+                            is_correct=True,
+                            next_turn_id=None,
+                        ),
+                        ChoiceOption(
+                            choice_id="wait",
+                            description="Wait",
+                            is_correct=False,
+                            next_turn_id=None,
+                        ),
+                        ChoiceOption(
+                            choice_id="panic",
+                            description="Panic",
+                            is_correct=False,
                             next_turn_id=None,
                         ),
                     ],
-                    is_starting_turn=True,
-                )
+                ),
             ],
-            starting_turn_id=0,
         )
 
         with patch("summit_sim.agents.config.Agent") as mock_agent_class:

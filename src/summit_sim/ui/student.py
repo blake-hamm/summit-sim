@@ -43,21 +43,14 @@ async def start_student_session() -> None:
 
 async def show_scenario_intro(scenario: ScenarioDraft) -> None:
     """Display scenario intro with start button."""
-    await cl.Message(
-        content=f"## 🏔️ {scenario.title}",
-    ).send()
-
-    await cl.Message(
-        content=f"**Setting:** {scenario.setting}",
-    ).send()
-
-    await cl.Message(
-        content=f"**Patient:** {scenario.patient_summary}",
-    ).send()
-
     objectives_text = "\n".join(f"• {obj}" for obj in scenario.learning_objectives)
     await cl.Message(
-        content=f"**Learning Objectives:**\n{objectives_text}",
+        content=(
+            f"## 🏔️ {scenario.title}\n\n"
+            f"**Setting:** {scenario.setting}\n\n"
+            f"**Patient:** {scenario.patient_summary}\n\n"
+            f"**Learning Objectives:**\n{objectives_text}"
+        ),
     ).send()
 
     res = await cl.AskActionMessage(
@@ -87,17 +80,20 @@ async def run_simulation() -> None:
 
     assert isinstance(scenario, ScenarioDraft)
 
-    await cl.Message(content="⏳ Starting simulation...").send()
-
     graph = create_student_graph()
     cl.user_session.set("simulation_graph", graph)
 
     thread_id = cl.user_session.get("id")
     config: RunnableConfig = {"configurable": {"thread_id": thread_id}}
 
+    starting_turn = scenario.get_starting_turn()
+    if starting_turn is None:
+        await cl.Message(content="❌ Invalid scenario: no starting turn found.").send()
+        return
+
     initial_state = StudentState(
         scenario_draft=scenario.model_dump(),
-        current_turn_id=scenario.starting_turn_id,
+        current_turn_id=starting_turn.turn_id,
         transcript=[],
         is_complete=False,
         key_learning_moments=[],
@@ -126,13 +122,18 @@ async def handle_simulation_loop(
     while True:
         if state.simulation_result:
             result_dict = state.simulation_result
-            await cl.Message(
-                content=f"💬 **{result_dict.get('feedback', '')}**",
-            ).send()
-
+            feedback = result_dict.get("feedback", "")
             learning_moments = result_dict.get("learning_moments", [])
-            for moment in learning_moments:
-                await cl.Message(content=f"📚 {moment}").send()
+            moments_text = "\n".join(f"• {m}" for m in learning_moments) or "None"
+
+            await cl.Message(
+                content=(
+                    f"### Feedback\n\n"
+                    f"{feedback}\n\n"
+                    f"### Learning Moments\n\n"
+                    f"{moments_text}"
+                ),
+            ).send()
 
         if state.is_complete:
             await show_debrief(state)
@@ -152,9 +153,13 @@ async def handle_simulation_loop(
 
         if scene_state := current_turn.scene_state:
             scene_text = ", ".join(f"**{k}:** {v}" for k, v in scene_state.items())
-            await cl.Message(content=f"**Conditions:** {scene_text}").send()
-
-        await cl.Message(content=current_turn.narrative_text).send()
+            await cl.Message(
+                content=(
+                    f"**Conditions:** {scene_text}\n\n{current_turn.narrative_text}"
+                ),
+            ).send()
+        else:
+            await cl.Message(content=current_turn.narrative_text).send()
 
         actions = [
             cl.Action(
@@ -175,10 +180,15 @@ async def handle_simulation_loop(
 
         choice_id = res.get("payload", {}).get("choice_id")
 
+        loading_msg = await cl.Message(content="⏳ Processing choice...").send()
+
         result = await graph.ainvoke(
             Command(resume={"choice_id": choice_id}),
             config=config,
         )
+
+        loading_msg.content = "✅ Choice recorded"
+        await loading_msg.update()
 
         state = StudentState.from_graph_result(result)
 
@@ -194,28 +204,27 @@ async def show_debrief(state: StudentState) -> None:
     score = debrief.final_score
     score_emoji = "✅" if score >= PASS_SCORE_THRESHOLD else "❌"
 
-    await cl.Message(
-        content=(
-            f"## 🏁 Simulation Complete\n\n"
-            f"**Score:** {score_emoji} **{score}%**\n"
-            f"**Status:** {debrief.completion_status.upper()}"
-        ),
-    ).send()
-
-    await cl.Message(content=f"**Summary:**\n{debrief.summary}").send()
+    content_parts = [
+        f"## 🏁 Simulation Complete\n\n"
+        f"**Score:** {score_emoji} **{score}%**\n"
+        f"**Status:** {debrief.completion_status.upper()}\n\n"
+        f"**Summary:**\n{debrief.summary}",
+    ]
 
     if debrief.key_mistakes:
         mistakes = "\n".join(f"⚠️ {m}" for m in debrief.key_mistakes)
-        await cl.Message(content=f"**Key Mistakes:**\n{mistakes}").send()
+        content_parts.append(f"**Key Mistakes:**\n{mistakes}")
 
     if debrief.strong_actions:
         strong = "\n".join(f"✅ {s}" for s in debrief.strong_actions)
-        await cl.Message(content=f"**Strong Actions:**\n{strong}").send()
+        content_parts.append(f"**Strong Actions:**\n{strong}")
 
     if debrief.teaching_points:
         points = "\n".join(f"📖 {p}" for p in debrief.teaching_points)
-        await cl.Message(content=f"**Teaching Points:**\n{points}").send()
+        content_parts.append(f"**Teaching Points:**\n{points}")
 
     if debrief.best_next_actions:
         next_actions = "\n".join(f"➡️ {n}" for n in debrief.best_next_actions)
-        await cl.Message(content=f"**Recommendations:**\n{next_actions}").send()
+        content_parts.append(f"**Recommendations:**\n{next_actions}")
+
+    await cl.Message(content="\n\n".join(content_parts)).send()

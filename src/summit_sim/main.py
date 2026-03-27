@@ -16,7 +16,6 @@ from summit_sim.ui import student, teacher
 mlflow.set_tracking_uri(settings.mlflow_tracking_uri)
 mlflow.set_experiment(settings.mlflow_experiment_name)
 mlflow.pydantic_ai.autolog()
-mlflow.langchain.autolog(run_tracer_inline=True)
 
 
 @on_chat_start
@@ -49,7 +48,7 @@ async def start() -> None:
         return
 
     cl.user_session.set("mode", "teacher")
-    await teacher.ask_num_participants()
+    await teacher.ask_scenario_config()
 
 
 @on_message
