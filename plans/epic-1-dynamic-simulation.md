@@ -22,9 +22,47 @@ Replace rigid multiple-choice turns with an interactive, free-text simulation lo
 
 ### What Needs to Change
 - Generator outputs only initial scenario (Setting, Patient Summary, Hidden Truth) + `initial_narrative`
-- UI accepts free-text input
-- Two new agents evaluate and generate dynamically
+- UI accepts free-text input (max 500 chars)
+- New ActionResponder agent evaluates and generates dynamically
 - Graph loops without pre-generated turn structure
+- Global max_turns setting (default: 5)
+
+---
+
+## Pre-requisites
+
+Complete these before starting Phase 1:
+
+### 1. Prompt Versioning System
+**File**: `agents/config.py`
+
+Current implementation auto-registers prompts but doesn't detect changes. Update to:
+- **System prompts**: Compare hash of current system_prompt with registered version; if different, register new version
+- **User prompts**: Store in MLflow with hash comparison before each agent call
+- **Semantic versioning**: Use `prompts:/{agent_name}-system@latest` but track version history
+
+**Why**: Prevents stale prompts from being used after code changes. Required before Phase 2 when ActionResponder is created.
+
+### 2. Settings Structure
+**File**: `settings.py`
+
+Add global configuration:
+```python
+class Settings(BaseSettings):
+    # ... existing settings ...
+    max_turns: int = Field(default=5, description="Maximum turns per scenario")
+```
+
+**Why**: Required for Phase 2 turn limit logic.
+
+### 3. Test Infrastructure
+**Files**: `tests/`
+
+Ensure existing tests pass and add:
+- Mock LLM infrastructure for ActionResponder testing
+- E2E test helpers for author/student flows
+
+**Why**: Each phase requires E2E validation; need infrastructure ready.
 
 ---
 
@@ -45,7 +83,7 @@ Student types action ("I check for pulse...")
 │  └───────────────────────────────┘  │
 │  ┌───────────────────────────────┐  │
 │  │  2. Generate: narrative_text │  │  ← Uses was_correct as context
-│  │     (with constraint)         │  │     May only worsen if was_correct=False
+│  │     (with constraint)         │  │  May only worsen if was_correct=False
 │  └───────────────────────────────┘  │
 │  ┌───────────────────────────────┐  │
 │  │  3. Evolve: hidden_state,    │  │  ← Updates both state dicts
@@ -76,18 +114,24 @@ Student Action Text
 │            ActionResponder                 │
 │  Single PydanticAI agent                    │
 │                                             │
-│  1. Evaluate (first in schema):             │
-│     - was_correct                           │
-│     - is_ending                             │
-│     - feedback                              │
+│  Context (all passed to agent):            │
+│  - Full scenario (setting, patient_summary,│
+│    hidden_truth, initial_narrative)         │
+│  - Current hidden_state & scene_state      │
+│  - Transcript history (past turns)         │
 │                                             │
-│  2. Generate narrative (second):           │
-│     - Uses was_correct as context           │
+│  1. Evaluate (first in schema):            │
+│     - was_correct                          │
+│     - is_ending                            │
+│     - feedback                             │
+│                                             │
+│  2. Generate narrative (second):          │
+│     - Uses was_correct as context          │
 │     - Constraint: worsen only if False     │
 │                                             │
 │  3. Evolve state:                          │
-│     - updated_hidden_state                  │
-│     - updated_scene_state                   │
+│     - updated_hidden_state                 │
+│     - updated_scene_state                  │
 └─────────────────────────────────────────────┘
                             │
                             ▼
@@ -98,7 +142,7 @@ Student Action Text
 ### Ending Detection
 
 - **ActionResponder's `is_ending`**: Boolean signal from the agent when scenario has reached natural conclusion (evacuation complete, patient stabilized, etc.)
-- **Turn limit**: Configurable (default: 5 turns). If `turn_count >= max_turns`, force end.
+- **Turn limit**: Global setting (default: 5 turns, configured in settings.py). If `turn_count >= max_turns`, force end.
 - **Logic**: End if `is_ending=True` OR `turn_count >= max_turns`
 - **LangGraph edge**: Conditional edge checks `is_ending` or `turn_count >= max_turns` to route to debrief or loop back
 
@@ -106,209 +150,105 @@ Student Action Text
 
 ## Implementation Phases
 
-### Phase 1: Schema & Generator Updates
+### Phase 1: Author Flow - Content Creation (Testable)
 
-**Goal**: Restrict generator to output only initial scenario (no pre-generated turns).
+**Goal**: Authors can create scenarios with `initial_narrative`, review and approve them. No student functionality yet.
+
+**E2E Test**:
+1. Start Docker container
+2. Author creates scenario
+3. Author sees `initial_narrative` in review screen
+4. Author can rate (if < 3, regenerates - existing behavior)
+5. Author approves scenario
+6. Verify NO pre-generated turns in the draft
 
 **Changes**:
-1. Add new schema to `schemas.py`:
-   ```python
-   class DynamicTurnResult(BaseModel):
-       """Output from ActionResponder agent (single LLM call)."""
-       was_correct: bool = Field(description="Evaluate if the student's medical action was correct based on the hidden truth.")
-       confidence: float = Field(ge=0.0, le=1.0, description="Confidence level in the evaluation (0.0-1.0).")
-       is_ending: bool = Field(description="Set to true if the scenario has reached a natural conclusion or the patient is stabilized.")
-       feedback: str = Field(description="Private medical feedback for the student's action.")
-       narrative_text: str = Field(description="The next scene narrative. CONSTRAINT: You may only worsen the patient's condition if was_correct is False.")
-       updated_hidden_state: dict[str, str] = Field(description="Updated underlying medical truth.")
-       updated_scene_state: dict[str, str] = Field(description="Updated visible scene conditions.")
-   ```
+1. `schemas.py`:
+   - Add `DynamicTurnResult` schema
+   - Update `ScenarioDraft`: add `initial_narrative: str`, make `turns` optional, add scenario-level `hidden_state` and `scene_state`
 
-2. Update `ScenarioDraft` schema:
-   - Add `initial_narrative: str` field (the first "What will you do?" prompt)
-   - Make `turns: list[ScenarioTurn]` optional (empty by default)
-   - Move `hidden_state` and `scene_state` to scenario level
-
-3. Update Generator Agent (`agents/generator.py`):
+2. `agents/generator.py`:
    - Remove multi-turn generation logic
-   - Output: setting, patient_summary, hidden_truth, **initial_narrative** (the first "What will you do?" prompt)
-   - Generate `initial_narrative` based on the scenario setup - this is the canonical first prompt
-   - **Important**: `initial_narrative` is generated by the generator and shown to the author during review. This allows the author to see and approve the first prompt before students see it. The author can request regeneration if the initial_narrative is unsatisfactory.
+   - Output: setting, patient_summary, hidden_truth, learning_objectives, **initial_narrative**
+   - Generate `initial_narrative` as the canonical first prompt
 
-**E2E Test**: Author creates scenario → reviews approval screen → sees initial_narrative displayed for review → author approves → NO pre-generated turns
+3. `ui/author.py`:
+   - Display `initial_narrative` in review screen
+   - Remove per-turn breakdown (no pre-generated turns)
+   - Existing rating behavior applies (regenerate if rating < 3)
 
 ---
 
-### Phase 2: ActionResponder Agent
+### Phase 2: Student Flow - Dynamic Simulation (Testable)
 
-**Goal**: Create a single PydanticAI agent that evaluates student action, generates narrative, and evolves state in one LLM call.
+**Goal**: Students play scenarios with free-text input. AI evaluates actions and generates narrative dynamically.
 
-**Why single agent**: Schema field order enforces evaluation → narrative. Placing evaluation fields before narrative fields forces the LLM to decide on medical correctness first, which it then uses as context to generate the narrative. This avoids the latency of sequential calls and eliminates race conditions.
+**E2E Test**:
+1. Start Docker container
+2. Student joins via link
+3. Student sees `initial_narrative`
+4. Student types free-text action (max 500 chars)
+5. AI evaluates and responds with feedback + narrative
+6. Turn count increments
+7. Repeat until `is_ending=True` or `turn_count >= max_turns`
+8. Debrief shows results
 
 **Changes**:
-1. Create `agents/action_responder.py`:
-   - System prompt: Evaluate student's free-text action medically, generate narrative response, evolve hidden/scene state
-   - **Constraint**: Can only worsen patient condition (e.g., change patient_alive from true to false) if `was_correct=False`. If the action was correct, patient condition should not worsen.
-   - Input: student action text + scenario context (setting, patient_summary, hidden_truth) + current hidden/scene state
+1. `agents/action_responder.py` (NEW):
+   - System prompt: Evaluate student's free-text action medically, generate narrative, evolve state
+   - Constraint: Can only worsen patient condition if `was_correct=False`
+   - Input: student action + scenario context + hidden/scene state + transcript history
    - Output: `DynamicTurnResult` schema (single call)
+   - Register prompt in MLflow as `prompts:/action-responder-user@latest`
 
-2. Register prompt template in MLflow as `prompts:/action-responder-user@latest`
+2. `agents/config.py`:
+   - Register ActionResponder via `get_agent()`
 
-**Schema Output** (field order matters):
-```python
-class DynamicTurnResult(BaseModel):
-    # 1. Evaluate first (model generates these first)
-    was_correct: bool = Field(description="Evaluate if the student's medical action was correct based on the hidden truth.")
-    confidence: float = Field(ge=0.0, le=1.0, description="Confidence level in the evaluation (0.0-1.0).")
-    is_ending: bool = Field(description="Set to true if the scenario has reached a natural conclusion or the patient is stabilized.")
-    feedback: str = Field(description="Private medical feedback for the student's action.")
-    
-    # 2. Generate narrative based on the evaluation above
-    narrative_text: str = Field(description="The next scene narrative. CONSTRAINT: You may only worsen the patient's condition if was_correct is False.")
-    
-    # 3. Evolve state
-    updated_hidden_state: dict[str, str] = Field(description="Updated underlying medical truth.")
-    updated_scene_state: dict[str, str] = Field(description="Updated visible scene conditions.")
-```
+3. `settings.py`:
+   - Add `max_turns` global config (default: 5)
 
-**System Prompt Emphasis**: In addition to the schema description, explicitly state the constraint in the ActionResponder's system prompt:
-> "CRITICAL CONSTRAINT: You may only worsen the patient's condition (e.g., change patient_alive from true to false, increase blood loss, etc.) if and only if was_correct=False. If the student's action was correct, the patient condition must not worsen as a direct result of that action."
+4. `graphs/simulation.py`:
+   - Update `SimulationState`: remove `current_turn_id`, add `turn_count`, `hidden_state`, `scene_state`, change `last_selected_choice` → `last_student_action`
+   - Refactor nodes: `present_turn` → `present_prompt`, `process_player_turn` → `process_player_action`
+   - New graph flow: `initialize → present_prompt → interrupt → process_player_action → update_state → check_ending → [loop or debrief]`
+   - Update `TranscriptEntry`: store `student_action: str` instead of `choice_id`
 
-**Error Handling**:
-   - Use PydanticAI's built-in retry
-   - If agent fails, LangGraph catches and returns friendly error message
+5. `ui/simulation.py`:
+   - Replace `cl.AskActionMessage` with `cl.AskUserMessage`
+   - Prompt: initial_narrative or "What will you do?"
+   - Enforce 500 character limit
+   - Display feedback + narrative from ActionResponder
 
-**E2E Test**: Mock LLM → call ActionResponder with "I apply direct pressure" + state → returns DynamicTurnResult with was_correct=True, narrative_text, updated state
+6. `public/hide-chat.css`:
+   - Scope hiding to author mode only (body.author-mode)
 
----
-
-### Phase 3: Initial Narrative Flow
-
-**Goal**: Ensure initial_narrative from Generator flows to student graph.
-
-**Clarification**: The `initial_narrative` is generated in Phase 1 by the Generator agent and displayed to the author during review. The author sees and approves it as part of the scenario. After approval, it flows to the student graph.
-
-**Changes**:
-1. Verify Generator outputs `initial_narrative` in Phase 1
-2. Ensure `initial_narrative` is stored in scenario state and flows to SimulationState
-3. Simulation graph uses `initial_narrative` as the first prompt (not a "START" action call)
-
-**E2E Test**: Author creates scenario → reviews and sees initial_narrative → approves → student graph loads → initial_narrative is displayed
-
----
-
-### Phase 4: Simulation Graph Refactor
-
-**Goal**: Refactor graph to use dynamic turn generation instead of turn lookup.
-
-**Changes**:
-1. Update `SimulationState` in `graphs/simulation.py`:
-   - Remove `current_turn_id` (no more turn lookup)
-   - Add `turn_count: int` (for 5-turn limit)
-   - Add `hidden_state: dict[str, str]` (scenario-level, evolves)
-   - Add `scene_state: dict[str, str]` (scenario-level, evolves)
-   - Change `last_selected_choice` → `last_student_action: str`
-   - Add `max_turns: int` (configurable, default 5)
-
-2. Refactor nodes:
-   - `present_turn` → `present_prompt`: Display current narrative via interrupt
-   - `process_player_turn` → `process_player_action`: Call ActionResponder
-   - `update_simulation_state`: Update transcript with free-text action, evolve state
-   - `check_ending`: Evaluate ActionResponder's `is_ending` + turn_count >= max_turns
-   - Add error handling: If orchestrator fails, catch and present friendly message to student
-
-3. New graph flow:
-   ```
-   initialize → present_prompt → interrupt(text input) → 
-   process_player_action → update_state → check_ending → 
-   [loop to present_prompt or generate_debrief]
-   ```
-
-4. Transcript Entry updates:
-   - Store `student_action: str` instead of `choice_id`
-   - Store `was_correct: bool` from evaluation
-
-**E2E Test**: Student types action → graph processes → new narrative displayed → turn_count increments
-
----
-
-### Phase 5: UI Updates
-
-**Goal**: Replace button-based input with free-text input.
-
-**Changes**:
-1. Update `public/hide-chat.css`:
-   - Scope hiding to author mode only using body class:
-   ```css
-   body.author-mode #message-composer,
-   body.author-mode #message-composer * {
-       display: none !important;
-   }
-   ```
-
-2. Update `main.py`:
+7. `main.py`:
    - Set body class based on mode ("author" or "player")
-
-3. Update `ui/simulation.py`:
-   - Replace `cl.AskActionMessage` (buttons) with `cl.AskUserMessage` (text input)
-   - Prompt: "What will you do?" or dynamic initial_narrative
-   - Handle free-text response
-
-4. Update feedback display:
-   - Show `was_correct` + `feedback` from ActionResponder
-   - Show new `narrative_text` from ActionResponder
-
-**E2E Test**: Student sees "What will you do?" → types "I check for breathing" → sees AI feedback → sees next narrative
 
 ---
 
 ## File Changes Summary
 
-| File | Changes |
-|------|---------|
-| `schemas.py` | Add DynamicTurnResult; update ScenarioDraft |
-| `agents/generator.py` | Remove multi-turn logic, output initial_narrative |
-| `agents/action_responder.py` | NEW - ActionResponder agent (single PydanticAI call) |
-| `graphs/simulation.py` | Refactor state, nodes, ending logic, error handling |
-| `ui/simulation.py` | Replace buttons with text input |
-| `agents/config.py` | Register ActionResponder via get_agent() |
-| `public/hide-chat.css` | Scope hiding to author mode only |
-| `src/summit_sim/main.py` | Set body class based on mode |
+| File | Changes | Phase |
+|------|---------|-------|
+| `schemas.py` | Add DynamicTurnResult; update ScenarioDraft | 1 |
+| `agents/generator.py` | Remove multi-turn logic, output initial_narrative | 1 |
+| `ui/author.py` | Display initial_narrative in review | 1 |
+| `agents/action_responder.py` | NEW - ActionResponder agent | 2 |
+| `agents/config.py` | Register ActionResponder | 2 |
+| `settings.py` | Add global max_turns (default: 5) | 2 |
+| `graphs/simulation.py` | Refactor state, nodes, graph flow | 2 |
+| `ui/simulation.py` | Replace buttons with text input | 2 |
+| `public/hide-chat.css` | Scope to author mode | 2 |
+| `main.py` | Set body class based on mode | 2 |
 
 ---
 
-## E2E Test Checklist
+## Notes
 
-| Phase | Test |
-|-------|------|
-| 1 | Author creates scenario → sees initial_narrative in review → author can request regeneration if unsatisfactory → NO pre-generated turns |
-| 2 | ActionResponder evaluates "I apply direct pressure" → returns was_correct=True, confidence, narrative_text, respects was_correct constraint |
-| 3 | After approval, initial_narrative flows to student graph |
-| 4 | Graph loops without pre-generated turns, turn_count increments |
-| 5a | Chat input hidden in author mode, visible in player mode |
-| 5b | Student types free text → AI responds dynamically |
-
----
-
-## Acceptance Criteria
-
-- [ ] Student can type free-text actions (e.g., "I apply a tourniquet")
-- [ ] ActionResponder evaluates action (returns was_correct and confidence)
-- [ ] ActionResponder generates narrative (respects was_correct constraint - worsen only if was_correct=False)
-- [ ] ActionResponder makes `is_ending` judgement
-- [ ] Hidden state and scene state evolve dynamically
-- [ ] Scenario ends early if `is_ending=True`
-- [ ] Scenario ends after max_turns (configurable, default 5)
-- [ ] Debrief adapted for free-text transcript
-- [ ] Ruff linting passes
-- [ ] Coverage ≥80%
-
----
-
-## Open Questions
-
-1. **Debrief adaptation**: Will adapt existing debrief for free-text transcript. The transcript format will change from `choice_id` to `student_action: str`, so debrief needs updating.
-
-2. **State evolution limits**: **RESOLVED** - ActionResponder can only worsen patient condition (e.g., change patient_alive from true to false) if `was_correct=False`. This constraint is enforced in the schema description.
-
-3. **Validation judges**: Deferred. Will create a separate judge agent later in the project for safety/realism validation. Focus on core functionality first.
+- **State persistence**: `hidden_state` and `scene_state` stored in `SimulationState`, passed to ActionResponder each turn
+- **Transcript history**: Full transcript passed to ActionResponder for continuity
+- **Prompt versioning**: System prompts use semantic versioning; MLflow prompts use hash comparison
+- **Fail fast**: Errors surface immediately - this is a breaking change, we want to know if things break
+- **Validation judges**: Deferred to later epic
+- **Debrief**: Will adapt existing debrief for free-text transcript
