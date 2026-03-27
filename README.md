@@ -1,52 +1,44 @@
-# summit-sim
+# 🏔️ Summit-Sim
 
-Summit-Sim is an AI wilderness rescue simulator. It uses multi-agent validation to generate medically safe, interactive backcountry emergencies for dynamic first-responder training.
+**An AI-powered wilderness rescue simulator.** 
+
+Summit-Sim uses strict, multi-agent validation to generate medically safe, interactive backcountry emergencies for dynamic Wilderness First Responder (WFR) training.
 
 <img src="public/favicon.png" alt="summit-sim" width="200"/>
 
-## Architecture & Naming Conventions
+## 💡 The Problem
+Wilderness First Responder (WFR) training relies heavily on static paper scenarios or expensive live-action roleplay. Students rarely get enough dynamic, unpredictable repetitions to truly test their decision-making under pressure. When the unexpected happens in the backcountry, textbook memorization isn't enough—responders need dynamic critical thinking.
 
-To support both self-serve (student) practice and instructor-led sessions, this project uses functional naming rather than persona-based naming. This ensures our codebase accurately reflects system behavior, even when a single user fulfills multiple roles across the application.
+## 🚀 The Solution
+Summit-Sim provides infinite, medically accurate WFR scenarios through a dynamic AI game loop. Instead of multiple-choice questions, responders use natural language to evaluate scenes, check vitals, and apply treatments. The system evaluates every action against a hidden medical "truth," evolving the scenario exactly as a real patient's condition would change in the wild.
 
-### Core Terminology
-We explicitly separate the static blueprint from the active gameplay session:
-*   **Scenario:** The static blueprint or configuration. This includes the setting, patient background, the hidden medical truth, and the initial state. 
-*   **Simulation:** The active, stateful playthrough of a Scenario. A simulation is instantiated from a scenario.
+### Key Features
+*   **Infinite Scenario Authoring:** Generate highly specific emergencies based on environment, group size, and difficulty level.
+*   **Dynamic State Machine:** The patient's condition evolves realistically based on the responder's timeline and medical interventions (or lack thereof).
+*   **Human-In-The-Loop (HITL) Feedback:** Instructors (Reviewers) can review and adjust the scenario, sending feedback to mlflow for prompt optimization and judge refinement.
+*   **Objective Debriefing:** Post-simulation evaluation scores the responder's actions against established WFR protocols.
 
-### UI/UX Roles (The "Who")
-Instead of rigid "Teacher" and "Student" designations, UI views and permissions are mapped to functional roles. A single user might act as both the Author and the Player in a self-serve session.
+---
 
-*   **The Author (formerly Teacher):** The user setting up the environment. They define the parameters (participants, activity, difficulty) to generate a Scenario.
-*   **The Player / Responder (formerly Student):** The user actively engaged in the Simulation. They input free-text actions to evaluate, treat, and respond to the medical emergency.
-*   **The Reviewer (HITL):** An optional, privileged view (often used by instructors) that can observe the hidden truth of a Simulation, interrupt the state graph, and inject dynamic feedback or complications.
+## 🏗️ Technical Architecture 
 
-### Backend & Graph State Naming (The "How")
-The backend is split into two distinct LangGraph workflows joined by a shared `scenario_id`. 
+Summit-Sim is built with a sophisticated, production-ready AI stack focused on latency, strict output schemas, and agentic orchestration. 
 
-#### 1. The Authoring Graph (Blueprint Generation)
-*Responsible for taking initial parameters and generating the `ScenarioBase`.*
-*   **File/Module Name:** `authoring.py` or `generator.py`
-*   **Graph Name:** `AuthoringGraph`
-*   **Key Schemas:**
-    *   `ScenarioConfig` (Replaces `TeacherConfig`): The initial form inputs (e.g., environment, difficulty).
-    *   `ScenarioBlueprint` / `ScenarioBase`: The structured output containing the Setting, Patient state, Hidden Truth, and Turn 0 narrative.
-    *   `ReviewerAdjustment`: Human-in-the-loop (HITL) injections used to rebuild or refine scenario.
+### Core Tech Stack
+*   **Orchestration (LangGraph):** Manages the complex state flows of the simulation. Utilizes `StateGraph` for the core loops, `interrupt()` for instructor HITL injections, and checkpointing for state persistence.
+*   **Agent Framework (PydanticAI):** Ensures absolute medical safety and system stability by strictly enforcing all LLM inputs and outputs via Pydantic `BaseModel` schemas.
+*   **Frontend UI (Chainlit):** A fully asynchronous, reactive Python UI tailored for conversational AI, providing seamless UX for both scenario authoring and active gameplay.
+*   **Observability (MLflow):** Comprehensive LLM span tracing, variable logging, and feedback tracking to monitor agent reasoning and model performance.
 
-#### 2. The Simulation Graph (Dynamic Game Loop)
-*Responsible for handling continuous free-text input, updating the medical state, and returning the next narrative frame.*
-*   **File/Module Name:** `simulation.py`
-*   **Graph Name:** `SimulationGraph`
-*   **Key Schemas:**
-    *   `PlayerAction` (Replaces `StudentAction`): The free-text input submitted by the user.
-    *   `SimulationTurnResult`: The PydanticAI model that evaluates the action against the blueprint's hidden truth, updates the active scene state, and generates the narrative response.
-    *   `SimulationState`: The overarching LangGraph state holding the chat history, current patient vitals, and active scene status.
+### System Flow
+The application is cleanly divided into two interconnected graphs joined by a shared Scenario ID:
 
-#### 3. The Evaluation Graph (Post-Simulation)
-*Responsible for concluding the session and grading the user's performance.*
-*   **File/Module Name:** `debrief.py`
-*   **Key Schemas:**
-    *   `ActionLog`: The compiled history of `PlayerAction`s.
-    *   `DebriefReport`: The final output evaluating the medical accuracy of the runtime decisions against the WFR protocol.
+1.  **The Authoring Graph:** Takes environmental parameters and dynamically generates the baseline blueprint (Setting, Patient vitals, Hidden Medical Truth, and Turn 0).
+2.  **The Simulation Graph:** A continuous game loop where the AI evaluates open-ended student actions against the hidden truth, dynamically updating the active scene state and generating the next narrative frame.
+
+---
+
+*Built for the Weber State AI Hackathon* 🐾
 
 
 #### Resources:
