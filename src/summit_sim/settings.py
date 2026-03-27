@@ -10,7 +10,7 @@ class Settings(BaseSettings):
 
     mlflow_tracking_uri: str = "http://localhost:5000"
     openrouter_api_key: str = ""
-    default_model: str = "google/gemini-3.1-flash-lite-preview"
+    default_model: str = "openai/gpt-4.1-nano"
     mlflow_experiment_name: str = "summit-sim"
     base_url: str = "http://localhost:8000"
     log_level: str = "INFO"
