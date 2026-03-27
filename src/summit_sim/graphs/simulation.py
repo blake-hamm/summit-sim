@@ -1,7 +1,7 @@
-"""LangGraph workflow for student orchestration.
+"""LangGraph workflow for simulation orchestration.
 
 This module implements a cyclic LangGraph workflow that:
-1. Presents turns to students with multiple choice options
+1. Presents turns to players with multiple choice options
 2. Uses interrupt() for human-in-the-loop choice selection
 3. Calls the Simulation Feedback Agent for personalized feedback
 4. Advances through turns until scenario completion
@@ -26,10 +26,10 @@ if TYPE_CHECKING:
 
 
 @dataclass
-class StudentState:
-    """LangGraph state for student workflow.
+class SimulationState:
+    """LangGraph state for simulation workflow.
 
-    Maintains all state needed for the cyclic student graph,
+    Maintains all state needed for the cyclic simulation graph,
     including the scenario, current position, and accumulated history.
     """
 
@@ -45,15 +45,15 @@ class StudentState:
     debrief_report: dict | None = None
 
     @classmethod
-    def from_graph_result(cls, result: dict[str, Any]) -> "StudentState":
+    def from_graph_result(cls, result: dict[str, Any]) -> "SimulationState":
         """Create state from LangGraph result, filtering extra fields."""
         valid_fields = {f.name for f in fields(cls)}
         filtered = {k: v for k, v in result.items() if k in valid_fields}
         return cls(**filtered)
 
 
-def initialize_student(state: StudentState) -> StudentState:
-    """Initialize student state from scenario draft.
+def initialize_simulation(state: SimulationState) -> SimulationState:
+    """Initialize simulation state from scenario draft.
 
     Validates that the starting turn ID exists in the scenario.
     """
@@ -67,12 +67,12 @@ def initialize_student(state: StudentState) -> StudentState:
     return state
 
 
-def present_student_turn(state: StudentState) -> dict:
-    """Present current turn to student and wait for choice selection.
+def present_turn(state: SimulationState) -> dict:
+    """Present current turn to player and wait for choice selection.
 
     Uses LangGraph's interrupt() for human-in-the-loop interaction.
     Displays the narrative and available choices, then pauses execution
-    until the student provides their choice.
+    until the player provides their choice.
     """
     scenario = ScenarioDraft.model_validate(state.scenario_draft)
     current_turn = scenario.get_turn(state.current_turn_id)
@@ -120,11 +120,11 @@ def _find_choice_by_id(choices: list[ChoiceOption], choice_id: str) -> ChoiceOpt
     raise ValueError(msg)
 
 
-async def process_student_turn(state: StudentState) -> dict:
-    """Process student's choice and generate feedback.
+async def process_player_turn(state: SimulationState) -> dict:
+    """Process player's choice and generate feedback.
 
     Calls the Simulation Feedback Agent to generate personalized
-    feedback for the student's choice.
+    feedback for the player's choice.
     """
     scenario = ScenarioDraft.model_validate(state.scenario_draft)
     current_turn = scenario.get_turn(state.current_turn_id)
@@ -138,8 +138,8 @@ async def process_student_turn(state: StudentState) -> dict:
     return {"simulation_result": result.model_dump()}
 
 
-def update_student_state(state: StudentState) -> dict:
-    """Update student state after processing choice.
+def update_simulation_state(state: SimulationState) -> dict:
+    """Update simulation state after processing choice.
 
     Appends transcript entry, updates learning moments, and advances
     to the next turn based on the selected choice.
@@ -183,8 +183,8 @@ def update_student_state(state: StudentState) -> dict:
     }
 
 
-async def generate_debrief_report(state: StudentState) -> dict:
-    """Generate debrief report after student completes simulation.
+async def generate_debrief_report(state: SimulationState) -> dict:
+    """Generate debrief report after simulation completes.
 
     Calls the Debrief Agent to analyze the complete simulation transcript
     and generate a structured performance report.
@@ -199,40 +199,40 @@ async def generate_debrief_report(state: StudentState) -> dict:
     return {"debrief_report": debrief_report.model_dump()}
 
 
-def check_student_completion(state: StudentState) -> str:
-    """Check if student simulation should continue or end.
+def check_simulation_completion(state: SimulationState) -> str:
+    """Check if simulation should continue or end.
 
     Routes the graph to either continue presenting turns or generate
     debrief based on the is_complete flag.
     """
     if state.is_complete:
         return "generate_debrief"
-    return "present_student_turn"
+    return "present_turn"
 
 
-def create_student_graph(
+def create_simulation_graph(
     checkpointer: BaseCheckpointSaver | None = None,
 ) -> CompiledStateGraph:
-    """Create and configure the student LangGraph."""
-    workflow = StateGraph(StudentState)
+    """Create and configure the simulation LangGraph."""
+    workflow = StateGraph(SimulationState)
 
-    workflow.add_node("initialize", initialize_student)
-    workflow.add_node("present_student_turn", present_student_turn)
-    workflow.add_node("process_student_turn", process_student_turn)
-    workflow.add_node("update_student_state", update_student_state)
+    workflow.add_node("initialize", initialize_simulation)
+    workflow.add_node("present_turn", present_turn)
+    workflow.add_node("process_player_turn", process_player_turn)
+    workflow.add_node("update_simulation_state", update_simulation_state)
     workflow.add_node("generate_debrief", generate_debrief_report)
 
     workflow.set_entry_point("initialize")
-    workflow.add_edge("initialize", "present_student_turn")
-    workflow.add_edge("present_student_turn", "process_student_turn")
-    workflow.add_edge("process_student_turn", "update_student_state")
+    workflow.add_edge("initialize", "present_turn")
+    workflow.add_edge("present_turn", "process_player_turn")
+    workflow.add_edge("process_player_turn", "update_simulation_state")
 
     workflow.add_conditional_edges(
-        "update_student_state",
-        check_student_completion,
+        "update_simulation_state",
+        check_simulation_completion,
         {
             "generate_debrief": "generate_debrief",
-            "present_student_turn": "present_student_turn",
+            "present_turn": "present_turn",
         },
     )
 

@@ -1,6 +1,6 @@
 """UI utilities for Summit-Sim."""
 
-from summit_sim.schemas import TeacherConfig
+from summit_sim.schemas import ScenarioConfig
 
 # Standard 1-5 star rating scale for scenario evaluation
 RATING_SCALE = [
@@ -36,15 +36,15 @@ def get_rating_content(title: str = "Rate this scenario") -> str:
     return f"#### {title}\n\nPlease evaluate the quality using the scale below:"
 
 
-def get_teacher_form_fields() -> list[dict]:
-    """Generate form field configuration from TeacherConfig schema.
+def get_author_form_fields() -> list[dict]:
+    """Generate form field configuration from ScenarioConfig schema.
 
     Extracts UI metadata from json_schema_extra to create field definitions
     that can be passed directly to the frontend form component.
     """
     fields = []
 
-    for name, field in TeacherConfig.model_fields.items():
+    for name, field in ScenarioConfig.model_fields.items():
         if name == "class_id":
             continue  # Skip internal fields not shown in form
 

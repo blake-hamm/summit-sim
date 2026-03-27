@@ -1,4 +1,4 @@
-"""Tests for the teacher review graph workflow."""
+"""Tests for the author review graph workflow."""
 
 from typing import Any
 from unittest.mock import AsyncMock, patch
@@ -7,20 +7,20 @@ import pytest
 from langgraph.types import Command
 
 from summit_sim.agents import config as agent_config
-from summit_sim.graphs.teacher import (
-    TeacherState,
-    create_teacher_graph,
-    initialize_teacher,
-    present_for_teacher,
+from summit_sim.graphs.author import (
+    AuthorState,
+    create_author_graph,
+    initialize_author,
+    present_for_author,
     should_retry,
 )
 from summit_sim.schemas import (
     ChoiceOption,
+    ScenarioConfig,
     ScenarioDraft,
     ScenarioTurn,
-    TeacherConfig,
 )
-from summit_sim.ui import teacher as teacher_ui
+from summit_sim.ui import author as author_ui
 
 
 def _session_get_participants(key: str) -> str | None:
@@ -44,9 +44,9 @@ def _session_get_for_rating(key: str, mock_graph: AsyncMock | None = None) -> An
 
 
 @pytest.fixture
-def sample_teacher_config():
+def sample_scenario_config():
     """Create a sample teacher configuration for testing."""
-    return TeacherConfig(
+    return ScenarioConfig(
         num_participants=3,
         activity_type="hiking",
         difficulty="med",
@@ -140,10 +140,10 @@ def sample_scenario():
 
 
 @pytest.fixture
-def initial_state(sample_teacher_config):
+def initial_state(sample_scenario_config):
     """Create initial state for testing."""
-    return TeacherState(
-        teacher_config=sample_teacher_config.model_dump(),
+    return AuthorState(
+        scenario_config=sample_scenario_config.model_dump(),
         scenario_draft=None,
         scenario_id="",
         class_id="",
@@ -153,30 +153,30 @@ def initial_state(sample_teacher_config):
 
 
 class TestInitializeTeacherSession:
-    """Tests for initialize_teacher node."""
+    """Tests for initialize_author node."""
 
     def test_initialize_generates_ids(self, initial_state):
         """Test that initialization generates scenario_id and class_id."""
-        result = initialize_teacher(initial_state)
+        result = initialize_author(initial_state)
 
         assert result.scenario_id.startswith("scn-")
         assert len(result.class_id) == 6
         assert result.retry_count == 0
 
-    def test_initialize_preserves_teacher_config(self, initial_state):
+    def test_initialize_preserves_scenario_config(self, initial_state):
         """Test that initialization preserves the teacher config."""
-        result = initialize_teacher(initial_state)
+        result = initialize_author(initial_state)
 
-        assert result.teacher_config == initial_state.teacher_config
+        assert result.scenario_config == initial_state.scenario_config
 
 
 class TestPresentForReview:
-    """Tests for present_for_teacher node."""
+    """Tests for present_for_author node."""
 
-    def test_present_for_teacher_valid_rating_5(self, sample_scenario):
+    def test_present_for_author_valid_rating_5(self, sample_scenario):
         """Test presenting a valid scenario with rating 5."""
-        state = TeacherState(
-            teacher_config=TeacherConfig(
+        state = AuthorState(
+            scenario_config=ScenarioConfig(
                 num_participants=3, activity_type="hiking", difficulty="med"
             ).model_dump(),
             scenario_draft=sample_scenario.model_dump(),
@@ -188,20 +188,20 @@ class TestPresentForReview:
         )
 
         with (
-            patch("summit_sim.graphs.teacher.interrupt") as mock_interrupt,
-            patch("summit_sim.graphs.teacher.mlflow.log_feedback") as mock_log,
+            patch("summit_sim.graphs.author.interrupt") as mock_interrupt,
+            patch("summit_sim.graphs.author.mlflow.log_feedback") as mock_log,
         ):
             mock_interrupt.return_value = {"rating": 5}
-            result = present_for_teacher(state)
+            result = present_for_author(state)
 
         assert result["approval_status"] == "approved"
-        assert result["teacher_rating"] == 5
+        assert result["author_rating"] == 5
         mock_log.assert_called_once()
 
-    def test_present_for_teacher_rating_3_acceptable(self, sample_scenario):
+    def test_present_for_author_rating_3_acceptable(self, sample_scenario):
         """Test rating 3 is acceptable and approved."""
-        state = TeacherState(
-            teacher_config=TeacherConfig(
+        state = AuthorState(
+            scenario_config=ScenarioConfig(
                 num_participants=3, activity_type="hiking", difficulty="med"
             ).model_dump(),
             scenario_draft=sample_scenario.model_dump(),
@@ -213,20 +213,20 @@ class TestPresentForReview:
         )
 
         with (
-            patch("summit_sim.graphs.teacher.interrupt") as mock_interrupt,
-            patch("summit_sim.graphs.teacher.mlflow.log_feedback") as mock_log,
+            patch("summit_sim.graphs.author.interrupt") as mock_interrupt,
+            patch("summit_sim.graphs.author.mlflow.log_feedback") as mock_log,
         ):
             mock_interrupt.return_value = {"rating": 3}
-            result = present_for_teacher(state)
+            result = present_for_author(state)
 
         assert result["approval_status"] == "approved"
-        assert result["teacher_rating"] == 3
+        assert result["author_rating"] == 3
         mock_log.assert_called_once()
 
-    def test_present_for_teacher_rating_2_rejected(self, sample_scenario):
+    def test_present_for_author_rating_2_rejected(self, sample_scenario):
         """Test rating 2 is rejected and should trigger retry."""
-        state = TeacherState(
-            teacher_config=TeacherConfig(
+        state = AuthorState(
+            scenario_config=ScenarioConfig(
                 num_participants=3, activity_type="hiking", difficulty="med"
             ).model_dump(),
             scenario_draft=sample_scenario.model_dump(),
@@ -238,20 +238,20 @@ class TestPresentForReview:
         )
 
         with (
-            patch("summit_sim.graphs.teacher.interrupt") as mock_interrupt,
-            patch("summit_sim.graphs.teacher.mlflow.log_feedback") as mock_log,
+            patch("summit_sim.graphs.author.interrupt") as mock_interrupt,
+            patch("summit_sim.graphs.author.mlflow.log_feedback") as mock_log,
         ):
             mock_interrupt.return_value = {"rating": 2}
-            result = present_for_teacher(state)
+            result = present_for_author(state)
 
         assert result["approval_status"] == "rejected"
-        assert result["teacher_rating"] == 2
+        assert result["author_rating"] == 2
         mock_log.assert_called_once()
 
-    def test_present_for_teacher_no_scenario(self):
+    def test_present_for_author_no_scenario(self):
         """Test presenting with no scenario raises error."""
-        state = TeacherState(
-            teacher_config=TeacherConfig(
+        state = AuthorState(
+            scenario_config=ScenarioConfig(
                 num_participants=3, activity_type="hiking", difficulty="med"
             ).model_dump(),
             scenario_draft=None,
@@ -262,12 +262,12 @@ class TestPresentForReview:
         )
 
         with pytest.raises(ValueError, match="No scenario draft available"):
-            present_for_teacher(state)
+            present_for_author(state)
 
-    def test_present_for_teacher_invalid_rating(self, sample_scenario):
+    def test_present_for_author_invalid_rating(self, sample_scenario):
         """Test presenting with invalid rating raises error."""
-        state = TeacherState(
-            teacher_config=TeacherConfig(
+        state = AuthorState(
+            scenario_config=ScenarioConfig(
                 num_participants=3, activity_type="hiking", difficulty="med"
             ).model_dump(),
             scenario_draft=sample_scenario.model_dump(),
@@ -277,15 +277,15 @@ class TestPresentForReview:
             approval_status=None,
         )
 
-        with patch("summit_sim.graphs.teacher.interrupt") as mock_interrupt:
+        with patch("summit_sim.graphs.author.interrupt") as mock_interrupt:
             mock_interrupt.return_value = {"rating": 6}
             with pytest.raises(ValueError, match="Invalid rating: 6"):
-                present_for_teacher(state)
+                present_for_author(state)
 
-    def test_present_for_teacher_missing_rating(self, sample_scenario):
+    def test_present_for_author_missing_rating(self, sample_scenario):
         """Test presenting with missing rating raises error."""
-        state = TeacherState(
-            teacher_config=TeacherConfig(
+        state = AuthorState(
+            scenario_config=ScenarioConfig(
                 num_participants=3, activity_type="hiking", difficulty="med"
             ).model_dump(),
             scenario_draft=sample_scenario.model_dump(),
@@ -295,10 +295,10 @@ class TestPresentForReview:
             approval_status=None,
         )
 
-        with patch("summit_sim.graphs.teacher.interrupt") as mock_interrupt:
+        with patch("summit_sim.graphs.author.interrupt") as mock_interrupt:
             mock_interrupt.return_value = {"decision": "approve"}
             with pytest.raises(ValueError, match="Invalid rating: None"):
-                present_for_teacher(state)
+                present_for_author(state)
 
 
 class TestShouldRetryLogic:
@@ -306,8 +306,8 @@ class TestShouldRetryLogic:
 
     def test_should_retry_low_rating_under_limit(self, sample_scenario):
         """Test should_retry routes to generate when rating < 3 and retry_count < 3."""
-        state = TeacherState(
-            teacher_config=TeacherConfig(
+        state = AuthorState(
+            scenario_config=ScenarioConfig(
                 num_participants=3, activity_type="hiking", difficulty="med"
             ).model_dump(),
             scenario_draft=sample_scenario.model_dump(),
@@ -315,7 +315,7 @@ class TestShouldRetryLogic:
             class_id="abc123",
             retry_count=1,
             approval_status=None,
-            teacher_rating=2,
+            author_rating=2,
         )
 
         result = should_retry(state)
@@ -323,8 +323,8 @@ class TestShouldRetryLogic:
 
     def test_should_retry_low_rating_at_limit(self, sample_scenario):
         """Test should_retry routes to save when rating < 3 but retry_count >= 3."""
-        state = TeacherState(
-            teacher_config=TeacherConfig(
+        state = AuthorState(
+            scenario_config=ScenarioConfig(
                 num_participants=3, activity_type="hiking", difficulty="med"
             ).model_dump(),
             scenario_draft=sample_scenario.model_dump(),
@@ -332,7 +332,7 @@ class TestShouldRetryLogic:
             class_id="abc123",
             retry_count=3,
             approval_status=None,
-            teacher_rating=2,
+            author_rating=2,
         )
 
         result = should_retry(state)
@@ -340,8 +340,8 @@ class TestShouldRetryLogic:
 
     def test_should_retry_acceptable_rating(self, sample_scenario):
         """Test should_retry routes to save when rating >= 3."""
-        state = TeacherState(
-            teacher_config=TeacherConfig(
+        state = AuthorState(
+            scenario_config=ScenarioConfig(
                 num_participants=3, activity_type="hiking", difficulty="med"
             ).model_dump(),
             scenario_draft=sample_scenario.model_dump(),
@@ -349,7 +349,7 @@ class TestShouldRetryLogic:
             class_id="abc123",
             retry_count=0,
             approval_status=None,
-            teacher_rating=4,
+            author_rating=4,
         )
 
         result = should_retry(state)
@@ -373,11 +373,11 @@ class TestTeacherReviewGraphFullCycle:
         mock_span = type("MockSpan", (), {"trace_id": "test-trace-123"})()
         with (
             patch(
-                "summit_sim.graphs.teacher.mlflow.get_current_active_span",
+                "summit_sim.graphs.author.mlflow.get_current_active_span",
                 return_value=mock_span,
             ),
             patch(
-                "summit_sim.graphs.teacher.mlflow.log_feedback",
+                "summit_sim.graphs.author.mlflow.log_feedback",
             ),
             patch(
                 "summit_sim.agents.generator.mlflow.get_current_active_span",
@@ -420,7 +420,7 @@ class TestTeacherReviewGraphFullCycle:
 
     @pytest.mark.asyncio
     async def test_full_happy_path_rating_5(
-        self, sample_teacher_config, sample_scenario
+        self, sample_scenario_config, sample_scenario
     ):
         """Test complete teacher review happy path with rating 5."""
 
@@ -428,16 +428,16 @@ class TestTeacherReviewGraphFullCycle:
             """Mock implementation that returns the sample scenario."""
             return sample_scenario
 
-        with patch("summit_sim.graphs.teacher.generate_scenario") as mock_generate:
+        with patch("summit_sim.graphs.author.generate_scenario") as mock_generate:
             mock_generate.side_effect = mock_generate_impl
 
-            with patch("summit_sim.graphs.teacher.interrupt") as mock_interrupt:
+            with patch("summit_sim.graphs.author.interrupt") as mock_interrupt:
                 mock_interrupt.return_value = {
                     "rating": 5,
                 }
 
-                initial_state = TeacherState(
-                    teacher_config=sample_teacher_config.model_dump(),
+                initial_state = AuthorState(
+                    scenario_config=sample_scenario_config.model_dump(),
                     scenario_draft=None,
                     scenario_id="",
                     class_id="",
@@ -445,7 +445,7 @@ class TestTeacherReviewGraphFullCycle:
                     approval_status=None,
                 )
 
-                graph = create_teacher_graph()
+                graph = create_author_graph()
                 config: Any = {"configurable": {"thread_id": "test-thread"}}
 
                 # Run to interrupt point
@@ -468,11 +468,11 @@ class TestTeacherReviewGraphFullCycle:
 
                 # Verify approval
                 assert final_result.get("approval_status") == "approved"
-                assert final_result.get("teacher_rating") == 5
+                assert final_result.get("author_rating") == 5
 
     @pytest.mark.asyncio
     async def test_retry_flow_rating_2_then_5(
-        self, sample_teacher_config, sample_scenario
+        self, sample_scenario_config, sample_scenario
     ):
         """Test retry flow: rating 2 triggers regeneration, then rating 5 succeeds."""
         call_count = 0
@@ -483,10 +483,10 @@ class TestTeacherReviewGraphFullCycle:
             call_count += 1
             return sample_scenario
 
-        with patch("summit_sim.graphs.teacher.generate_scenario") as mock_generate:
+        with patch("summit_sim.graphs.author.generate_scenario") as mock_generate:
             mock_generate.side_effect = mock_generate_impl
 
-            with patch("summit_sim.graphs.teacher.interrupt") as mock_interrupt:
+            with patch("summit_sim.graphs.author.interrupt") as mock_interrupt:
                 # First call returns rating 2, second call returns rating 5
                 mock_interrupt.side_effect = [
                     {
@@ -497,8 +497,8 @@ class TestTeacherReviewGraphFullCycle:
                     },
                 ]
 
-                initial_state = TeacherState(
-                    teacher_config=sample_teacher_config.model_dump(),
+                initial_state = AuthorState(
+                    scenario_config=sample_scenario_config.model_dump(),
                     scenario_draft=None,
                     scenario_id="",
                     class_id="",
@@ -506,7 +506,7 @@ class TestTeacherReviewGraphFullCycle:
                     approval_status=None,
                 )
 
-                graph = create_teacher_graph()
+                graph = create_author_graph()
                 config: Any = {"configurable": {"thread_id": "test-thread"}}
 
                 # First generation
@@ -538,11 +538,11 @@ class TestTeacherReviewGraphFullCycle:
                 )
 
                 assert final_result.get("approval_status") == "approved"
-                assert final_result.get("teacher_rating") == 5
+                assert final_result.get("author_rating") == 5
 
     def test_graph_creation(self):
         """Test that graph can be created successfully."""
-        graph = create_teacher_graph()
+        graph = create_author_graph()
         assert graph is not None
 
 
@@ -550,27 +550,27 @@ class TestGenerateScenario:
     """Tests for the generate_scenario UI function."""
 
     @pytest.mark.asyncio
-    async def test_generate_scenario_success(self, sample_teacher_config):
+    async def test_generate_scenario_success(self, sample_scenario_config):
         """Test successful scenario generation flow."""
         mock_graph = AsyncMock()
         mock_message = AsyncMock()
 
         with (
             patch.object(
-                teacher_ui.cl.user_session,
+                author_ui.cl.user_session,
                 "get",
                 side_effect=_session_get_participants,
             ),
-            patch.object(teacher_ui.cl.user_session, "set"),
-            patch.object(teacher_ui.cl, "Message", return_value=mock_message),
+            patch.object(author_ui.cl.user_session, "set"),
+            patch.object(author_ui.cl, "Message", return_value=mock_message),
             patch.object(
-                teacher_ui, "create_teacher_graph", return_value=mock_graph
+                author_ui, "create_author_graph", return_value=mock_graph
             ) as mock_create_graph,
-            patch.object(teacher_ui, "show_review_screen", new_callable=AsyncMock),
+            patch.object(author_ui, "show_review_screen", new_callable=AsyncMock),
         ):
             mock_graph.ainvoke = AsyncMock(
                 return_value={
-                    "teacher_config": sample_teacher_config.model_dump(),
+                    "scenario_config": sample_scenario_config.model_dump(),
                     "scenario_draft": {
                         "title": "Test",
                         "setting": "Mountain",
@@ -586,7 +586,7 @@ class TestGenerateScenario:
                 }
             )
 
-            await teacher_ui.generate_scenario()
+            await author_ui.generate_scenario()
 
             mock_create_graph.assert_called_once()
 
@@ -597,11 +597,11 @@ class TestGenerateScenario:
         mock_message = AsyncMock()
 
         with (
-            patch.object(teacher_ui.cl.user_session, "get", return_value=None),
-            patch.object(teacher_ui.cl.user_session, "set"),
-            patch.object(teacher_ui.cl, "Message", return_value=mock_message),
-            patch.object(teacher_ui, "create_teacher_graph", return_value=mock_graph),
-            patch.object(teacher_ui, "show_review_screen", new_callable=AsyncMock),
+            patch.object(author_ui.cl.user_session, "get", return_value=None),
+            patch.object(author_ui.cl.user_session, "set"),
+            patch.object(author_ui.cl, "Message", return_value=mock_message),
+            patch.object(author_ui, "create_author_graph", return_value=mock_graph),
+            patch.object(author_ui, "show_review_screen", new_callable=AsyncMock),
         ):
             mock_graph.ainvoke = AsyncMock(
                 return_value={
@@ -620,7 +620,7 @@ class TestGenerateScenario:
                 }
             )
 
-            await teacher_ui.generate_scenario()
+            await author_ui.generate_scenario()
 
     @pytest.mark.asyncio
     async def test_generate_scenario_failure_no_draft(self):
@@ -630,17 +630,17 @@ class TestGenerateScenario:
 
         with (
             patch.object(
-                teacher_ui.cl.user_session,
+                author_ui.cl.user_session,
                 "get",
                 side_effect=_session_get_participants,
             ),
-            patch.object(teacher_ui.cl.user_session, "set"),
-            patch.object(teacher_ui.cl, "Message", return_value=mock_message),
-            patch.object(teacher_ui, "create_teacher_graph", return_value=mock_graph),
+            patch.object(author_ui.cl.user_session, "set"),
+            patch.object(author_ui.cl, "Message", return_value=mock_message),
+            patch.object(author_ui, "create_author_graph", return_value=mock_graph),
         ):
             mock_graph.ainvoke = AsyncMock(return_value={})
 
-            await teacher_ui.generate_scenario()
+            await author_ui.generate_scenario()
 
     @pytest.mark.asyncio
     async def test_generate_scenario_exception(self):
@@ -650,17 +650,17 @@ class TestGenerateScenario:
 
         with (
             patch.object(
-                teacher_ui.cl.user_session,
+                author_ui.cl.user_session,
                 "get",
                 side_effect=_session_get_participants,
             ),
-            patch.object(teacher_ui.cl.user_session, "set"),
-            patch.object(teacher_ui.cl, "Message", return_value=mock_message),
-            patch.object(teacher_ui, "create_teacher_graph", return_value=mock_graph),
+            patch.object(author_ui.cl.user_session, "set"),
+            patch.object(author_ui.cl, "Message", return_value=mock_message),
+            patch.object(author_ui, "create_author_graph", return_value=mock_graph),
         ):
             mock_graph.ainvoke = AsyncMock(side_effect=Exception("API Error"))
 
-            await teacher_ui.generate_scenario()
+            await author_ui.generate_scenario()
 
 
 class TestShowReviewScreen:
@@ -669,8 +669,8 @@ class TestShowReviewScreen:
     @pytest.mark.asyncio
     async def test_show_review_screen_success(self, sample_scenario):
         """Test successful review screen display."""
-        state = TeacherState(
-            teacher_config=TeacherConfig(
+        state = AuthorState(
+            scenario_config=ScenarioConfig(
                 num_participants=3, activity_type="hiking", difficulty="med"
             ).model_dump(),
             scenario_draft=sample_scenario.model_dump(),
@@ -684,15 +684,15 @@ class TestShowReviewScreen:
         mock_message = AsyncMock()
 
         with (
-            patch.object(teacher_ui.cl, "Message", return_value=mock_message),
+            patch.object(author_ui.cl, "Message", return_value=mock_message),
             patch.object(
-                teacher_ui.cl,
+                author_ui.cl,
                 "AskActionMessage",
                 return_value=AsyncMock(send=AsyncMock(return_value=mock_response)),
             ) as mock_ask,
-            patch.object(teacher_ui, "handle_rating", new_callable=AsyncMock),
+            patch.object(author_ui, "handle_rating", new_callable=AsyncMock),
         ):
-            await teacher_ui.show_review_screen(state)
+            await author_ui.show_review_screen(state)
 
             mock_message.send.assert_called()
             mock_ask.assert_called()
@@ -700,8 +700,8 @@ class TestShowReviewScreen:
     @pytest.mark.asyncio
     async def test_show_review_screen_with_retry(self, sample_scenario):
         """Test review screen shows retry attempt text."""
-        state = TeacherState(
-            teacher_config=TeacherConfig(
+        state = AuthorState(
+            scenario_config=ScenarioConfig(
                 num_participants=3, activity_type="hiking", difficulty="med"
             ).model_dump(),
             scenario_draft=sample_scenario.model_dump(),
@@ -713,22 +713,22 @@ class TestShowReviewScreen:
         mock_message = AsyncMock()
 
         with (
-            patch.object(teacher_ui.cl, "Message", return_value=mock_message),
+            patch.object(author_ui.cl, "Message", return_value=mock_message),
             patch.object(
-                teacher_ui.cl,
+                author_ui.cl,
                 "AskActionMessage",
                 return_value=AsyncMock(send=AsyncMock(return_value=None)),
             ),
         ):
-            await teacher_ui.show_review_screen(state)
+            await author_ui.show_review_screen(state)
 
             mock_message.send.assert_called()
 
     @pytest.mark.asyncio
     async def test_show_review_screen_no_scenario(self):
         """Test review screen handles no scenario."""
-        state = TeacherState(
-            teacher_config=TeacherConfig(
+        state = AuthorState(
+            scenario_config=ScenarioConfig(
                 num_participants=3, activity_type="hiking", difficulty="med"
             ).model_dump(),
             scenario_draft=None,
@@ -739,16 +739,16 @@ class TestShowReviewScreen:
         )
         mock_message = AsyncMock()
 
-        with patch.object(teacher_ui.cl, "Message", return_value=mock_message):
-            await teacher_ui.show_review_screen(state)
+        with patch.object(author_ui.cl, "Message", return_value=mock_message):
+            await author_ui.show_review_screen(state)
 
             mock_message.send.assert_called()
 
     @pytest.mark.asyncio
     async def test_show_review_screen_no_rating(self, sample_scenario):
         """Test review screen handles no rating response."""
-        state = TeacherState(
-            teacher_config=TeacherConfig(
+        state = AuthorState(
+            scenario_config=ScenarioConfig(
                 num_participants=3, activity_type="hiking", difficulty="med"
             ).model_dump(),
             scenario_draft=sample_scenario.model_dump(),
@@ -760,15 +760,15 @@ class TestShowReviewScreen:
         mock_message = AsyncMock()
 
         with (
-            patch.object(teacher_ui.cl, "Message", return_value=mock_message),
+            patch.object(author_ui.cl, "Message", return_value=mock_message),
             patch.object(
-                teacher_ui.cl,
+                author_ui.cl,
                 "AskActionMessage",
                 return_value=AsyncMock(send=AsyncMock(return_value={})),
             ),
-            patch.object(teacher_ui, "handle_rating", new_callable=AsyncMock),
+            patch.object(author_ui, "handle_rating", new_callable=AsyncMock),
         ):
-            await teacher_ui.show_review_screen(state)
+            await author_ui.show_review_screen(state)
 
 
 class TestHandleRating:
@@ -777,8 +777,8 @@ class TestHandleRating:
     @pytest.mark.asyncio
     async def test_handle_rating_approved(self, sample_scenario):
         """Test rating >= 3 leads to completion."""
-        state = TeacherState(
-            teacher_config=TeacherConfig(
+        state = AuthorState(
+            scenario_config=ScenarioConfig(
                 num_participants=3, activity_type="hiking", difficulty="med"
             ).model_dump(),
             scenario_draft=sample_scenario.model_dump(),
@@ -786,38 +786,38 @@ class TestHandleRating:
             class_id="abc123",
             retry_count=0,
             approval_status=None,
-            teacher_rating=4,
+            author_rating=4,
         )
 
         mock_graph = AsyncMock()
 
         with (
             patch.object(
-                teacher_ui.cl.user_session,
+                author_ui.cl.user_session,
                 "get",
                 side_effect=lambda k: _session_get_for_rating(k, mock_graph),
             ),
-            patch.object(teacher_ui, "show_completion", new_callable=AsyncMock),
+            patch.object(author_ui, "show_completion", new_callable=AsyncMock),
         ):
             mock_graph.ainvoke = AsyncMock(
                 return_value={
-                    "teacher_config": state.teacher_config,
+                    "scenario_config": state.scenario_config,
                     "scenario_draft": sample_scenario.model_dump(),
                     "scenario_id": "scn-test123",
                     "class_id": "abc123",
                     "retry_count": 0,
                     "approval_status": "approved",
-                    "teacher_rating": 4,
+                    "author_rating": 4,
                 }
             )
 
-            await teacher_ui.handle_rating(state, 4)
+            await author_ui.handle_rating(state, 4)
 
     @pytest.mark.asyncio
     async def test_handle_rating_retry(self, sample_scenario):
         """Test rating < 3 triggers regeneration."""
-        state = TeacherState(
-            teacher_config=TeacherConfig(
+        state = AuthorState(
+            scenario_config=ScenarioConfig(
                 num_participants=3, activity_type="hiking", difficulty="med"
             ).model_dump(),
             scenario_draft=sample_scenario.model_dump(),
@@ -825,7 +825,7 @@ class TestHandleRating:
             class_id="abc123",
             retry_count=0,
             approval_status=None,
-            teacher_rating=2,
+            author_rating=2,
         )
 
         mock_graph = AsyncMock()
@@ -833,26 +833,26 @@ class TestHandleRating:
 
         with (
             patch.object(
-                teacher_ui.cl.user_session,
+                author_ui.cl.user_session,
                 "get",
                 side_effect=lambda k: _session_get_for_rating(k, mock_graph),
             ),
-            patch.object(teacher_ui.cl, "Message", return_value=mock_message),
-            patch.object(teacher_ui, "show_review_screen", new_callable=AsyncMock),
+            patch.object(author_ui.cl, "Message", return_value=mock_message),
+            patch.object(author_ui, "show_review_screen", new_callable=AsyncMock),
         ):
             mock_graph.ainvoke = AsyncMock(
                 side_effect=[
                     {
-                        "teacher_config": state.teacher_config,
+                        "scenario_config": state.scenario_config,
                         "scenario_draft": sample_scenario.model_dump(),
                         "scenario_id": "scn-test123",
                         "class_id": "abc123",
                         "retry_count": 1,
                         "approval_status": "rejected",
-                        "teacher_rating": 2,
+                        "author_rating": 2,
                     },
                     {
-                        "teacher_config": state.teacher_config,
+                        "scenario_config": state.scenario_config,
                         "scenario_draft": sample_scenario.model_dump(),
                         "scenario_id": "scn-test123",
                         "class_id": "abc123",
@@ -861,15 +861,15 @@ class TestHandleRating:
                 ]
             )
 
-            await teacher_ui.handle_rating(state, 2)
+            await author_ui.handle_rating(state, 2)
 
             mock_message.send.assert_called()
 
     @pytest.mark.asyncio
     async def test_handle_rating_max_retries(self, sample_scenario):
         """Test rating < 3 at max retries proceeds anyway."""
-        state = TeacherState(
-            teacher_config=TeacherConfig(
+        state = AuthorState(
+            scenario_config=ScenarioConfig(
                 num_participants=3, activity_type="hiking", difficulty="med"
             ).model_dump(),
             scenario_draft=sample_scenario.model_dump(),
@@ -877,7 +877,7 @@ class TestHandleRating:
             class_id="abc123",
             retry_count=2,
             approval_status=None,
-            teacher_rating=2,
+            author_rating=2,
         )
 
         mock_graph = AsyncMock()
@@ -885,34 +885,34 @@ class TestHandleRating:
 
         with (
             patch.object(
-                teacher_ui.cl.user_session,
+                author_ui.cl.user_session,
                 "get",
                 side_effect=lambda k: _session_get_for_rating(k, mock_graph),
             ),
-            patch.object(teacher_ui.cl, "Message", return_value=mock_message),
-            patch.object(teacher_ui, "show_completion", new_callable=AsyncMock),
+            patch.object(author_ui.cl, "Message", return_value=mock_message),
+            patch.object(author_ui, "show_completion", new_callable=AsyncMock),
         ):
             mock_graph.ainvoke = AsyncMock(
                 return_value={
-                    "teacher_config": state.teacher_config,
+                    "scenario_config": state.scenario_config,
                     "scenario_draft": sample_scenario.model_dump(),
                     "scenario_id": "scn-test123",
                     "class_id": "abc123",
                     "retry_count": 3,
                     "approval_status": "rejected",
-                    "teacher_rating": 2,
+                    "author_rating": 2,
                 }
             )
 
-            await teacher_ui.handle_rating(state, 2)
+            await author_ui.handle_rating(state, 2)
 
             mock_message.send.assert_called()
 
     @pytest.mark.asyncio
     async def test_handle_rating_no_graph(self, sample_scenario):
         """Test handling when graph is missing from session."""
-        state = TeacherState(
-            teacher_config=TeacherConfig(
+        state = AuthorState(
+            scenario_config=ScenarioConfig(
                 num_participants=3, activity_type="hiking", difficulty="med"
             ).model_dump(),
             scenario_draft=sample_scenario.model_dump(),
@@ -925,18 +925,18 @@ class TestHandleRating:
         mock_message = AsyncMock()
 
         with (
-            patch.object(teacher_ui.cl.user_session, "get", return_value=None),
-            patch.object(teacher_ui.cl, "Message", return_value=mock_message),
+            patch.object(author_ui.cl.user_session, "get", return_value=None),
+            patch.object(author_ui.cl, "Message", return_value=mock_message),
         ):
-            await teacher_ui.handle_rating(state, 4)
+            await author_ui.handle_rating(state, 4)
 
             mock_message.send.assert_called()
 
     @pytest.mark.asyncio
     async def test_handle_rating_exception(self, sample_scenario):
         """Test handling exceptions during rating."""
-        state = TeacherState(
-            teacher_config=TeacherConfig(
+        state = AuthorState(
+            scenario_config=ScenarioConfig(
                 num_participants=3, activity_type="hiking", difficulty="med"
             ).model_dump(),
             scenario_draft=sample_scenario.model_dump(),
@@ -951,16 +951,16 @@ class TestHandleRating:
 
         with (
             patch.object(
-                teacher_ui.cl.user_session,
+                author_ui.cl.user_session,
                 "get",
                 side_effect=lambda k: _session_get_for_rating(k, mock_graph),
             ),
-            patch.object(teacher_ui.cl, "Message", return_value=mock_message),
-            patch.object(teacher_ui, "show_review_screen", new_callable=AsyncMock),
+            patch.object(author_ui.cl, "Message", return_value=mock_message),
+            patch.object(author_ui, "show_review_screen", new_callable=AsyncMock),
         ):
             mock_graph.ainvoke = AsyncMock(side_effect=Exception("API Error"))
 
-            await teacher_ui.handle_rating(state, 4)
+            await author_ui.handle_rating(state, 4)
 
             mock_message.send.assert_called()
 
@@ -971,8 +971,8 @@ class TestShowCompletion:
     @pytest.mark.asyncio
     async def test_show_completion(self):
         """Test completion screen displays shareable link."""
-        state = TeacherState(
-            teacher_config=TeacherConfig(
+        state = AuthorState(
+            scenario_config=ScenarioConfig(
                 num_participants=3, activity_type="hiking", difficulty="med"
             ).model_dump(),
             scenario_draft=None,
@@ -984,10 +984,10 @@ class TestShowCompletion:
         mock_message = AsyncMock()
 
         with (
-            patch.object(teacher_ui.settings, "base_url", "https://example.com"),
-            patch.object(teacher_ui.cl, "Message", return_value=mock_message),
+            patch.object(author_ui.settings, "base_url", "https://example.com"),
+            patch.object(author_ui.cl, "Message", return_value=mock_message),
         ):
-            await teacher_ui.show_completion(state)
+            await author_ui.show_completion(state)
 
             mock_message.send.assert_called()
 
@@ -1009,21 +1009,21 @@ class TestAskScenarioConfig:
 
         with (
             patch.object(
-                teacher_ui.cl,
+                author_ui.cl,
                 "CustomElement",
                 return_value=mock_element,
             ),
             patch.object(
-                teacher_ui.cl,
+                author_ui.cl,
                 "AskElementMessage",
                 return_value=AsyncMock(send=AsyncMock(return_value=mock_response)),
             ) as mock_ask,
-            patch.object(teacher_ui.cl.user_session, "set") as mock_set,
+            patch.object(author_ui.cl.user_session, "set") as mock_set,
             patch.object(
-                teacher_ui, "generate_scenario", new_callable=AsyncMock
+                author_ui, "generate_scenario", new_callable=AsyncMock
             ) as mock_generate,
         ):
-            await teacher_ui.ask_scenario_config()
+            await author_ui.ask_scenario_config()
 
             # Verify the form was displayed
             mock_ask.assert_called_once()
@@ -1052,19 +1052,19 @@ class TestAskScenarioConfig:
 
         with (
             patch.object(
-                teacher_ui.cl,
+                author_ui.cl,
                 "CustomElement",
                 return_value=mock_element,
             ),
             patch.object(
-                teacher_ui.cl,
+                author_ui.cl,
                 "AskElementMessage",
                 return_value=AsyncMock(send=AsyncMock(return_value=mock_response)),
             ),
-            patch.object(teacher_ui.cl.user_session, "set") as mock_set,
-            patch.object(teacher_ui, "generate_scenario", new_callable=AsyncMock),
+            patch.object(author_ui.cl.user_session, "set") as mock_set,
+            patch.object(author_ui, "generate_scenario", new_callable=AsyncMock),
         ):
-            await teacher_ui.ask_scenario_config()
+            await author_ui.ask_scenario_config()
 
             # Verify 6+ was converted to 6
             mock_set.assert_any_call("num_participants", 6)
@@ -1080,21 +1080,21 @@ class TestAskScenarioConfig:
 
         with (
             patch.object(
-                teacher_ui.cl,
+                author_ui.cl,
                 "CustomElement",
                 return_value=mock_element,
             ),
             patch.object(
-                teacher_ui.cl,
+                author_ui.cl,
                 "AskElementMessage",
                 return_value=AsyncMock(send=AsyncMock(return_value=mock_response)),
             ),
-            patch.object(teacher_ui.cl.user_session, "set") as mock_set,
+            patch.object(author_ui.cl.user_session, "set") as mock_set,
             patch.object(
-                teacher_ui, "generate_scenario", new_callable=AsyncMock
+                author_ui, "generate_scenario", new_callable=AsyncMock
             ) as mock_generate,
         ):
-            await teacher_ui.ask_scenario_config()
+            await author_ui.ask_scenario_config()
 
             # Verify no session values were set
             mock_set.assert_not_called()
@@ -1108,21 +1108,21 @@ class TestAskScenarioConfig:
 
         with (
             patch.object(
-                teacher_ui.cl,
+                author_ui.cl,
                 "CustomElement",
                 return_value=mock_element,
             ),
             patch.object(
-                teacher_ui.cl,
+                author_ui.cl,
                 "AskElementMessage",
                 return_value=AsyncMock(send=AsyncMock(return_value=None)),
             ),
-            patch.object(teacher_ui.cl.user_session, "set") as mock_set,
+            patch.object(author_ui.cl.user_session, "set") as mock_set,
             patch.object(
-                teacher_ui, "generate_scenario", new_callable=AsyncMock
+                author_ui, "generate_scenario", new_callable=AsyncMock
             ) as mock_generate,
         ):
-            await teacher_ui.ask_scenario_config()
+            await author_ui.ask_scenario_config()
 
             # Verify no session values were set
             mock_set.assert_not_called()

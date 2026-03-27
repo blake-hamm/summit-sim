@@ -1,13 +1,13 @@
-"""Student flow handlers for the Chainlit app."""
+"""Simulation flow handlers for the Chainlit app."""
 
 from typing import TYPE_CHECKING
 
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import Command
 
-from summit_sim.graphs.student import (
-    StudentState,
-    create_student_graph,
+from summit_sim.graphs.simulation import (
+    SimulationState,
+    create_simulation_graph,
 )
 from summit_sim.graphs.utils import scenario_store
 from summit_sim.schemas import DebriefReport, ScenarioDraft
@@ -22,8 +22,8 @@ else:
     from langchain_core.runnables import RunnableConfig
 
 
-async def start_student_session() -> None:
-    """Start student session by loading scenario from store."""
+async def start_simulation_session() -> None:
+    """Start player session by loading scenario from store."""
     scenario_id = cl.user_session.get("scenario_id")
 
     result = scenario_store.get(("scenarios",), scenario_id)
@@ -69,7 +69,7 @@ async def show_scenario_intro(scenario: ScenarioDraft) -> None:
 
 
 async def run_simulation() -> None:
-    """Run the simulation graph with student interactions."""
+    """Run the simulation graph with player interactions."""
     scenario = cl.user_session.get("scenario")
     scenario_id = cl.user_session.get("scenario_id") or ""
     class_id = cl.user_session.get("class_id")
@@ -80,7 +80,7 @@ async def run_simulation() -> None:
 
     assert isinstance(scenario, ScenarioDraft)
 
-    graph = create_student_graph()
+    graph = create_simulation_graph()
     cl.user_session.set("simulation_graph", graph)
 
     thread_id = cl.user_session.get("id")
@@ -91,7 +91,7 @@ async def run_simulation() -> None:
         await cl.Message(content="❌ Invalid scenario: no starting turn found.").send()
         return
 
-    initial_state = StudentState(
+    initial_state = SimulationState(
         scenario_draft=scenario.model_dump(),
         current_turn_id=starting_turn.turn_id,
         transcript=[],
@@ -111,13 +111,13 @@ async def run_simulation() -> None:
 
 
 async def handle_simulation_loop(
-    state: StudentState | dict,
+    state: SimulationState | dict,
     graph: CompiledStateGraph,
     config: RunnableConfig,
 ) -> None:
-    """Handle simulation interrupts and student choices."""
+    """Handle simulation interrupts and player choices."""
     if isinstance(state, dict):
-        state = StudentState.from_graph_result(state)
+        state = SimulationState.from_graph_result(state)
 
     while True:
         if state.simulation_result:
@@ -190,10 +190,10 @@ async def handle_simulation_loop(
         loading_msg.content = "✅ Choice recorded"
         await loading_msg.update()
 
-        state = StudentState.from_graph_result(result)
+        state = SimulationState.from_graph_result(result)
 
 
-async def show_debrief(state: StudentState) -> None:
+async def show_debrief(state: SimulationState) -> None:
     """Display the final debrief report."""
     if state.debrief_report is None:
         await cl.Message(content="❌ Error: No debrief available.").send()

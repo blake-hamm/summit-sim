@@ -4,34 +4,34 @@ import pytest
 
 from summit_sim.schemas import (
     ChoiceOption,
+    ScenarioConfig,
     ScenarioDraft,
     ScenarioTurn,
     SimulationResult,
-    TeacherConfig,
 )
 
 
-class TestTeacherConfig:
-    """Tests for TeacherConfig schema."""
+class TestScenarioConfig:
+    """Tests for ScenarioConfig schema."""
 
-    def test_teacher_config_creation(self):
-        """Test creating minimal teacher configuration."""
-        config = TeacherConfig(
+    def test_scenario_config_creation(self):
+        """Test creating minimal scenario configuration."""
+        config = ScenarioConfig(
             num_participants=4, activity_type="hiking", difficulty="med"
         )
         assert config.num_participants == 4
         assert config.activity_type == "hiking"
         assert config.difficulty == "med"
 
-    def test_teacher_config_validation_min(self):
+    def test_scenario_config_validation_min(self):
         """Test minimum participant validation."""
         with pytest.raises(ValueError, match="greater than or equal to 1"):
-            TeacherConfig(num_participants=0, activity_type="skiing", difficulty="low")
+            ScenarioConfig(num_participants=0, activity_type="skiing", difficulty="low")
 
-    def test_teacher_config_validation_max(self):
+    def test_scenario_config_validation_max(self):
         """Test maximum participant validation."""
         with pytest.raises(ValueError, match="less than or equal to 20"):
-            TeacherConfig(
+            ScenarioConfig(
                 num_participants=21, activity_type="canyoneering", difficulty="high"
             )
 

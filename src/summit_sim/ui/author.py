@@ -1,21 +1,21 @@
-"""Teacher flow handlers for the Chainlit app."""
+"""Author flow handlers for the Chainlit app."""
 
 from typing import TYPE_CHECKING
 
 from langgraph.types import Command
 
-from summit_sim.graphs.teacher import (
+from summit_sim.graphs.author import (
     ACCEPTABLE_RATING_THRESHOLD,
     MAX_RETRY_ATTEMPTS,
-    TeacherState,
-    create_teacher_graph,
+    AuthorState,
+    create_author_graph,
 )
-from summit_sim.schemas import ScenarioDraft, TeacherConfig
+from summit_sim.schemas import ScenarioConfig, ScenarioDraft
 from summit_sim.settings import settings
 from summit_sim.ui.utils import (
+    get_author_form_fields,
     get_rating_actions,
     get_rating_content,
-    get_teacher_form_fields,
 )
 
 if TYPE_CHECKING:
@@ -30,7 +30,7 @@ async def ask_scenario_config() -> None:
     element = cl.CustomElement(
         name="ScenarioConfigForm",
         display="inline",
-        props={"fields": get_teacher_form_fields()},
+        props={"fields": get_author_form_fields()},
     )
 
     res = await cl.AskElementMessage(
@@ -68,24 +68,24 @@ async def generate_scenario() -> None:
     )
     difficulty = str(difficulty_val) if difficulty_val is not None else "med"
 
-    config = TeacherConfig(
+    config = ScenarioConfig(
         num_participants=num_participants,
         activity_type=activity_type,  # type: ignore[arg-type]
         difficulty=difficulty,  # type: ignore[arg-type]
     )
 
-    cl.user_session.set("teacher_config", config)
+    cl.user_session.set("scenario_config", config)
 
     loading_msg = await cl.Message(content="⏳ *Generating your scenario...*").send()
 
-    graph = create_teacher_graph()
+    graph = create_author_graph()
     cl.user_session.set("graph", graph)
 
     thread_id = cl.user_session.get("id")
     config_dict: RunnableConfig = {"configurable": {"thread_id": thread_id}}
 
-    initial_state: TeacherState = TeacherState(
-        teacher_config=config.model_dump(),
+    initial_state: AuthorState = AuthorState(
+        scenario_config=config.model_dump(),
         scenario_draft=None,
         scenario_id="",
         class_id="",
@@ -100,7 +100,7 @@ async def generate_scenario() -> None:
         )
 
         if result.get("scenario_draft"):
-            state = TeacherState.from_graph_result(result)
+            state = AuthorState.from_graph_result(result)
             loading_msg.content = "✅ *Scenario ready for review!*"
             await loading_msg.update()
             await show_review_screen(state)
@@ -116,7 +116,7 @@ async def generate_scenario() -> None:
         await loading_msg.update()
 
 
-async def show_review_screen(state: TeacherState) -> None:
+async def show_review_screen(state: AuthorState) -> None:
     """Display the scenario review screen with 1-5 rating buttons."""
     scenario_dict = state.scenario_draft
     retry_count = state.retry_count
@@ -157,7 +157,7 @@ async def show_review_screen(state: TeacherState) -> None:
             "\n".join(scene_lines) if scene_lines else "   *No special conditions*"
         )
 
-        # Format hidden state (teacher-only view)
+        # Format hidden state (author-only view)
         hidden_lines = []
         if turn.hidden_state:
             for key, value in turn.hidden_state.items():
@@ -170,7 +170,7 @@ async def show_review_screen(state: TeacherState) -> None:
             f"{turn.narrative_text}\n\n"
             f"👁️ **Visible Scene Conditions:**\n"
             f"{scene_display}\n\n"
-            f"🕵️ **Hidden State (Teacher View):**\n"
+            f"🕵️ **Hidden State (Author View):**\n"
             f"{hidden_display}\n\n"
             f"📋 **Available Choices:**\n" + "\n".join(choices_lines)
         )
@@ -207,8 +207,8 @@ async def show_review_screen(state: TeacherState) -> None:
             await handle_rating(state, int(rating))
 
 
-async def handle_rating(state: TeacherState, rating: int) -> None:
-    """Handle teacher rating and manage retry/approval flow."""
+async def handle_rating(state: AuthorState, rating: int) -> None:
+    """Handle author rating and manage retry/approval flow."""
     graph = cl.user_session.get("graph")
     if graph is None:
         await cl.Message(content="❌ Error: Session expired. Please start over.").send()
@@ -223,7 +223,7 @@ async def handle_rating(state: TeacherState, rating: int) -> None:
             config=config_dict,
         )
 
-        final_state = TeacherState.from_graph_result(result)
+        final_state = AuthorState.from_graph_result(result)
         new_retry_count = final_state.retry_count or 0
 
         if (
@@ -243,7 +243,7 @@ async def handle_rating(state: TeacherState, rating: int) -> None:
             )
 
             if result.get("scenario_draft"):
-                new_state = TeacherState.from_graph_result(result)
+                new_state = AuthorState.from_graph_result(result)
                 await show_review_screen(new_state)
             else:
                 await cl.Message(
@@ -270,7 +270,7 @@ async def handle_rating(state: TeacherState, rating: int) -> None:
         await show_review_screen(state)
 
 
-async def show_completion(state: TeacherState) -> None:
+async def show_completion(state: AuthorState) -> None:
     """Display completion screen with shareable link."""
     scenario_id = state.scenario_id or ""
     shareable_url = f"{settings.base_url}?scenario_id={scenario_id}"
@@ -279,7 +279,7 @@ async def show_completion(state: TeacherState) -> None:
         content=(
             f"#### ✅ Scenario Approved!\n\n"
             f"**Shareable URL:**\n{shareable_url}\n\n"
-            f"Students can join by visiting the URL above. "
+            f"Players can join by visiting the URL above. "
             f"The simulation is ready to run!"
         ),
     ).send()

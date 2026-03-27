@@ -16,8 +16,8 @@ def generate_class_id() -> str:
     return uuid.uuid4().hex[:6]
 
 
-class TeacherConfig(BaseModel):
-    """Minimal configuration provided by the teacher to generate a scenario.
+class ScenarioConfig(BaseModel):
+    """Minimal configuration provided by the author to generate a scenario.
 
     This is the starting point - the AI expands these 3 parameters
     into a full wilderness rescue scenario with multiple turns.
