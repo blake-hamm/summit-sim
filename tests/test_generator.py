@@ -7,7 +7,7 @@ import pytest
 
 from summit_sim.agents import config as agent_config
 from summit_sim.agents.generator import generate_scenario
-from summit_sim.schemas import ChoiceOption, ScenarioDraft, ScenarioTurn, TeacherConfig
+from summit_sim.schemas import ChoiceOption, ScenarioConfig, ScenarioDraft, ScenarioTurn
 
 
 class TestGeneratorAgent:
@@ -56,7 +56,7 @@ class TestGeneratorAgent:
     @pytest.mark.asyncio
     async def test_generate_scenario(self):
         """Test scenario generation from teacher config."""
-        teacher_config = TeacherConfig(
+        teacher_config = ScenarioConfig(
             num_participants=4, activity_type="hiking", difficulty="med"
         )
 
@@ -159,7 +159,7 @@ class TestGeneratorAgent:
         self, activity: Literal["canyoneering", "skiing", "hiking"]
     ):
         """Test scenario generation for different activity types."""
-        teacher_config = TeacherConfig(
+        teacher_config = ScenarioConfig(
             num_participants=3, activity_type=activity, difficulty="low"
         )
 
@@ -261,7 +261,7 @@ class TestGeneratorAgent:
         self, difficulty: Literal["low", "med", "high"]
     ):
         """Test scenario generation for different difficulty levels."""
-        teacher_config = TeacherConfig(
+        teacher_config = ScenarioConfig(
             num_participants=5, activity_type="hiking", difficulty=difficulty
         )
 

@@ -1,8 +1,8 @@
-"""LangGraph workflow for teacher orchestration.
+"""LangGraph workflow for author orchestration.
 
 This module implements a linear LangGraph workflow that:
-1. Initializes a teacher session with generated IDs
-2. Generates a scenario from teacher configuration
+1. Initializes an author session with generated IDs
+2. Generates a scenario from author configuration
 3. Uses interrupt() for human-in-the-loop review and approval
 4. Completes with approval status for sharing
 """
@@ -23,8 +23,8 @@ from mlflow.entities import AssessmentSource, AssessmentSourceType, SpanType
 from summit_sim.agents.generator import generate_scenario
 from summit_sim.graphs.utils import scenario_store
 from summit_sim.schemas import (
+    ScenarioConfig,
     ScenarioDraft,
-    TeacherConfig,
     generate_class_id,
     generate_scenario_id,
 )
@@ -40,39 +40,39 @@ if TYPE_CHECKING:
 
 
 @dataclass
-class TeacherState:
-    """LangGraph state for teacher workflow.
+class AuthorState:
+    """LangGraph state for author workflow.
 
-    Maintains all state needed for the teacher graph,
-    including the teacher configuration, generated scenario draft,
+    Maintains all state needed for the author graph,
+    including the scenario configuration, generated scenario draft,
     and review metadata.
     """
 
-    teacher_config: dict
+    scenario_config: dict
     scenario_draft: dict | None = None
     scenario_id: str = ""
     class_id: str = ""
     retry_count: int = 0
     approval_status: str | None = None
     current_trace_id: str | None = None
-    teacher_rating: int | None = None
+    author_rating: int | None = None
 
     @classmethod
-    def from_graph_result(cls, result: dict[str, Any]) -> "TeacherState":
+    def from_graph_result(cls, result: dict[str, Any]) -> "AuthorState":
         """Create state from LangGraph result, filtering extra fields."""
         valid_fields = {f.name for f in fields(cls)}
         filtered = {k: v for k, v in result.items() if k in valid_fields}
         return cls(**filtered)
 
 
-def initialize_teacher(state: TeacherState) -> TeacherState:
-    """Initialize teacher session with generated IDs.
+def initialize_author(state: AuthorState) -> AuthorState:
+    """Initialize author session with generated IDs.
 
     Generates scenario_id and class_id, initializes retry_count to 0,
     and creates empty feedback_history.
     """
-    return TeacherState(
-        teacher_config=state.teacher_config,
+    return AuthorState(
+        scenario_config=state.scenario_config,
         scenario_id=generate_scenario_id(),
         class_id=generate_class_id(),
         retry_count=0,
@@ -80,20 +80,20 @@ def initialize_teacher(state: TeacherState) -> TeacherState:
 
 
 @mlflow.trace(span_type=SpanType.AGENT)
-async def generate_scenario_node(state: TeacherState, config: RunnableConfig) -> dict:
-    """Generate scenario from teacher configuration.
+async def generate_scenario_node(state: AuthorState, config: RunnableConfig) -> dict:
+    """Generate scenario from author configuration.
 
     Calls the scenario generator agent to create a complete scenario
-    based on the teacher's configuration parameters.
+    based on the author's configuration parameters.
     On retry, increments retry_count.
     """
-    teacher_config = TeacherConfig.model_validate(state.teacher_config)
+    scenario_config = ScenarioConfig.model_validate(state.scenario_config)
 
-    is_retry = state.teacher_rating is not None
+    is_retry = state.author_rating is not None
     retry_count = state.retry_count + 1 if is_retry else 0
 
     # First generation - let MLflow create a new trace
-    scenario = await generate_scenario(teacher_config)
+    scenario = await generate_scenario(scenario_config)
     active_span = mlflow.get_current_active_span()
     current_trace_id = active_span.trace_id if active_span else None
 
@@ -112,11 +112,11 @@ async def generate_scenario_node(state: TeacherState, config: RunnableConfig) ->
     }
 
 
-def present_for_teacher(state: TeacherState) -> dict:
-    """Present scenario for teacher review and capture rating.
+def present_for_author(state: AuthorState) -> dict:
+    """Present scenario for author review and capture rating.
 
     Uses LangGraph's interrupt() for human-in-the-loop interaction.
-    Displays the generated scenario and captures teacher rating (1-5).
+    Displays the generated scenario and captures author rating (1-5).
     Automatically retries if rating < 3 (up to 3 attempts).
     """
     scenario = state.scenario_draft
@@ -149,29 +149,29 @@ def present_for_teacher(state: TeacherState) -> dict:
     if current_trace_id := state.current_trace_id:
         mlflow.log_feedback(
             trace_id=current_trace_id,
-            name="teacher_rating",
+            name="author_rating",
             value=rating,
-            rationale=f"Teacher rated {rating}/5",
+            rationale=f"Author rated {rating}/5",
             source=AssessmentSource(
                 source_type=AssessmentSourceType.HUMAN, source_id=state.scenario_id
             ),
         )
 
     return {
-        "teacher_rating": rating,
+        "author_rating": rating,
         "approval_status": (
             "approved" if rating >= ACCEPTABLE_RATING_THRESHOLD else "rejected"
         ),
     }
 
 
-def should_retry(state: TeacherState) -> str:
+def should_retry(state: AuthorState) -> str:
     """Determine if scenario should be regenerated based on rating.
 
     Routes to "generate" if rating < 3 and retry_count < 3.
     Otherwise routes to "save".
     """
-    rating = state.teacher_rating
+    rating = state.author_rating
     retry_count = state.retry_count
 
     if (
@@ -183,7 +183,7 @@ def should_retry(state: TeacherState) -> str:
     return "save"
 
 
-def save_scenario(state: TeacherState) -> dict:
+def save_scenario(state: AuthorState) -> dict:
     """Save approved scenario to LangGraph store."""
     if state.scenario_draft and state.scenario_id:
         scenario_store.put(
@@ -194,16 +194,16 @@ def save_scenario(state: TeacherState) -> dict:
     return {}
 
 
-def create_teacher_graph(
+def create_author_graph(
     checkpointer: BaseCheckpointSaver | None = None,
     store: BaseStore | None = None,
 ) -> CompiledStateGraph:
-    """Create and configure the teacher LangGraph."""
-    workflow = StateGraph(TeacherState)
+    """Create and configure the author LangGraph."""
+    workflow = StateGraph(AuthorState)
 
-    workflow.add_node("initialize", initialize_teacher)
+    workflow.add_node("initialize", initialize_author)
     workflow.add_node("generate", generate_scenario_node)
-    workflow.add_node("review", present_for_teacher)
+    workflow.add_node("review", present_for_author)
     workflow.add_node("save", save_scenario)
 
     workflow.set_entry_point("initialize")

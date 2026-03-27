@@ -1,19 +1,19 @@
 """LangGraph workflow components for simulation orchestration."""
 
-from summit_sim.graphs.student import (
-    StudentState,
-    create_student_graph,
+from summit_sim.graphs.author import (
+    AuthorState,
+    create_author_graph,
 )
-from summit_sim.graphs.teacher import (
-    TeacherState,
-    create_teacher_graph,
+from summit_sim.graphs.simulation import (
+    SimulationState,
+    create_simulation_graph,
 )
 from summit_sim.graphs.utils import TranscriptEntry
 
 __all__ = [
-    "StudentState",
-    "create_student_graph",
-    "TeacherState",
-    "create_teacher_graph",
+    "SimulationState",
+    "create_simulation_graph",
+    "AuthorState",
+    "create_author_graph",
     "TranscriptEntry",
 ]

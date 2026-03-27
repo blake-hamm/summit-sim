@@ -5,7 +5,7 @@ from __future__ import annotations
 import mlflow
 
 from summit_sim.agents.config import get_agent
-from summit_sim.schemas import ScenarioDraft, TeacherConfig
+from summit_sim.schemas import ScenarioConfig, ScenarioDraft
 
 AGENT_NAME = "generator-draft"
 
@@ -80,8 +80,8 @@ Create a complete scenario with:
 The scenario should be challenging but educational for wilderness first responders."""
 
 
-async def generate_scenario(teacher_config: TeacherConfig) -> ScenarioDraft:
-    """Generate a complete scenario from minimal teacher configuration."""
+async def generate_scenario(scenario_config: ScenarioConfig) -> ScenarioDraft:
+    """Generate a complete scenario from minimal author configuration."""
     agent = get_agent(
         agent_name=AGENT_NAME,
         output_type=ScenarioDraft,
@@ -93,9 +93,9 @@ async def generate_scenario(teacher_config: TeacherConfig) -> ScenarioDraft:
         f"prompts:/{AGENT_NAME}-user@latest"
     )
     prompt = user_prompt.format(
-        num_participants=teacher_config.num_participants,
-        activity_type=teacher_config.activity_type,
-        difficulty=teacher_config.difficulty,
+        num_participants=scenario_config.num_participants,
+        activity_type=scenario_config.activity_type,
+        difficulty=scenario_config.difficulty,
     )
 
     result = await agent.run(prompt)
