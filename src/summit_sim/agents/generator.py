@@ -98,5 +98,5 @@ async def generate_scenario(teacher_config: TeacherConfig) -> ScenarioDraft:
         difficulty=teacher_config.difficulty,
     )
 
-    result = await agent.run(str(prompt))
+    result = await agent.run(prompt)
     return result.output
