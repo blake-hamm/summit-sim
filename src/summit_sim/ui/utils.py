@@ -1,6 +1,22 @@
 """UI utilities for Summit-Sim."""
 
+from typing import Any
+
+from pydantic import BaseModel
+
 from summit_sim.schemas import ScenarioConfig
+
+
+def get_config_defaults(model: type[BaseModel]) -> dict[str, Any]:
+    """Extract default values from schema's json_schema_extra UI metadata."""
+    defaults = {}
+    for name, field in model.model_fields.items():
+        ui = field.json_schema_extra.get("ui", {}) if field.json_schema_extra else {}
+        defaults[name] = ui.get("value")
+    return defaults
+
+
+SCENARIO_CONFIG_DEFAULTS: dict[str, Any] = get_config_defaults(ScenarioConfig)
 
 # Standard 1-5 star rating scale for scenario evaluation
 RATING_SCALE = [
@@ -45,9 +61,6 @@ def get_author_form_fields() -> list[dict]:
     fields = []
 
     for name, field in ScenarioConfig.model_fields.items():
-        if name == "class_id":
-            continue  # Skip internal fields not shown in form
-
         ui = (
             field.json_schema_extra.get("ui", {})  # type: ignore[union-attr]
             if field.json_schema_extra

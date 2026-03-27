@@ -42,40 +42,51 @@ async def ask_scenario_config() -> None:
     ).send()
 
     if res and res.get("submitted"):
-        participants = res.get("num_participants", "3")
-        activity = res.get("activity_type", "Hiking")
-        difficulty_map = {"low": "low", "medium": "med", "high": "high"}
-        difficulty_raw = res.get("difficulty", "High")
-        difficulty = difficulty_map.get(difficulty_raw.lower(), "high")
+        primary_focus = res.get("primary_focus")
+        environment = res.get("environment")
+        available_personnel = res.get("available_personnel")
+        evac_distance = res.get("evac_distance")
+        complexity = res.get("complexity")
 
-        if participants == "6+":
-            participants = "6"
+        if not all(
+            [primary_focus, environment, available_personnel, evac_distance, complexity]
+        ):
+            raise ValueError("Missing required scenario configuration values")
 
-        cl.user_session.set("num_participants", int(participants))
-        cl.user_session.set("activity_type", activity.lower())  # type: ignore[arg-type]
-        cl.user_session.set("difficulty", difficulty)  # type: ignore[arg-type]
+        cl.user_session.set("primary_focus", primary_focus)
+        cl.user_session.set("environment", environment)
+        cl.user_session.set("available_personnel", available_personnel)
+        cl.user_session.set("evac_distance", evac_distance)
+        cl.user_session.set("complexity", complexity)
         await generate_scenario()
 
 
 async def generate_scenario() -> None:
     """Generate scenario with collected config."""
     logger.info("Starting scenario generation")
-    num_participants_val = cl.user_session.get("num_participants")
-    activity_type_val = cl.user_session.get("activity_type")
-    difficulty_val = cl.user_session.get("difficulty")
 
-    num_participants = (
-        int(num_participants_val) if num_participants_val is not None else 3
-    )
-    activity_type = (
-        str(activity_type_val) if activity_type_val is not None else "hiking"
-    )
-    difficulty = str(difficulty_val) if difficulty_val is not None else "med"
+    primary_focus = cl.user_session.get("primary_focus")
+    environment = cl.user_session.get("environment")
+    available_personnel = cl.user_session.get("available_personnel")
+    evac_distance = cl.user_session.get("evac_distance")
+    complexity = cl.user_session.get("complexity")
 
-    config = ScenarioConfig(
-        num_participants=num_participants,
-        activity_type=activity_type,  # type: ignore[arg-type]
-        difficulty=difficulty,  # type: ignore[arg-type]
+    if not all(
+        [primary_focus, environment, available_personnel, evac_distance, complexity]
+    ):
+        raise ValueError(
+            "Missing required scenario config in session. "
+            "Did you navigate to this page without completing the form?"
+        )
+
+    config = ScenarioConfig.model_validate(
+        {
+            "primary_focus": primary_focus,
+            "environment": environment,
+            "available_personnel": available_personnel,
+            "evac_distance": evac_distance,
+            "complexity": complexity,
+        }
     )
 
     cl.user_session.set("scenario_config", config)
@@ -92,7 +103,6 @@ async def generate_scenario() -> None:
         scenario_config=config.model_dump(),
         scenario_draft=None,
         scenario_id="",
-        class_id="",
         retry_count=0,
         approval_status=None,
     )
@@ -105,7 +115,12 @@ async def generate_scenario() -> None:
 
         if result.get("scenario_draft"):
             state = AuthorState.from_graph_result(result)
-            loading_msg.content = "✅ *Scenario ready for review!*"
+            params_text = (
+                f"**Focus:** {config.primary_focus} | **Env:** {config.environment} | "
+                f"**Team:** {config.available_personnel} | **Evac:** "
+                f"{config.evac_distance} | **Complexity:** {config.complexity}"
+            )
+            loading_msg.content = f"✅ *Scenario ready for review!*\n\n{params_text}"
             await loading_msg.update()
             await show_review_screen(state)
         else:
@@ -136,10 +151,8 @@ async def show_review_screen(state: AuthorState) -> None:
     learning_obj_text = "\n".join(f"• {obj}" for obj in scenario.learning_objectives)
     attempt_text = f" (Attempt {retry_count + 1}/3)" if retry_count > 0 else ""
 
-    # Build detailed turns display
     turns_sections = []
     for i, turn in enumerate(scenario.turns, 1):
-        # Format choices with correctness indicators
         choices_lines = []
         for j, choice in enumerate(turn.choices, 1):
             correct_indicator = "✅" if choice.is_correct else "❌"
@@ -152,7 +165,6 @@ async def show_review_screen(state: AuthorState) -> None:
                 f"   {j}. {correct_indicator} {choice.description} ({next_info})"
             )
 
-        # Format scene state
         scene_lines = []
         if turn.scene_state:
             for key, value in turn.scene_state.items():
@@ -161,14 +173,12 @@ async def show_review_screen(state: AuthorState) -> None:
             "\n".join(scene_lines) if scene_lines else "   *No special conditions*"
         )
 
-        # Format hidden state (author-only view)
         hidden_lines = []
         if turn.hidden_state:
             for key, value in turn.hidden_state.items():
                 hidden_lines.append(f"   • {key.replace('_', ' ').title()}: {value}")
         hidden_display = "\n".join(hidden_lines) if hidden_lines else "   *None*"
 
-        # Build turn section
         turn_section = (
             f"**Turn {i}** (ID: {turn.turn_id})\n"
             f"{turn.narrative_text}\n\n"

@@ -37,7 +37,6 @@ class SimulationState:
     last_selected_choice: dict | None = None
     simulation_result: dict | None = None
     scenario_id: str = ""
-    class_id: str | None = None
     debrief_report: dict | None = None
 
     @classmethod
