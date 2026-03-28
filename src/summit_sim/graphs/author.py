@@ -104,10 +104,18 @@ async def generate_scenario_node(state: AuthorState, config: RunnableConfig) -> 
             tags={"session_id": thread_id},
         )
 
-    # Log revision metrics to MLflow
+    # Log revision status to MLflow as trace feedback
     if current_trace_id:
-        mlflow.log_metric("revision_count", retry_count)
-        mlflow.log_param("is_revision", is_revision)
+        mlflow.log_feedback(
+            trace_id=current_trace_id,
+            name="is_revision",
+            value=is_revision,
+            rationale="Indicates if this generation is a revision of a previous draft",
+            source=AssessmentSource(
+                source_type=AssessmentSourceType.HUMAN,
+                source_id=state.scenario_id,
+            ),
+        )
 
     return {
         "scenario_draft": scenario.model_dump(),
@@ -149,9 +157,18 @@ def present_for_author(state: AuthorState) -> dict:
 
     is_approved = action == "approve"
 
-    # Log approval status to MLflow
+    # Log approval status to MLflow as trace feedback
     if current_trace_id := state.current_trace_id:
-        mlflow.log_param("is_approved", is_approved)
+        mlflow.log_feedback(
+            trace_id=current_trace_id,
+            name="is_approved",
+            value=is_approved,
+            rationale="Author approval decision for the scenario draft",
+            source=AssessmentSource(
+                source_type=AssessmentSourceType.HUMAN,
+                source_id=state.scenario_id,
+            ),
+        )
         if feedback:
             mlflow.log_feedback(
                 trace_id=current_trace_id,

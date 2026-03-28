@@ -153,7 +153,7 @@ async def generate_scenario(
         )
     else:
         # Use standard generation prompt
-        prompt = USER_PROMPT_TEMPLATE.format(
+        prompt = _user_prompt.format(
             primary_focus=scenario_config.primary_focus,
             environment=scenario_config.environment,
             available_personnel=scenario_config.available_personnel,

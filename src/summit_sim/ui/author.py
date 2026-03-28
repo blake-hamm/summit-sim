@@ -3,7 +3,9 @@
 import logging
 from typing import TYPE_CHECKING
 
+import mlflow
 from langgraph.types import Command
+from mlflow.entities import AssessmentSource, AssessmentSourceType
 
 from summit_sim.graphs.author import (
     MAX_RETRY_ATTEMPTS,
@@ -137,7 +139,7 @@ async def generate_scenario() -> None:
 
 
 async def show_completion(state: AuthorState) -> None:
-    """Display completion screen with shareable link and satisfaction survey."""
+    """Display completion screen with shareable link and collect rating."""
     scenario_id = state.scenario_id or ""
     shareable_url = f"{settings.base_url}?scenario_id={scenario_id}"
 
@@ -150,7 +152,7 @@ async def show_completion(state: AuthorState) -> None:
         ),
     ).send()
 
-    # Ask for satisfaction rating after approval
+    # Ask for satisfaction rating (non-blocking)
     res = await cl.AskActionMessage(
         content=get_satisfaction_content(),
         actions=[
@@ -161,9 +163,18 @@ async def show_completion(state: AuthorState) -> None:
 
     if res and res.get("payload"):
         rating = res.get("payload", {}).get("value")
-        if rating is not None:
-            logger.info("Author satisfaction rating: %s", rating)
-            # Could log to MLflow here if needed
+        if rating is not None and state.current_trace_id:
+            # Log rating to MLflow using the trace_id from the graph state
+            mlflow.log_feedback(
+                trace_id=state.current_trace_id,
+                name="author_rating",
+                value=rating,
+                rationale="Author satisfaction rating for the scenario",
+                source=AssessmentSource(
+                    source_type=AssessmentSourceType.HUMAN,
+                    source_id=state.scenario_id,
+                ),
+            )
 
 
 async def handle_approval(state: AuthorState) -> None:
@@ -198,11 +209,17 @@ async def handle_revision(state: AuthorState) -> None:
         await cl.Message(content="❌ Error: Session expired. Please start over.").send()
         return
 
+    # Show chat input for revision feedback
+    await cl.CustomElement(name="ChatVisibilityToggle", props={"visible": True}).send()
+
     # Ask author what they want changed
     feedback_res = await cl.AskUserMessage(
         content="What would you like me to change? (e.g., 'Make the injuries more severe', 'Change the setting to winter')",
         timeout=120,
     ).send()
+
+    # Hide chat input after feedback received (or timeout)
+    await cl.CustomElement(name="ChatVisibilityToggle", props={"visible": False}).send()
 
     if not feedback_res or not feedback_res.get("output"):
         await cl.Message(
