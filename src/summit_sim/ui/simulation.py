@@ -49,14 +49,37 @@ async def start_simulation_session() -> None:
 async def show_scenario_intro(scenario: ScenarioDraft) -> None:
     """Display scenario intro and start simulation immediately."""
     objectives_text = "\n".join(f"• {obj}" for obj in scenario.learning_objectives)
-    await cl.Message(
-        content=(
-            f"## 🏔️ {scenario.title}\n\n"
-            f"**Setting:** {scenario.setting}\n\n"
-            f"**Patient:** {scenario.patient_summary}\n\n"
-            f"**Learning Objectives:**\n{objectives_text}"
-        ),
-    ).send()
+
+    scene_display = (
+        scenario.scene_state if scenario.scene_state else "*No special conditions*"
+    )
+
+    content = f"""## 🏔️ {scenario.title}
+
+#### 🎯 Learning Objectives
+{objectives_text}
+
+#### 🏔️ Environment
+**Setting:** {scenario.setting}
+
+**Scene State:** {scene_display}
+
+#### 🏥 Patient
+**Summary:** {scenario.patient_summary}
+
+**Opening Narrative:** {scenario.initial_narrative}
+
+#### 🎮 How to Play
+You are the primary responder. Type your actions naturally below.
+
+• **Assess** the patient (e.g., "Check ABCs", "Take a pulse")
+• **Ask questions** (e.g., "What happened?", "Are you on any medications?")
+• **Apply treatments** (e.g., "Apply a tourniquet", "Give them water")
+• **Manage the scene** (e.g., "Move them to the shade", "Call for evac")
+
+*The scenario will evolve based on your decisions!*"""
+
+    await cl.Message(content=content).send()
 
     await run_simulation()
 

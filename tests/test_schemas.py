@@ -61,7 +61,7 @@ class TestScenarioDraft:
             setting="Test Location",
             patient_summary="Test Patient",
             hidden_truth="Test Truth",
-            learning_objectives=["Objective 1"],
+            learning_objectives=["Objective 1", "Objective 2"],
             initial_narrative=(
                 "You arrive at the scene and see a patient lying on the ground."
             ),
@@ -86,7 +86,7 @@ class TestScenarioDraft:
             setting="Somewhere",
             patient_summary="A patient",
             hidden_truth="Something",
-            learning_objectives=["Learn something"],
+            learning_objectives=["Learn something", "Apply knowledge"],
             initial_narrative="The scene opens.",
             hidden_state="Initial hidden state",
             scene_state="Initial scene state",

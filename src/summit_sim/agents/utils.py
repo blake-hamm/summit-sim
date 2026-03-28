@@ -19,6 +19,87 @@ from summit_sim.settings import settings
 
 logger = logging.getLogger(__name__)
 
+# WFR Curriculum Learning Objectives - organized by category
+WFR_LEARNING_OBJECTIVES = {
+    "patient_assessment": [
+        "Execute systematic scene size-up identifying mechanism of injury, "
+        "number of patients, and immediate hazards before approaching",
+        "Perform primary assessment using ABCDE protocol identifying and "
+        "correcting immediate life threats within 90 seconds",
+        "Distinguish between patent and compromised airway recognizing signs "
+        "of obstruction and positioning appropriately",
+        "Assess breathing effectiveness counting respiratory rate and "
+        "identifying inadequate ventilation requiring intervention",
+        "Evaluate circulation status checking pulses, skin color/temperature, "
+        "and capillary refill to identify shock",
+        "Conduct focused secondary assessment performing thorough head-to-toe "
+        "or focused exam based on chief complaint",
+        "Obtain accurate vital signs measuring heart rate, respiratory rate, "
+        "blood pressure, and temperature correctly",
+    ],
+    "trauma": [
+        "Perform spinal motion restriction decision-making using focused spine "
+        "assessment criteria to determine need for immobilization",
+        "Control life-threatening hemorrhage applying direct pressure, "
+        "pressure bandages, and tourniquets appropriately",
+        "Manage penetrating chest wounds recognizing tension pneumothorax "
+        "signs and applying occlusive dressings",
+        "Assess and splint long bone fractures using improvised materials to "
+        "immobilize distal joints above and below injury",
+        "Evaluate traumatic brain injuries identifying concussion signs, "
+        "worsening mental status, and evacuation criteria",
+        "Perform wound cleaning and closure irrigating wounds and determining "
+        "appropriate closure methods for wilderness context",
+        "Assess and manage burns calculating TBSA, determining depth, and "
+        "providing appropriate cooling and dressing",
+    ],
+    "environmental": [
+        "Recognize and treat hypothermia identifying stages (mild/moderate/"
+        "severe) and applying appropriate rewarming techniques",
+        "Identify frostbite and implement rewarming distinguishing between "
+        "superficial and deep frostbite and rewarming only when no refreezing "
+        "risk exists",
+        "Assess altitude illness progression differentiating between AMS, "
+        "HACE, and HAPE with appropriate descent decisions",
+        "Manage heat-related illnesses distinguishing heat exhaustion from "
+        "heat stroke and initiating rapid cooling",
+        "Respond to lightning strike injuries triaging multiple victims and "
+        "managing cardiac/respiratory arrest patterns",
+        "Treat envenomation injuries identifying venomous snake/insect bites "
+        "and applying appropriate first aid while preventing further harm",
+    ],
+    "medical": [
+        "Recognize anaphylaxis identifying multi-system allergic reactions "
+        "and administering epinephrine auto-injectors",
+        "Manage severe asthma attacks assessing respiratory distress severity "
+        "and positioning/medicating appropriately",
+        "Assess diabetic emergencies distinguishing hypoglycemia from "
+        "hyperglycemia and providing appropriate glucose intervention",
+        "Identify acute abdominal emergencies recognizing signs of "
+        "appendicitis, bowel obstruction, or internal bleeding requiring "
+        "evacuation",
+        "Evaluate cardiac chest pain assessing for MI symptoms and managing "
+        "patient while planning evacuation",
+    ],
+    "evacuation": [
+        "Apply stay-vs-go decision criteria weighing patient condition, "
+        "resources, environment, and evacuation logistics",
+        "Package patient for litter carry securing patient to litter while "
+        "protecting injuries and preparing for rough terrain",
+        "Coordinate group resources delegating tasks effectively based on "
+        "group size and skill levels",
+        "Document patient care maintaining accurate SOAP notes and vital sign "
+        "trends for handoff to definitive care",
+        "Communicate evacuation needs clearly relaying accurate patient "
+        "status, location, and resource requirements to rescue services",
+    ],
+}
+
+# Flattened list for easy validation
+ALL_WFR_OBJECTIVES = [
+    obj for category in WFR_LEARNING_OBJECTIVES.values() for obj in category
+]
+
 
 @lru_cache(maxsize=1)
 def get_provider() -> OpenRouterProvider:

@@ -40,7 +40,7 @@ async def ask_scenario_config() -> None:
     )
 
     res = await cl.AskElementMessage(
-        content="**Configure Your Scenario**\n\nSet up your rescue simulation:",
+        content="",
         element=element,
     ).send()
 
@@ -296,29 +296,28 @@ async def show_review_screen(state: AuthorState) -> None:
     scene_display = (
         scenario.scene_state if scenario.scene_state else "*No special conditions*"
     )
-    hidden_display = scenario.hidden_state if scenario.hidden_state else "*None*"
 
-    elements = [
-        cl.Text(name="🎯 Goals", content=learning_obj_text, display="inline"),
-        cl.Text(
-            name="🏔️ Environment",
-            content=(
-                f"**Setting:** {scenario.setting}\n\n**Scene State:** {scene_display}"
-            ),
-            display="inline",
-        ),
-        cl.Text(name="🏥 Subject", content=scenario.patient_summary, display="inline"),
-        cl.Text(
-            name="👁️ Instructor Only: Hidden Truth",
-            content=hidden_display,
-            display="inline",
-        ),
-    ]
+    content = f"""## 🏔️ {scenario.title}{attempt_text}
 
-    await cl.Message(
-        content=f"## {scenario.title}{attempt_text}",
-        elements=elements,
-    ).send()
+#### 🎯 Learning Objectives
+{learning_obj_text}
+
+#### 🏔️ Environment
+**Setting:** {scenario.setting}
+
+**Scene State:** {scene_display}
+
+#### 🏥 Patient
+**Summary:** {scenario.patient_summary}
+
+**Opening Narrative:** {scenario.initial_narrative}
+
+#### 🔒 Instructor Only
+**Hidden Truth:** {scenario.hidden_truth}
+
+**Hidden State:** {scenario.hidden_state}"""
+
+    await cl.Message(content=content).send()
 
     res = await cl.AskActionMessage(
         content=get_review_content(),
