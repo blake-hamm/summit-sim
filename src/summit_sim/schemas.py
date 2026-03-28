@@ -118,9 +118,7 @@ class DynamicTurnResult(BaseModel):
         le=1.0,
         description="Progress toward scenario completion (0.0-1.0 scale)",
     )
-    is_complete: bool = Field(
-        ..., description="Whether the scenario has reached a natural conclusion"
-    )
+
     feedback: str = Field(
         ..., description="AI-generated personalized feedback on the action"
     )
@@ -145,25 +143,81 @@ class ScenarioDraft(BaseModel):
     based on student free-text actions.
     """
 
-    title: str = Field(..., description="Short name for the scenario")
-    setting: str = Field(..., description="Location and environmental context")
-    patient_summary: str = Field(..., description="Brief description of the patient")
+    title: str = Field(
+        ...,
+        description=(
+            "A punchy, unique title for the scenario. "
+            "Examples: 'Lightning Strike on the Grand Teton', "
+            "'Anaphylaxis on the Pine Ridge Trail', 'HAPE at 14,000 Feet'"
+        ),
+    )
+    setting: str = Field(
+        ...,
+        description=(
+            "Specific location, weather, and time of day. Keep under 20 words. "
+            "Example: 'Exposed rocky ridge at 13,000 ft. Incoming thunderstorm, "
+            "dropping temperatures.'"
+        ),
+    )
+    patient_summary: str = Field(
+        ...,
+        description=(
+            "Age, sex, chief complaint, and visible mechanism of injury (MOI). "
+            "Example: '28-year-old female, thrown 10 feet by indirect lightning "
+            "strike. Conscious but confused.'"
+        ),
+    )
     hidden_truth: str = Field(
-        ..., description="Secret medical information not visible to students"
+        ...,
+        description=(
+            "The actual medical diagnosis students must discover. Example: 'Patient "
+            "has a minor burn on the right leg, but the critical hidden issue is a "
+            "suspected cervical spine injury from the throw and developing "
+            "hypothermia.'"
+        ),
     )
     learning_objectives: list[str] = Field(
-        ..., description="List of skills students should practice"
+        ...,
+        min_length=2,
+        max_length=3,
+        description=(
+            "2-3 specific WFR skills tested from the curriculum (e.g., 'Spinal "
+            "clearance protocol', 'Lightning strike safety/evacuation', "
+            "'Hypothermia prevention'). Select from WFR learning objectives catalog."
+        ),
     )
     initial_narrative: str = Field(
-        ..., description="Opening narrative that sets the scene for the student"
+        ...,
+        max_length=400,
+        description=(
+            "Immersive opening scene ending with a call to action. STRICTLY 2-4 "
+            "sentences. DO NOT EXCEED 4 SENTENCES. Present tense, second person "
+            "('You are...'). Must end with a question inviting action. Example: 'You "
+            "are descending the Grand Teton when a loud crack echoes, and you see "
+            "your climbing partner thrown against the rocks by an indirect lightning "
+            "strike. The sky is dark, and the wind is picking up. She is groaning on "
+            "the ground. What is your first move?'"
+        ),
     )
     hidden_state: str = Field(
         ...,
-        description="Initial secret medical info for AI reference",
+        description=(
+            "Comprehensive baseline medical data for AI reference. Must include "
+            "complete initial vitals (HR, RR, BP, SCTM, AVPU), SAMPLE history, and "
+            "hidden injuries. Write as a clinical summary. Example: 'Patient is "
+            "A&O x2. HR 110, RR 24, BP 130/80. SCTM: Pale, cool, clammy. "
+            "Superficial fern-like burn on right calf. Tenderness upon palpation "
+            "of C4 vertebrae. No other major trauma. Cannot recall the incident.'"
+        ),
     )
     scene_state: str = Field(
         ...,
-        description="Initial visible scene conditions",
+        description=(
+            "Environmental context, available gear, group dynamics, and exact "
+            "distance/time to definitive care. Keep concise. Example: 'Group of 2. "
+            "1 rope, standard rack, basic WFR first aid kit. 6 hours from the "
+            "trailhead. Immediate danger of secondary lightning strikes.'"
+        ),
     )
 
 

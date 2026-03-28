@@ -73,6 +73,18 @@ async def start() -> None:
 
     logger.info("Starting author flow")
     cl.user_session.set("mode", "author")
+    await cl.Message(
+        content=(
+            "# 🏔️ Welcome to Summit-Sim\n\n"
+            "**An AI-powered wilderness rescue simulator.**\n\n"
+            "Summit-Sim generates medically safe, interactive "
+            "backcountry emergencies for dynamic Wilderness First "
+            "Responder (WFR) training.\n\n"
+            "---\n"
+            "#### 🎨 Author Mode\n"
+            "Use the form below to author a specific emergency scenario."
+        )
+    ).send()
     await author.ask_scenario_config()
 
 
@@ -84,15 +96,16 @@ async def on_message_handler(_message: cl.Message) -> None:
     if mode == "author":
         await cl.Message(
             content=(
-                "Type **restart** to create a new scenario, or use the buttons above."
+                "🎨 Type **restart** to create a new scenario, "
+                "or use the buttons above."
             ),
         ).send()
     elif mode == "player":
         await cl.Message(
-            content="Please use the buttons above to make your selection.",
+            content="🎮 Please use the buttons above to make your selection.",
         ).send()
     else:
         await cl.Message(
-            content="Welcome! The scenario creator will start automatically.",
+            content="🎮 Welcome! The scenario creator will start automatically.",
         ).send()
         await start()

@@ -18,6 +18,9 @@ from summit_sim.settings import get_settings
 
 logger = logging.getLogger(__name__)
 
+# Completion threshold - scenario ends when score reaches this value
+COMPLETION_THRESHOLD = 0.7
+
 if TYPE_CHECKING:
     from langgraph.checkpoint.base import BaseCheckpointSaver
 
@@ -118,6 +121,11 @@ async def process_player_action(state: SimulationState) -> dict:
     settings = get_settings()
     max_turns = settings.max_turns
 
+    # Extract previous score for progressive tracking
+    previous_score = 0.0
+    if state.action_result:
+        previous_score = state.action_result.get("completion_score", 0.0)
+
     result = await process_action(
         student_action=state.last_student_action or "",
         scenario=scenario,
@@ -127,8 +135,12 @@ async def process_player_action(state: SimulationState) -> dict:
             transcript_history=_build_transcript_context(state.transcript),
             turn_count=state.turn_count + 1,
             max_turns=max_turns,
+            previous_score=previous_score,
         ),
     )
+
+    # Programmatic failsafe: ensure score never decreases
+    result.completion_score = max(previous_score, result.completion_score)
 
     return {"action_result": result.model_dump()}
 
@@ -148,12 +160,14 @@ def update_simulation_state(state: SimulationState) -> dict:
     )
 
     # Check if scenario is naturally complete or if we've hit max turns
+    # is_complete is derived from completion_score (>= 0.7 = 70% threshold)
     settings = get_settings()
     next_turn_count = state.turn_count + 1
     is_max_turns_reached = next_turn_count >= settings.max_turns
-    is_complete = result.is_complete or is_max_turns_reached
+    is_evacuation_complete = result.completion_score >= COMPLETION_THRESHOLD
+    is_complete = is_evacuation_complete or is_max_turns_reached
 
-    if is_max_turns_reached and not result.is_complete:
+    if is_max_turns_reached and not is_evacuation_complete:
         logger.info(
             "Simulation ending due to max turns: turn=%d, max=%d",
             next_turn_count,

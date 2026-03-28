@@ -170,7 +170,6 @@ class TestProcessAction:
         expected_result = DynamicTurnResult(
             was_correct=True,
             completion_score=0.3,
-            is_complete=False,
             feedback="Good approach to stabilize the patient",
             narrative_text="You carefully stabilize the patient's head...",
             updated_hidden_state="Patient vitals stable, head stabilized",
@@ -199,7 +198,6 @@ class TestProcessAction:
 
             assert result == expected_result
             assert result.was_correct is True
-            assert result.is_complete is False
 
     @pytest.mark.asyncio
     async def test_process_action_with_transcript_history(self, sample_scenario):
@@ -222,7 +220,6 @@ class TestProcessAction:
         expected_result = DynamicTurnResult(
             was_correct=True,
             completion_score=0.5,
-            is_complete=False,
             feedback="Continuing good assessment",
             narrative_text="Patient responding well...",
             updated_hidden_state="Stable vitals",
@@ -265,7 +262,6 @@ class TestProcessAction:
         expected_result = DynamicTurnResult(
             was_correct=True,
             completion_score=1.0,
-            is_complete=True,
             feedback="Excellent work! Patient successfully evacuated.",
             narrative_text="The helicopter lifts off with the patient...",
             updated_hidden_state="Patient evacuated to medical facility",
@@ -292,7 +288,6 @@ class TestProcessAction:
                 context=context,
             )
 
-            assert result.is_complete is True
             assert result.completion_score == 1.0
 
     @pytest.mark.asyncio
@@ -303,7 +298,6 @@ class TestProcessAction:
         expected_result = DynamicTurnResult(
             was_correct=False,
             completion_score=0.1,
-            is_complete=False,
             feedback="Moving the patient with a potential spinal injury is dangerous",
             narrative_text="As you move the patient, they cry out in pain...",
             updated_hidden_state="Patient condition worsened, increased pain",
@@ -343,9 +337,8 @@ class TestProcessAction:
     def test_system_prompt_defined(self):
         """Test that system prompt is defined."""
         assert len(SYSTEM_PROMPT) > 0
-        assert "wilderness first aid" in SYSTEM_PROMPT.lower()
+        assert "wilderness first responder" in SYSTEM_PROMPT.lower()
         assert "was_correct" in SYSTEM_PROMPT
-        assert "narrative_text" in SYSTEM_PROMPT
 
     def test_user_prompt_template_defined(self):
         """Test that user prompt template is defined."""

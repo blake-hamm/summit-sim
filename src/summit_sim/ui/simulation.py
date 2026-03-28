@@ -12,6 +12,7 @@ from summit_sim.graphs.simulation import (
 )
 from summit_sim.graphs.utils import scenario_store
 from summit_sim.schemas import DebriefReport, DynamicTurnResult, ScenarioDraft
+from summit_sim.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -49,14 +50,32 @@ async def start_simulation_session() -> None:
 async def show_scenario_intro(scenario: ScenarioDraft) -> None:
     """Display scenario intro and start simulation immediately."""
     objectives_text = "\n".join(f"• {obj}" for obj in scenario.learning_objectives)
-    await cl.Message(
-        content=(
-            f"## 🏔️ {scenario.title}\n\n"
-            f"**Setting:** {scenario.setting}\n\n"
-            f"**Patient:** {scenario.patient_summary}\n\n"
-            f"**Learning Objectives:**\n{objectives_text}"
-        ),
-    ).send()
+
+    scene_display = (
+        scenario.scene_state if scenario.scene_state else "*No special conditions*"
+    )
+
+    content = f"""## 🏔️ {scenario.title}
+
+#### 🎯 Learning Objectives
+{objectives_text}
+
+#### 🏔️ Environment
+**Setting:** {scenario.setting}
+
+**Scene State:** {scene_display}
+
+#### 🏥 Patient
+**Summary:** {scenario.patient_summary}
+
+**Opening Narrative:** {scenario.initial_narrative}
+
+#### 🎮 How to Play
+You're the responder on scene. Type what you'd like to do—assess the patient,
+ask questions, provide care, or manage the situation. The simulation tracks
+your progress and dynamically responds to your choices."""
+
+    await cl.Message(content=content).send()
 
     await run_simulation()
 
@@ -150,7 +169,7 @@ async def handle_simulation_loop(
         # Get free-text action from student with character limit
         res = await cl.AskUserMessage(
             content=prompt_content,
-            timeout=300,  # 5 minute timeout
+            timeout=settings.ui_timeout,
         ).send()
 
         if not res or not res.get("output"):

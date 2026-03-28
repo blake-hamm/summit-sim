@@ -137,24 +137,26 @@ class TestInitializeAuthor:
 class TestShouldRetry:
     """Tests for should_retry function."""
 
-    def test_should_retry_low_rating_under_limit(self):
-        """Test retry when rating is low and under retry limit."""
+    def test_should_retry_with_feedback_under_limit(self):
+        """Test retry when revision feedback exists and under retry limit."""
         state = AuthorState(
             scenario_config={},
             author_rating=2,
             retry_count=1,
+            revision_feedback="Add more detail",
         )
 
         result = should_retry(state)
 
         assert result == "generate"
 
-    def test_should_not_retry_acceptable_rating(self):
-        """Test no retry when rating is acceptable."""
+    def test_should_not_retry_without_feedback(self):
+        """Test no retry when no revision feedback exists."""
         state = AuthorState(
             scenario_config={},
             author_rating=4,
             retry_count=0,
+            revision_feedback=None,
         )
 
         result = should_retry(state)
@@ -162,50 +164,54 @@ class TestShouldRetry:
         assert result == "save"
 
     def test_should_not_retry_at_limit(self):
-        """Test no retry when at retry limit."""
+        """Test no retry when at retry limit even with feedback."""
         state = AuthorState(
             scenario_config={},
             author_rating=2,
             retry_count=MAX_RETRY_ATTEMPTS,
+            revision_feedback="Still needs work",
         )
 
         result = should_retry(state)
 
         assert result == "save"
 
-    def test_should_not_retry_no_rating(self):
-        """Test no retry when no rating provided."""
+    def test_should_not_retry_no_feedback(self):
+        """Test no retry when no revision feedback provided."""
         state = AuthorState(
             scenario_config={},
             author_rating=None,
             retry_count=0,
+            revision_feedback=None,
         )
 
         result = should_retry(state)
 
         assert result == "save"
 
-    def test_threshold_boundary(self):
-        """Test boundary at ACCEPTABLE_RATING_THRESHOLD."""
-        # Rating at threshold should save
-        state_at_threshold = AuthorState(
+    def test_retry_with_feedback(self):
+        """Test retry when revision feedback is present."""
+        # With feedback and under limit should generate
+        state_with_feedback = AuthorState(
             scenario_config={},
             author_rating=ACCEPTABLE_RATING_THRESHOLD,
             retry_count=0,
+            revision_feedback="Please revise",
         )
 
-        result = should_retry(state_at_threshold)
-        assert result == "save"
+        result = should_retry(state_with_feedback)
+        assert result == "generate"
 
-        # Rating just below threshold should retry
-        state_below = AuthorState(
+        # Without feedback should save regardless of rating
+        state_without_feedback = AuthorState(
             scenario_config={},
             author_rating=ACCEPTABLE_RATING_THRESHOLD - 1,
             retry_count=0,
+            revision_feedback=None,
         )
 
-        result = should_retry(state_below)
-        assert result == "generate"
+        result = should_retry(state_without_feedback)
+        assert result == "save"
 
 
 class TestSaveScenario:
@@ -218,7 +224,7 @@ class TestSaveScenario:
             setting="Mountain trail",
             patient_summary="30yo male",
             hidden_truth="Fracture",
-            learning_objectives=["Learn"],
+            learning_objectives=["Learn", "Practice skill"],
             initial_narrative="Start",
             hidden_state="Hidden",
             scene_state="Scene",
@@ -264,7 +270,7 @@ class TestSaveScenario:
             setting="Test",
             patient_summary="Test",
             hidden_truth="Test",
-            learning_objectives=["Test"],
+            learning_objectives=["Test", "Validate approach"],
             initial_narrative="Test",
             hidden_state="Test",
             scene_state="Test",
@@ -294,7 +300,7 @@ class TestPresentForAuthor:
             setting="Mountain trail",
             patient_summary="30yo male",
             hidden_truth="Fracture",
-            learning_objectives=["Learn"],
+            learning_objectives=["Learn", "Practice skill"],
             initial_narrative="Start",
             hidden_state="Hidden",
             scene_state="Scene",
@@ -308,7 +314,7 @@ class TestPresentForAuthor:
         )
 
         with patch("summit_sim.graphs.author.interrupt") as mock_interrupt:
-            mock_interrupt.return_value = {"rating": 4}
+            mock_interrupt.return_value = {"action": "approve", "rating": 4}
 
             result = present_for_author(state)
 
@@ -319,8 +325,8 @@ class TestPresentForAuthor:
             assert call_args["retry_count"] == 1
 
             # Verify result
-            assert result["author_rating"] == 4
             assert result["approval_status"] == "approved"
+            assert result["revision_feedback"] is None
 
     def test_present_rejected_scenario(self):
         """Test presenting scenario that gets rejected."""
@@ -329,7 +335,7 @@ class TestPresentForAuthor:
             setting="Test",
             patient_summary="Test",
             hidden_truth="Test",
-            learning_objectives=["Test"],
+            learning_objectives=["Test", "Validate approach"],
             initial_narrative="Test",
             hidden_state="Test",
             scene_state="Test",
@@ -342,21 +348,24 @@ class TestPresentForAuthor:
         )
 
         with patch("summit_sim.graphs.author.interrupt") as mock_interrupt:
-            mock_interrupt.return_value = {"rating": 2}
+            mock_interrupt.return_value = {
+                "action": "revise",
+                "feedback": "Needs more detail",
+            }
 
             result = present_for_author(state)
 
-            assert result["author_rating"] == 2
-            assert result["approval_status"] == "rejected"
+            assert result["approval_status"] == "revision_requested"
+            assert result["revision_feedback"] == "Needs more detail"
 
-    def test_present_invalid_rating_raises(self):
-        """Test that invalid rating raises ValueError."""
+    def test_present_invalid_action_raises(self):
+        """Test that invalid action raises ValueError."""
         scenario_draft = ScenarioDraft(
             title="Test",
             setting="Test",
             patient_summary="Test",
             hidden_truth="Test",
-            learning_objectives=["Test"],
+            learning_objectives=["Test", "Validate approach"],
             initial_narrative="Test",
             hidden_state="Test",
             scene_state="Test",
@@ -368,16 +377,16 @@ class TestPresentForAuthor:
         )
 
         with patch("summit_sim.graphs.author.interrupt") as mock_interrupt:
-            # Test rating too high
-            mock_interrupt.return_value = {"rating": 10}
+            # Test invalid action
+            mock_interrupt.return_value = {"action": "invalid", "rating": 4}
 
-            with pytest.raises(ValueError, match="Invalid rating"):
+            with pytest.raises(ValueError, match="Invalid action"):
                 present_for_author(state)
 
-            # Test rating too low
-            mock_interrupt.return_value = {"rating": 0}
+            # Test missing action
+            mock_interrupt.return_value = {"rating": 4}
 
-            with pytest.raises(ValueError, match="Invalid rating"):
+            with pytest.raises(ValueError, match="Invalid action"):
                 present_for_author(state)
 
     def test_present_no_scenario_raises(self):

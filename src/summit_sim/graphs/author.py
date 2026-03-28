@@ -50,6 +50,7 @@ class AuthorState:
     approval_status: str | None = None
     current_trace_id: str | None = None
     author_rating: int | None = None
+    revision_feedback: str | None = None
 
     @classmethod
     def from_graph_result(cls, result: dict[str, Any]) -> "AuthorState":
@@ -77,11 +78,21 @@ async def generate_scenario_node(state: AuthorState, config: RunnableConfig) -> 
     logger.info("Generating scenario: retry_count=%d", state.retry_count)
     scenario_config = ScenarioConfig.model_validate(state.scenario_config)
 
-    is_retry = state.author_rating is not None
-    retry_count = state.retry_count + 1 if is_retry else 0
+    is_revision = state.revision_feedback is not None
+    retry_count = state.retry_count + 1 if is_revision else state.retry_count
 
-    # First generation - let MLflow create a new trace
-    scenario = await generate_scenario(scenario_config)
+    # Get previous draft for revision context
+    previous_draft = None
+    if is_revision and state.scenario_draft:
+        previous_draft = ScenarioDraft.model_validate(state.scenario_draft)
+
+    # Generate scenario with optional revision context
+    scenario = await generate_scenario(
+        scenario_config,
+        previous_draft=previous_draft,
+        revision_feedback=state.revision_feedback,
+    )
+
     active_span = mlflow.get_current_active_span()
     current_trace_id = active_span.trace_id if active_span else None
 
@@ -93,15 +104,29 @@ async def generate_scenario_node(state: AuthorState, config: RunnableConfig) -> 
             tags={"session_id": thread_id},
         )
 
+    # Log revision status to MLflow as trace feedback
+    if current_trace_id:
+        mlflow.log_feedback(
+            trace_id=current_trace_id,
+            name="is_revision",
+            value=is_revision,
+            rationale="Indicates if this generation is a revision of a previous draft",
+            source=AssessmentSource(
+                source_type=AssessmentSourceType.HUMAN,
+                source_id=state.scenario_id,
+            ),
+        )
+
     return {
         "scenario_draft": scenario.model_dump(),
         "current_trace_id": current_trace_id,
         "retry_count": retry_count,
+        "revision_feedback": None,  # Clear after use
     }
 
 
 def present_for_author(state: AuthorState) -> dict:
-    """Present scenario for author review and capture rating."""
+    """Present scenario for author review and capture approve/revise decision."""
     scenario = state.scenario_draft
 
     if scenario is None:
@@ -123,49 +148,52 @@ def present_for_author(state: AuthorState) -> dict:
         }
     )
 
-    rating = choice_data.get("rating")
+    action = choice_data.get("action")
+    feedback = choice_data.get("feedback")
 
-    if (
-        rating is None
-        or not isinstance(rating, int)
-        or not MIN_RATING <= rating <= MAX_RATING
-    ):
-        msg = f"Invalid rating: {rating}. Expected integer 1-5"
+    if action not in ("approve", "revise"):
+        msg = f"Invalid action: {action}. Expected 'approve' or 'revise'"
         raise ValueError(msg)
 
+    is_approved = action == "approve"
+
+    # Log approval status to MLflow as trace feedback
     if current_trace_id := state.current_trace_id:
         mlflow.log_feedback(
             trace_id=current_trace_id,
-            name="author_rating",
-            value=rating,
-            rationale=f"Author rated {rating}/5",
+            name="is_approved",
+            value=is_approved,
+            rationale="Author approval decision for the scenario draft",
             source=AssessmentSource(
-                source_type=AssessmentSourceType.HUMAN, source_id=state.scenario_id
+                source_type=AssessmentSourceType.HUMAN,
+                source_id=state.scenario_id,
             ),
         )
+        if feedback:
+            mlflow.log_feedback(
+                trace_id=current_trace_id,
+                name="revision_feedback",
+                value=feedback,
+                rationale="Author requested revision",
+                source=AssessmentSource(
+                    source_type=AssessmentSourceType.HUMAN,
+                    source_id=state.scenario_id,
+                ),
+            )
 
     return {
-        "author_rating": rating,
-        "approval_status": (
-            "approved" if rating >= ACCEPTABLE_RATING_THRESHOLD else "rejected"
-        ),
+        "approval_status": "approved" if is_approved else "revision_requested",
+        "revision_feedback": feedback if not is_approved else None,
     }
 
 
 def should_retry(state: AuthorState) -> str:
-    """Determine if scenario should be regenerated based on rating.
+    """Determine if scenario should be regenerated based on revision request.
 
-    Routes to "generate" if rating < 3 and retry_count < 3.
+    Routes to "generate" if revision_feedback is present and retry_count < 3.
     Otherwise routes to "save".
     """
-    rating = state.author_rating
-    retry_count = state.retry_count
-
-    if (
-        rating is not None
-        and rating < ACCEPTABLE_RATING_THRESHOLD
-        and retry_count < MAX_RETRY_ATTEMPTS
-    ):
+    if state.revision_feedback is not None and state.retry_count < MAX_RETRY_ATTEMPTS:
         return "generate"
     return "save"
 
