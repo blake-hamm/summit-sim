@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING
 from langgraph.types import Command
 
 from summit_sim.graphs.author import (
-    ACCEPTABLE_RATING_THRESHOLD,
     MAX_RETRY_ATTEMPTS,
     AuthorState,
     create_author_graph,
@@ -15,8 +14,10 @@ from summit_sim.schemas import ScenarioConfig, ScenarioDraft
 from summit_sim.settings import settings
 from summit_sim.ui.utils import (
     get_author_form_fields,
-    get_rating_actions,
-    get_rating_content,
+    get_review_actions,
+    get_review_content,
+    get_satisfaction_actions,
+    get_satisfaction_content,
 )
 
 logger = logging.getLogger(__name__)
@@ -116,9 +117,9 @@ async def generate_scenario() -> None:
         if result.get("scenario_draft"):
             state = AuthorState.from_graph_result(result)
             params_text = (
-                f"**Focus:** {config.primary_focus} | **Env:** {config.environment} | "
-                f"**Team:** {config.available_personnel} | **Evac:** "
-                f"{config.evac_distance} | **Complexity:** {config.complexity}"
+                f"**Focus:** {config.primary_focus}\n**Env:** {config.environment}\n"
+                f"**Team:** {config.available_personnel}\n**Evac:** "
+                f"{config.evac_distance}\n**Complexity:** {config.complexity}"
             )
             loading_msg.content = f"✅ *Scenario ready for review!*\n\n{params_text}"
             await loading_msg.update()
@@ -135,8 +136,135 @@ async def generate_scenario() -> None:
         await loading_msg.update()
 
 
+async def show_completion(state: AuthorState) -> None:
+    """Display completion screen with shareable link and satisfaction survey."""
+    scenario_id = state.scenario_id or ""
+    shareable_url = f"{settings.base_url}?scenario_id={scenario_id}"
+
+    await cl.Message(
+        content=(
+            f"#### ✅ Scenario Approved!\n\n"
+            f"**Shareable URL:**\n{shareable_url}\n\n"
+            f"Players can join by visiting the URL above. "
+            f"The simulation is ready to run!"
+        ),
+    ).send()
+
+    # Ask for satisfaction rating after approval
+    res = await cl.AskActionMessage(
+        content=get_satisfaction_content(),
+        actions=[
+            cl.Action(name=a["name"], payload=a["payload"], label=a["label"])
+            for a in get_satisfaction_actions()
+        ],
+    ).send()
+
+    if res and res.get("payload"):
+        rating = res.get("payload", {}).get("value")
+        if rating is not None:
+            logger.info("Author satisfaction rating: %s", rating)
+            # Could log to MLflow here if needed
+
+
+async def handle_approval(state: AuthorState) -> None:
+    """Handle scenario approval and save to store."""
+    graph = cl.user_session.get("graph")
+    if graph is None:
+        await cl.Message(content="❌ Error: Session expired. Please start over.").send()
+        return
+
+    thread_id = cl.user_session.get("id")
+    config_dict: RunnableConfig = {"configurable": {"thread_id": thread_id}}
+
+    try:
+        result = await graph.ainvoke(
+            Command(resume={"action": "approve"}),
+            config=config_dict,
+        )
+
+        final_state = AuthorState.from_graph_result(result)
+        await show_completion(final_state)
+
+    except Exception as e:
+        await cl.Message(
+            content=f"❌ Error during approval: {e!s}",
+        ).send()
+
+
+async def handle_revision(state: AuthorState) -> None:
+    """Handle revision request with human-in-the-loop feedback."""
+    graph = cl.user_session.get("graph")
+    if graph is None:
+        await cl.Message(content="❌ Error: Session expired. Please start over.").send()
+        return
+
+    # Ask author what they want changed
+    feedback_res = await cl.AskUserMessage(
+        content="What would you like me to change? (e.g., 'Make the injuries more severe', 'Change the setting to winter')",
+        timeout=120,
+    ).send()
+
+    if not feedback_res or not feedback_res.get("output"):
+        await cl.Message(
+            content="❌ No feedback provided. Returning to review screen.",
+        ).send()
+        await show_review_screen(state)
+        return
+
+    feedback = feedback_res.get("output")
+
+    thread_id = cl.user_session.get("id")
+    config_dict: RunnableConfig = {"configurable": {"thread_id": thread_id}}
+
+    try:
+        # Resume graph with revision feedback
+        result = await graph.ainvoke(
+            Command(resume={"action": "revise", "feedback": feedback}),
+            config=config_dict,
+        )
+
+        final_state = AuthorState.from_graph_result(result)
+        new_retry_count = final_state.retry_count or 0
+
+        if new_retry_count >= MAX_RETRY_ATTEMPTS:
+            await cl.Message(
+                content=(
+                    f"⚠️ Maximum revision attempts reached ({MAX_RETRY_ATTEMPTS}/"
+                    f"{MAX_RETRY_ATTEMPTS}). Proceeding with current scenario."
+                ),
+            ).send()
+            await show_completion(final_state)
+        else:
+            await cl.Message(
+                content=(
+                    f"🔄 Revising scenario based on your feedback "
+                    f"(attempt {new_retry_count}/{MAX_RETRY_ATTEMPTS})..."
+                ),
+            ).send()
+
+            # Continue graph to regenerate
+            result = await graph.ainvoke(
+                None,
+                config=config_dict,
+            )
+
+            if result.get("scenario_draft"):
+                new_state = AuthorState.from_graph_result(result)
+                await show_review_screen(new_state)
+            else:
+                await cl.Message(
+                    content="❌ Error: Revision failed. Please try again.",
+                ).send()
+
+    except Exception as e:
+        await cl.Message(
+            content=f"❌ Error during revision: {e!s}",
+        ).send()
+        await show_review_screen(state)
+
+
 async def show_review_screen(state: AuthorState) -> None:
-    """Display the scenario review screen with 1-5 rating buttons."""
+    """Display the scenario review screen with approve/revise buttons."""
     scenario_dict = state.scenario_draft
     retry_count = state.retry_count
 
@@ -156,112 +284,37 @@ async def show_review_screen(state: AuthorState) -> None:
     )
     hidden_display = scenario.hidden_state if scenario.hidden_state else "*None*"
 
-    await cl.Message(
-        content=(
-            f"## {scenario.title}{attempt_text}\n"
-            f"**Setting:** {scenario.setting}\n"
-            f"\n**Learning Objectives:**\n"
-            f"{learning_obj_text}\n"
-            f"\n**Patient:** {scenario.patient_summary}\n"
-            f"\n**Hidden Truth:** {scenario.hidden_truth}\n"
-            f"\n---\n"
-            f"### Opening Narrative\n\n"
-            f"{scenario.initial_narrative}\n\n"
-            f"---\n"
-            f"### Initial Scene State\n"
-            f"{scene_display}\n\n"
-            f"### Hidden State (Author View)\n"
-            f"{hidden_display}"
+    elements = [
+        cl.Text(name="🎯 Goals", content=learning_obj_text, display="inline"),
+        cl.Text(
+            name="🏔️ Environment",
+            content=f"**Setting:** {scenario.setting}\n\n**Scene State:** {scene_display}",
+            display="inline",
         ),
+        cl.Text(name="🏥 Subject", content=scenario.patient_summary, display="inline"),
+        cl.Text(
+            name="👁️ Instructor Only: Hidden Truth",
+            content=hidden_display,
+            display="inline",
+        ),
+    ]
+
+    await cl.Message(
+        content=f"## {scenario.title}{attempt_text}",
+        elements=elements,
     ).send()
 
     res = await cl.AskActionMessage(
-        content=get_rating_content(),
+        content=get_review_content(),
         actions=[
             cl.Action(name=a["name"], payload=a["payload"], label=a["label"])
-            for a in get_rating_actions()
+            for a in get_review_actions()
         ],
     ).send()
 
     if res and res.get("payload"):
-        rating = res.get("payload", {}).get("value")
-        if rating is not None:
-            await handle_rating(state, int(rating))
-
-
-async def handle_rating(state: AuthorState, rating: int) -> None:
-    """Handle author rating and manage retry/approval flow."""
-    graph = cl.user_session.get("graph")
-    if graph is None:
-        await cl.Message(content="❌ Error: Session expired. Please start over.").send()
-        return
-
-    thread_id = cl.user_session.get("id")
-    config_dict: RunnableConfig = {"configurable": {"thread_id": thread_id}}
-
-    try:
-        result = await graph.ainvoke(
-            Command(resume={"rating": rating}),
-            config=config_dict,
-        )
-
-        final_state = AuthorState.from_graph_result(result)
-        new_retry_count = final_state.retry_count or 0
-
-        if (
-            rating < ACCEPTABLE_RATING_THRESHOLD
-            and new_retry_count < MAX_RETRY_ATTEMPTS
-        ):
-            await cl.Message(
-                content=(
-                    f"🔄 Regenerating scenario "
-                    f"(attempt {new_retry_count + 1}/{MAX_RETRY_ATTEMPTS})..."
-                ),
-            ).send()
-
-            result = await graph.ainvoke(
-                None,
-                config=config_dict,
-            )
-
-            if result.get("scenario_draft"):
-                new_state = AuthorState.from_graph_result(result)
-                await show_review_screen(new_state)
-            else:
-                await cl.Message(
-                    content="❌ Error: Regeneration failed. Please try again.",
-                ).send()
-        elif (
-            rating < ACCEPTABLE_RATING_THRESHOLD
-            and new_retry_count >= MAX_RETRY_ATTEMPTS
-        ):
-            await cl.Message(
-                content=(
-                    f"⚠️ Maximum retry attempts reached ({MAX_RETRY_ATTEMPTS}/"
-                    f"{MAX_RETRY_ATTEMPTS}). Proceeding with current scenario."
-                ),
-            ).send()
-            await show_completion(final_state)
-        else:
-            await show_completion(final_state)
-
-    except Exception as e:
-        await cl.Message(
-            content=f"❌ Error during rating: {e!s}",
-        ).send()
-        await show_review_screen(state)
-
-
-async def show_completion(state: AuthorState) -> None:
-    """Display completion screen with shareable link."""
-    scenario_id = state.scenario_id or ""
-    shareable_url = f"{settings.base_url}?scenario_id={scenario_id}"
-
-    await cl.Message(
-        content=(
-            f"#### ✅ Scenario Approved!\n\n"
-            f"**Shareable URL:**\n{shareable_url}\n\n"
-            f"Players can join by visiting the URL above. "
-            f"The simulation is ready to run!"
-        ),
-    ).send()
+        action = res.get("payload", {}).get("action")
+        if action == "approve":
+            await handle_approval(state)
+        elif action == "revise":
+            await handle_revision(state)

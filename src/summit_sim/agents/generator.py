@@ -100,18 +100,43 @@ The scenario should be medically accurate and educational for wilderness
 first responders."""
 
 
-async def generate_scenario(scenario_config: ScenarioConfig) -> ScenarioDraft:
+REVISION_PROMPT_TEMPLATE = """\
+Revise the following wilderness rescue scenario based on the author's feedback.
+
+Author's feedback: {feedback}
+
+Previous scenario draft:
+{previous_draft}
+
+Please create a revised version that:
+1. Addresses the specific feedback provided
+2. Maintains medical accuracy and educational value
+3. Preserves the core learning objectives unless explicitly asked to change them
+4. Keeps the scenario coherent and internally consistent
+
+Generate the complete revised scenario with all fields updated as needed."""
+
+
+async def generate_scenario(
+    scenario_config: ScenarioConfig,
+    previous_draft: ScenarioDraft | None = None,
+    revision_feedback: str | None = None,
+) -> ScenarioDraft:
     """Generate a complete scenario from minimal author configuration."""
+    is_revision = previous_draft is not None and revision_feedback is not None
+
     logger.info(
         "Generating scenario: primary_focus=%s, environment=%s, personnel=%s, "
-        "evac=%s, complexity=%s",
+        "evac=%s, complexity=%s, is_revision=%s",
         scenario_config.primary_focus,
         scenario_config.environment,
         scenario_config.available_personnel,
         scenario_config.evac_distance,
         scenario_config.complexity,
+        is_revision,
     )
-    agent, user_prompt = setup_agent_and_prompts(
+
+    agent, _user_prompt = setup_agent_and_prompts(
         agent_name=AGENT_NAME,
         output_type=ScenarioDraft,
         system_prompt=SYSTEM_PROMPT,
@@ -119,13 +144,22 @@ async def generate_scenario(scenario_config: ScenarioConfig) -> ScenarioDraft:
         reasoning_effort="high",
     )
 
-    prompt = user_prompt.format(
-        primary_focus=scenario_config.primary_focus,
-        environment=scenario_config.environment,
-        available_personnel=scenario_config.available_personnel,
-        evac_distance=scenario_config.evac_distance,
-        complexity=scenario_config.complexity,
-    )
+    if is_revision:
+        # Use revision prompt directly as string
+        assert previous_draft is not None  # for type checker
+        prompt = REVISION_PROMPT_TEMPLATE.format(
+            feedback=revision_feedback,
+            previous_draft=previous_draft.model_dump_json(indent=2),
+        )
+    else:
+        # Use standard generation prompt
+        prompt = USER_PROMPT_TEMPLATE.format(
+            primary_focus=scenario_config.primary_focus,
+            environment=scenario_config.environment,
+            available_personnel=scenario_config.available_personnel,
+            evac_distance=scenario_config.evac_distance,
+            complexity=scenario_config.complexity,
+        )
 
     result = await agent.run(prompt)
     logger.info("Scenario generated: title=%s", result.output.title)

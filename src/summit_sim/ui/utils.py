@@ -28,15 +28,42 @@ RATING_SCALE = [
 ]
 
 
-def get_rating_actions() -> list[dict]:
-    """Get action button specifications for the standard rating scale.
+def get_review_actions() -> list[dict]:
+    """Get action button specifications for approve/revise workflow.
+
+    Returns action specs for the AI Co-Author experience.
+    """
+    return [
+        {
+            "name": "approve",
+            "payload": {"action": "approve"},
+            "label": "✅ Approve & Publish",
+        },
+        {
+            "name": "revise",
+            "payload": {"action": "revise"},
+            "label": "🔄 Revise Scenario",
+        },
+    ]
+
+
+def get_review_content() -> str:
+    """Get the content text for the review prompt.
+
+    Returns a message asking the author to approve or revise the scenario.
+    """
+    return "#### Review Your Scenario\n\nDoes this scenario meet your needs?"
+
+
+def get_satisfaction_actions() -> list[dict]:
+    """Get action button specifications for post-approval satisfaction rating.
 
     Returns action specs that can be used with cl.AskActionMessage.
     Each action has name, payload, and label fields.
     """
     return [
         {
-            "name": f"rate_{r['value']}",
+            "name": f"satisfaction_{r['value']}",
             "payload": {"value": r["value"]},
             "label": r["label"],
         }
@@ -44,12 +71,14 @@ def get_rating_actions() -> list[dict]:
     ]
 
 
-def get_rating_content(title: str = "Rate this scenario") -> str:
-    """Get the content text for a rating prompt.
+def get_satisfaction_content() -> str:
+    """Get the content text for satisfaction rating prompt.
 
-    Returns a descriptive message asking the user to rate quality.
+    Returns a descriptive message asking the user to rate satisfaction.
     """
-    return f"#### {title}\n\nPlease evaluate the quality using the scale below:"
+    return (
+        "#### How satisfied are you with the final scenario?\n\nRate your experience:"
+    )
 
 
 def get_author_form_fields() -> list[dict]:
