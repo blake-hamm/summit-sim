@@ -145,9 +145,9 @@ async def show_completion(state: AuthorState) -> None:
 
     await cl.Message(
         content=(
-            f"**🔗 Shareable URL:**\n{shareable_url}\n\n"
-            f"Players can join by visiting the link above. "
-            f"The simulation is ready to run!"
+            f"Players can join by visiting the link below. "
+            f"The simulation is ready to run!\n\n"
+            f"**🔗 Shareable URL:** {shareable_url}"
         ),
     ).send()
 

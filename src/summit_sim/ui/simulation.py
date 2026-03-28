@@ -70,14 +70,9 @@ async def show_scenario_intro(scenario: ScenarioDraft) -> None:
 **Opening Narrative:** {scenario.initial_narrative}
 
 #### 🎮 How to Play
-You are the primary responder. Type your actions naturally below.
-
-• **Assess** the patient (e.g., "Check ABCs", "Take a pulse")
-• **Ask questions** (e.g., "What happened?", "Are you on any medications?")
-• **Apply treatments** (e.g., "Apply a tourniquet", "Give them water")
-• **Manage the scene** (e.g., "Move them to the shade", "Call for evac")
-
-*The scenario will evolve based on your decisions!*"""
+You're the responder on scene. Type what you'd like to do—assess the patient,
+ask questions, provide care, or manage the situation. The simulation tracks
+your progress and dynamically responds to your choices."""
 
     await cl.Message(content=content).send()
 
