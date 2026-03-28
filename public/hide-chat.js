@@ -40,20 +40,16 @@ window.addEventListener('summit-mode-change', (e) => {
 // Track if we've already switched to player mode (to avoid redundant operations)
 let isPlayerMode = document.body.classList.contains('player-mode');
 
-// Zero-width non-joiner character used as signal
-const SIMULATION_READY_MARKER = '\u200C';
-
-// Watch for simulation ready signal in messages
-function watchForSimulationReady() {
+// Watch for ChatEnabler custom element (signals simulation is ready)
+function watchForChatEnabler() {
     const observer = new MutationObserver((mutations) => {
         if (isPlayerMode) return; // Already in player mode, no need to check
         
         mutations.forEach((mutation) => {
             mutation.addedNodes.forEach((node) => {
                 if (node.nodeType === Node.ELEMENT_NODE) {
-                    // Check if the added node or its children contain the marker
-                    const text = node.textContent || '';
-                    if (text.includes(SIMULATION_READY_MARKER)) {
+                    // Check if this is the ChatEnabler custom element
+                    if (node.tagName && node.tagName.toLowerCase() === 'chatenabler') {
                         setMode('player');
                         isPlayerMode = true;
                     }
@@ -69,5 +65,5 @@ function watchForSimulationReady() {
     });
 }
 
-// Start watching for simulation ready signal
-watchForSimulationReady();
+// Start watching for ChatEnabler element
+watchForChatEnabler();

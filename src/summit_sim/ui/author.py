@@ -125,7 +125,6 @@ async def generate_scenario() -> None:
             mode = cl.user_session.get("mode", "instructor")
             is_student = mode == "student"
             params_text = (
-                f"**Role:** {mode}\n"
                 f"**Focus:** {config.primary_focus}\n**Env:** {config.environment}\n"
                 f"**Team:** {config.available_personnel}\n**Evac:** "
                 f"{config.evac_distance}\n**Complexity:** {config.complexity}"
@@ -234,7 +233,16 @@ your progress and dynamically responds to your choices."""
 
         context_content = format_scenario_intro(scenario) + how_to_play
 
-        await cl.Message(content=context_content).send()
+        await cl.Message(
+            content=context_content,
+            elements=[
+                cl.CustomElement(
+                    name="ChatEnabler",
+                    props={},
+                    display="inline",
+                )
+            ],
+        ).send()
 
         # Start simulation (skip intro since we just showed context)
         await simulation.run_simulation()
