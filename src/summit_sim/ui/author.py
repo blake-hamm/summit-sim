@@ -14,6 +14,7 @@ from summit_sim.graphs.author import (
 )
 from summit_sim.schemas import ScenarioConfig, ScenarioDraft
 from summit_sim.settings import settings
+from summit_sim.ui import simulation
 from summit_sim.ui.utils import (
     get_author_form_fields,
     get_review_actions,
@@ -51,6 +52,7 @@ async def ask_scenario_config() -> None:
         available_personnel = res.get("available_personnel")
         evac_distance = res.get("evac_distance")
         complexity = res.get("complexity")
+        mode = res.get("mode", "Instructor (Review & Share)")
 
         if not all(
             [primary_focus, environment, available_personnel, evac_distance, complexity]
@@ -62,6 +64,7 @@ async def ask_scenario_config() -> None:
         cl.user_session.set("available_personnel", available_personnel)
         cl.user_session.set("evac_distance", evac_distance)
         cl.user_session.set("complexity", complexity)
+        cl.user_session.set("mode", mode)
         await generate_scenario()
 
 
@@ -176,6 +179,39 @@ async def show_completion(state: AuthorState) -> None:
                     source_id=state.scenario_id,
                 ),
             )
+
+
+async def handle_student_start(_state: AuthorState) -> None:
+    """Handle student mode - auto-approve and start simulation immediately."""
+    graph = cl.user_session.get("graph")
+    if graph is None:
+        await cl.Message(content="❌ Error: Session expired. Please start over.").send()
+        return
+
+    thread_id = cl.user_session.get("id")
+    config_dict: RunnableConfig = {"configurable": {"thread_id": thread_id}}
+
+    try:
+        # Auto-approve the scenario
+        result = await graph.ainvoke(
+            Command(resume={"action": "approve"}),
+            config=config_dict,
+        )
+
+        final_state = AuthorState.from_graph_result(result)
+        scenario_id = final_state.scenario_id or ""
+
+        # Set up simulation session
+        cl.user_session.set("scenario_id", scenario_id)
+        cl.user_session.set("mode", "player")
+
+        # Start simulation
+        await simulation.start_simulation_session()
+
+    except Exception as e:
+        await cl.Message(
+            content=f"❌ Error starting simulation: {e!s}",
+        ).send()
 
 
 async def handle_approval(_state: AuthorState) -> None:
@@ -299,6 +335,10 @@ async def show_review_screen(state: AuthorState) -> None:
         scenario.scene_state if scenario.scene_state else "*No special conditions*"
     )
 
+    # Check mode - student mode hides instructor-only information
+    mode = cl.user_session.get("mode", "Instructor (Review & Share)")
+    is_student = mode == "Student (Play Now)"
+
     content = f"""## 🏔️ {scenario.title}{attempt_text}
 
 #### 🎯 Learning Objectives
@@ -312,7 +352,11 @@ async def show_review_screen(state: AuthorState) -> None:
 #### 🏥 Patient
 **Summary:** {scenario.patient_summary}
 
-**Opening Narrative:** {scenario.initial_narrative}
+**Opening Narrative:** {scenario.initial_narrative}"""
+
+    # Only show instructor-only info in instructor mode
+    if not is_student:
+        content += f"""
 
 #### 🔒 Instructor Only
 **Hidden Truth:** {scenario.hidden_truth}
@@ -321,18 +365,37 @@ async def show_review_screen(state: AuthorState) -> None:
 
     await cl.Message(content=content).send()
 
-    res = await cl.AskActionMessage(
-        content=get_review_content(),
-        actions=[
-            cl.Action(name=a["name"], payload=a["payload"], label=a["label"])
-            for a in get_review_actions()
-        ],
-        timeout=settings.ui_timeout,
-    ).send()
+    # Show different actions based on mode
+    if is_student:
+        res = await cl.AskActionMessage(
+            content="Ready to start the simulation?",
+            actions=[
+                cl.Action(
+                    name="start",
+                    payload={"action": "start"},
+                    label="▶️ Start Simulation",
+                ),
+            ],
+            timeout=settings.ui_timeout,
+        ).send()
 
-    if res and res.get("payload"):
-        action = res.get("payload", {}).get("action")
-        if action == "approve":
-            await handle_approval(state)
-        elif action == "revise":
-            await handle_revision(state)
+        if res and res.get("payload"):
+            action = res.get("payload", {}).get("action")
+            if action == "start":
+                await handle_student_start(state)
+    else:
+        res = await cl.AskActionMessage(
+            content=get_review_content(),
+            actions=[
+                cl.Action(name=a["name"], payload=a["payload"], label=a["label"])
+                for a in get_review_actions()
+            ],
+            timeout=settings.ui_timeout,
+        ).send()
+
+        if res and res.get("payload"):
+            action = res.get("payload", {}).get("action")
+            if action == "approve":
+                await handle_approval(state)
+            elif action == "revise":
+                await handle_revision(state)

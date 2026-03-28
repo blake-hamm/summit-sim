@@ -19,6 +19,17 @@ class ScenarioConfig(BaseModel):
     and evacuation logistics (distance/environment).
     """
 
+    mode: Literal["instructor", "student"] = Field(
+        default="instructor",
+        json_schema_extra={
+            "ui": {
+                "type": "select",
+                "label": "Role",
+                "options": ["Instructor (Review & Share)", "Student (Play Now)"],
+                "value": "Instructor (Review & Share)",
+            }
+        },
+    )
     primary_focus: Literal["Trauma", "Medical", "Environmental", "Mixed"] = Field(
         ...,
         description="The core WFR syllabus category to test.",
