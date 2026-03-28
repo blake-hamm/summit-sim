@@ -1,9 +1,25 @@
 """Pydantic schemas for Summit-Sim data models."""
 
 import uuid
+from dataclasses import dataclass
 from typing import Literal
 
 from pydantic import BaseModel, Field
+
+
+@dataclass
+class TranscriptEntry:
+    """Single entry in simulation transcript with full context.
+
+    Captures complete information about a turn for debrief analysis.
+    """
+
+    turn_id: int
+    turn_narrative: str
+    student_action: str
+    was_correct: bool
+    feedback: str
+    learning_moments: list[str]
 
 
 def generate_scenario_id() -> str:
@@ -123,15 +139,38 @@ class DynamicTurnResult(BaseModel):
         ..., description="AI-generated personalized feedback on the action"
     )
     narrative_text: str = Field(
-        ..., description="Generated narrative describing the outcome"
-    )
-    updated_hidden_state: str = Field(
         ...,
-        description="Updated secret medical info after this turn (full replacement)",
-    )
-    updated_scene_state: str = Field(
-        ...,
-        description="Updated scene conditions after this turn (full replacement)",
+        description=(
+            "Immersive narrative describing what the student discovers "
+            "based on their action. Progressively reveal hidden information "
+            "from hidden_truth/hidden_state as student performs assessments. "
+            "3-5 sentences, end with open question inviting next action.\n\n"
+            "EXAMPLE 1 - Vitals check reveals findings:\n"
+            "Student: 'I check pulse and breathing.'\n"
+            "AI: 'You check wrist pulse - rapid at 110 bpm. Breathing is "
+            "quick and shallow at 24/min. Skin feels cool and clammy. "
+            "What do you check next?'\n\n"
+            "EXAMPLE 2 - Physical exam reveals injuries:\n"
+            "Student: 'I do a head-to-toe exam.'\n"
+            "AI: 'Head shows no trauma. Chest rises evenly. Abdomen soft. "
+            "Right ankle has deformity, swelling, and bruising. "
+            "Foot is cold. How do you proceed?'\n\n"
+            "EXAMPLE 3 - SAMPLE history reveals info:\n"
+            "Student: 'I ask about allergies and history.'\n"
+            "AI: 'Patient reports penicillin allergy and carries EpiPen "
+            "for bee stings. Takes asthma meds. Last ate 4 hours ago. "
+            "Does this change your priorities?'\n\n"
+            "EXAMPLE 4 - Scene assessment reveals changes:\n"
+            "Student: 'I scan for dangers.'\n"
+            "AI: 'Dark clouds approach from west - storm in 30 min. "
+            "Temperature dropping. 2 hours of daylight left. Limited "
+            "shelter on this ridge. How does this affect your plan?'\n\n"
+            "EXAMPLE 5 - Progressive revelation over time:\n"
+            "Turn 1: 'You check vitals - HR 110, RR 24. Skin pale.'\n"
+            "Turn 2: 'You find burns on right calf. Neck tender at C4.'\n"
+            "Turn 3: 'Patient has no recall, allergies, or meds.'\n"
+            "Each narrative adds new discoveries without repeating facts."
+        ),
     )
 
 

@@ -71,9 +71,14 @@ async def start() -> None:
         ).send()
         return
 
-    logger.info("Starting author flow")
-    cl.user_session.set("mode", "author")
-    await cl.Message(
+    logger.info("Showing role selection")
+    await ask_role_selection()
+
+
+async def ask_role_selection() -> None:
+    """Ask user to select their role."""
+    element = cl.CustomElement(name="RoleSelection", props={})
+    res = await cl.AskElementMessage(
         content=(
             "# 🏔️ Welcome to Summit-Sim\n\n"
             "**An AI-powered wilderness rescue simulator.**\n\n"
@@ -81,11 +86,52 @@ async def start() -> None:
             "backcountry emergencies for dynamic Wilderness First "
             "Responder (WFR) training.\n\n"
             "---\n"
-            "#### 🎨 Author Mode\n"
-            "Use the form below to author a specific emergency scenario."
-        )
+            "#### Select Your Role"
+        ),
+        element=element,
+        timeout=settings.ui_timeout,
     ).send()
-    await author.ask_scenario_config()
+
+    if res and res.get("submitted"):
+        role = res.get("role")
+        if role not in ("instructor", "student"):
+            await cl.Message(
+                content="❌ Invalid role selected. Please try again.",
+            ).send()
+            await ask_role_selection()
+            return
+
+        cl.user_session.set("mode", role)
+
+        if role == "instructor":
+            await show_instructor_welcome()
+        else:
+            await show_student_welcome()
+
+        await author.ask_scenario_config()
+
+
+async def show_instructor_welcome() -> None:
+    """Display welcome message for instructors."""
+    await cl.Message(
+        content=(
+            "### 🎓 Instructor Mode\n\n"
+            "You can create scenarios, review them with full details visible, "
+            "provide feedback to refine them, and share with students when ready."
+        ),
+    ).send()
+
+
+async def show_student_welcome() -> None:
+    """Display welcome message for students."""
+    await cl.Message(
+        content=(
+            "### 👤 Student Mode\n\n"
+            "Configure and play scenarios immediately. No hidden information "
+            "will be shown - you'll need to discover medical details through "
+            "assessment."
+        ),
+    ).send()
 
 
 @on_message

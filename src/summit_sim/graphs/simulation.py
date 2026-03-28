@@ -11,9 +11,9 @@ from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import interrupt
 
-from summit_sim.agents.action_responder import TurnContext, process_action
-from summit_sim.graphs.utils import TranscriptEntry
-from summit_sim.schemas import DynamicTurnResult, ScenarioDraft
+from summit_sim.agents.action_responder import process_action
+from summit_sim.agents.debrief import generate_debrief
+from summit_sim.schemas import DynamicTurnResult, ScenarioDraft, TranscriptEntry
 from summit_sim.settings import get_settings
 
 logger = logging.getLogger(__name__)
@@ -30,20 +30,18 @@ class SimulationState:
     """LangGraph state for dynamic simulation workflow.
 
     Maintains all state needed for the free-text simulation graph,
-    including scenario context, evolving states, and accumulated history.
+    including scenario context and accumulated history.
+    Uses transcript as single source of truth for turn history.
     """
 
-    scenario_draft: dict | None
-    turn_count: int = 0
+    scenario: ScenarioDraft | None
     transcript: list[TranscriptEntry] = field(default_factory=list)
+    turn_count: int = 0
     is_complete: bool = False
-    key_learning_moments: list[str] = field(default_factory=list)
-    last_student_action: str | None = None
     action_result: dict | None = None
     scenario_id: str = ""
     debrief_report: dict | None = None
-    hidden_state: str = ""
-    scene_state: str = ""
+    hidden_state: str = ""  # Ground truth for AI to reveal from
 
     @classmethod
     def from_graph_result(cls, result: dict[str, Any]) -> "SimulationState":
@@ -54,26 +52,22 @@ class SimulationState:
 
 
 def initialize_simulation(state: SimulationState) -> SimulationState:
-    """Initialize simulation state from scenario draft."""
+    """Initialize simulation state from scenario."""
     logger.info(
         "Initializing dynamic simulation: scenario_id=%s",
         state.scenario_id,
     )
-    scenario = ScenarioDraft.model_validate(state.scenario_draft)
 
     # Initialize states from scenario
     return SimulationState(
-        scenario_draft=state.scenario_draft,
-        turn_count=0,
+        scenario=state.scenario,
         transcript=[],
+        turn_count=0,
         is_complete=False,
-        key_learning_moments=[],
-        last_student_action=None,
         action_result=None,
         scenario_id=state.scenario_id,
         debrief_report=None,
-        hidden_state=scenario.hidden_state,
-        scene_state=scenario.scene_state,
+        hidden_state=state.scenario.hidden_state,
     )
 
 
@@ -83,11 +77,13 @@ def present_prompt(state: SimulationState) -> dict:
     Uses LangGraph's interrupt() for human-in-the-loop interaction.
     Displays the narrative and waits for student text input.
     """
-    scenario = ScenarioDraft.model_validate(state.scenario_draft)
+    if state.scenario is None:
+        msg = "Cannot present prompt without scenario"
+        raise ValueError(msg)
 
     # Get current narrative (initial or from last action result)
     if state.turn_count == 0:
-        current_narrative = scenario.initial_narrative
+        current_narrative = state.scenario.initial_narrative
     else:
         result = DynamicTurnResult.model_validate(state.action_result)
         current_narrative = result.narrative_text
@@ -97,7 +93,6 @@ def present_prompt(state: SimulationState) -> dict:
             "type": "prompt_presented",
             "turn_count": state.turn_count,
             "narrative": current_narrative,
-            "scene_state": state.scene_state,
             "is_initial": state.turn_count == 0,
         }
     )
@@ -108,7 +103,20 @@ def present_prompt(state: SimulationState) -> dict:
         msg = "Empty student action received"
         raise ValueError(msg)
 
-    return {"last_student_action": student_action}
+    # Store the action in a new transcript entry for this turn
+    return {
+        "transcript": state.transcript
+        + [
+            TranscriptEntry(
+                turn_id=state.turn_count + 1,
+                turn_narrative="",  # Will be filled by action result
+                student_action=student_action,
+                was_correct=False,  # Will be updated by action result
+                feedback="",
+                learning_moments=[],
+            )
+        ]
+    }
 
 
 async def process_player_action(state: SimulationState) -> dict:
@@ -117,9 +125,19 @@ async def process_player_action(state: SimulationState) -> dict:
     Calls the ActionResponder agent to evaluate the action,
     generate narrative, and update simulation state.
     """
-    scenario = ScenarioDraft.model_validate(state.scenario_draft)
+    if state.scenario is None:
+        msg = "Cannot process action without scenario"
+        raise ValueError(msg)
+
     settings = get_settings()
     max_turns = settings.max_turns
+
+    # Get the student action from the last transcript entry
+    if not state.transcript:
+        msg = "No transcript entry found for student action"
+        raise ValueError(msg)
+
+    student_action = state.transcript[-1].student_action
 
     # Extract previous score for progressive tracking
     previous_score = 0.0
@@ -127,16 +145,10 @@ async def process_player_action(state: SimulationState) -> dict:
         previous_score = state.action_result.get("completion_score", 0.0)
 
     result = await process_action(
-        student_action=state.last_student_action or "",
-        scenario=scenario,
-        context=TurnContext(
-            hidden_state=state.hidden_state,
-            scene_state=state.scene_state,
-            transcript_history=_build_transcript_context(state.transcript),
-            turn_count=state.turn_count + 1,
-            max_turns=max_turns,
-            previous_score=previous_score,
-        ),
+        student_action=student_action,
+        scenario=state.scenario,
+        simulation_state=state,
+        max_turns=max_turns,
     )
 
     # Programmatic failsafe: ensure score never decreases
@@ -149,15 +161,21 @@ def update_simulation_state(state: SimulationState) -> dict:
     """Update simulation state after processing action."""
     result = DynamicTurnResult.model_validate(state.action_result)
 
-    # Create transcript entry
-    transcript_entry = TranscriptEntry(
-        turn_id=state.turn_count + 1,
+    # Update the last transcript entry with results
+    if not state.transcript:
+        msg = "No transcript entry to update"
+        raise ValueError(msg)
+
+    updated_entry = TranscriptEntry(
+        turn_id=state.transcript[-1].turn_id,
         turn_narrative=result.narrative_text,
-        student_action=state.last_student_action or "",
+        student_action=state.transcript[-1].student_action,
         was_correct=result.was_correct,
         feedback=result.feedback,
         learning_moments=[result.feedback] if result.feedback else [],
     )
+
+    updated_transcript = state.transcript[:-1] + [updated_entry]
 
     # Check if scenario is naturally complete or if we've hit max turns
     # is_complete is derived from completion_score (>= 0.7 = 70% threshold)
@@ -183,32 +201,11 @@ def update_simulation_state(state: SimulationState) -> dict:
     )
 
     return {
-        "transcript": state.transcript + [transcript_entry],
-        "key_learning_moments": state.key_learning_moments + [result.feedback],
+        "transcript": updated_transcript,
         "turn_count": next_turn_count,
         "is_complete": is_complete,
-        "hidden_state": result.updated_hidden_state,
-        "scene_state": result.updated_scene_state,
-        "last_student_action": None,  # Reset for next turn
+        # hidden_state stays the same (ground truth doesn't change)
     }
-
-
-def _build_transcript_context(transcript: list[TranscriptEntry]) -> list[dict]:
-    """Build simplified transcript context for ActionResponder.
-
-    Returns last 5 turns as context for the agent.
-    """
-    context = []
-    for entry in transcript[-5:]:
-        context.append(
-            {
-                "action": entry.student_action,
-                "feedback": entry.feedback,
-                "narrative": entry.turn_narrative,
-                "was_correct": entry.was_correct,
-            }
-        )
-    return context
 
 
 async def generate_debrief_report(state: SimulationState) -> dict:
@@ -217,11 +214,9 @@ async def generate_debrief_report(state: SimulationState) -> dict:
     Calls the Debrief Agent to analyze the complete simulation transcript
     and generate a structured performance report.
     """
-    from summit_sim.agents.debrief import generate_debrief  # noqa: PLC0415
-
     debrief_report = await generate_debrief(
         transcript=state.transcript,
-        scenario_draft=ScenarioDraft.model_validate(state.scenario_draft),
+        scenario_draft=state.scenario,
         scenario_id=state.scenario_id,
     )
     return {"debrief_report": debrief_report.model_dump()}

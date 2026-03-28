@@ -15,8 +15,7 @@ from summit_sim.agents.debrief import (
     calculate_score,
     generate_debrief,
 )
-from summit_sim.graphs.utils import TranscriptEntry
-from summit_sim.schemas import DebriefReport, ScenarioDraft
+from summit_sim.schemas import DebriefReport, ScenarioDraft, TranscriptEntry
 
 
 class TestAgentConstants:

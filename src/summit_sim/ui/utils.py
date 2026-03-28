@@ -4,7 +4,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from summit_sim.schemas import ScenarioConfig
+from summit_sim.schemas import ScenarioConfig, ScenarioDraft
 
 
 def get_config_defaults(model: type[BaseModel]) -> dict[str, Any]:
@@ -14,6 +14,37 @@ def get_config_defaults(model: type[BaseModel]) -> dict[str, Any]:
         ui = field.json_schema_extra.get("ui", {}) if field.json_schema_extra else {}
         defaults[name] = ui.get("value")
     return defaults
+
+
+def format_scenario_intro(scenario: ScenarioDraft) -> str:
+    """Format the scenario intro content (excluding narrative).
+
+    Creates a standardized display of scenario information for both
+    instructor and student modes. Opening narrative is intentionally
+    excluded and shown separately during simulation.
+    """
+    objectives_text = "\n".join(f"• {obj}" for obj in scenario.learning_objectives)
+    scene_display = (
+        scenario.scene_state if scenario.scene_state else "*No special conditions*"
+    )
+
+    return f"""## 🏔️ {scenario.title}
+
+#### 🎯 Learning Objectives
+{objectives_text}
+
+#### 🏔️ Environment
+**Setting:** {scenario.setting}
+
+**Scene State:** {scene_display}
+
+#### 🏥 Patient
+**Summary:** {scenario.patient_summary}
+
+#### 🎮 How to Play
+You're the responder on scene. Type what you'd like to do—assess the patient,
+ask questions, provide care, or manage the situation. The simulation tracks
+your progress and dynamically responds to your choices."""
 
 
 SCENARIO_CONFIG_DEFAULTS: dict[str, Any] = get_config_defaults(ScenarioConfig)

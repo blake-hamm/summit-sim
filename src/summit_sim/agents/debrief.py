@@ -9,8 +9,7 @@ from mlflow.entities import SpanType
 from mlflow.entities.model_registry.prompt_version import PromptVersion
 
 from summit_sim.agents.utils import setup_agent_and_prompts
-from summit_sim.graphs.utils import TranscriptEntry
-from summit_sim.schemas import DebriefReport, ScenarioDraft
+from summit_sim.schemas import DebriefReport, ScenarioDraft, TranscriptEntry
 
 logger = logging.getLogger(__name__)
 

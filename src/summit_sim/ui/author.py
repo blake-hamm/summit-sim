@@ -12,9 +12,12 @@ from summit_sim.graphs.author import (
     AuthorState,
     create_author_graph,
 )
+from summit_sim.graphs.utils import scenario_store
 from summit_sim.schemas import ScenarioConfig, ScenarioDraft
 from summit_sim.settings import settings
+from summit_sim.ui import simulation
 from summit_sim.ui.utils import (
+    format_scenario_intro,
     get_author_form_fields,
     get_review_actions,
     get_review_content,
@@ -119,6 +122,8 @@ async def generate_scenario() -> None:
 
         if result.get("scenario_draft"):
             state = AuthorState.from_graph_result(result)
+            mode = cl.user_session.get("mode", "instructor")
+            is_student = mode == "student"
             params_text = (
                 f"**Focus:** {config.primary_focus}\n**Env:** {config.environment}\n"
                 f"**Team:** {config.available_personnel}\n**Evac:** "
@@ -126,7 +131,12 @@ async def generate_scenario() -> None:
             )
             loading_msg.content = f"✅ *Scenario ready for review!*\n\n{params_text}"
             await loading_msg.update()
-            await show_review_screen(state)
+
+            # Route students directly to simulation, instructors to review screen
+            if is_student:
+                await handle_student_start(state)
+            else:
+                await show_review_screen(state)
         else:
             loading_msg.content = (
                 "❌ Error: Scenario generation failed. Please try again."
@@ -176,6 +186,65 @@ async def show_completion(state: AuthorState) -> None:
                     source_id=state.scenario_id,
                 ),
             )
+
+
+async def handle_student_start(_state: AuthorState) -> None:
+    """Handle student mode - auto-approve and start simulation immediately."""
+    graph = cl.user_session.get("graph")
+    if graph is None:
+        await cl.Message(content="❌ Error: Session expired. Please start over.").send()
+        return
+
+    thread_id = cl.user_session.get("id")
+    config_dict: RunnableConfig = {"configurable": {"thread_id": thread_id}}
+
+    try:
+        # Auto-approve the scenario
+        result = await graph.ainvoke(
+            Command(resume={"action": "approve"}),
+            config=config_dict,
+        )
+
+        final_state = AuthorState.from_graph_result(result)
+        scenario_id = final_state.scenario_id or ""
+
+        # Set up simulation session
+        cl.user_session.set("scenario_id", scenario_id)
+        cl.user_session.set("mode", "player")
+
+        # Load scenario from store (it was just saved during approval)
+        store_result = scenario_store.get(("scenarios",), scenario_id)
+        if store_result is None:
+            await cl.Message(
+                content="❌ Error: Scenario not found in store.",
+            ).send()
+            return
+
+        scenario_data = store_result.value
+        scenario = ScenarioDraft.model_validate(scenario_data["scenario_draft"])
+        cl.user_session.set("scenario", scenario)
+
+        # Show scenario context for student before starting
+        context_content = format_scenario_intro(scenario)
+
+        await cl.Message(
+            content=context_content,
+            elements=[
+                cl.CustomElement(
+                    name="ChatEnabler",
+                    props={},
+                    display="inline",
+                )
+            ],
+        ).send()
+
+        # Start simulation (skip intro since we just showed context)
+        await simulation.run_simulation()
+
+    except Exception as e:
+        await cl.Message(
+            content=f"❌ Error starting simulation: {e!s}",
+        ).send()
 
 
 async def handle_approval(_state: AuthorState) -> None:
