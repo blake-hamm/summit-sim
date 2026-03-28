@@ -225,13 +225,7 @@ async def handle_student_start(_state: AuthorState) -> None:
         cl.user_session.set("scenario", scenario)
 
         # Show scenario context for student before starting
-        how_to_play = """
-#### 🎮 How to Play
-You're the responder on scene. Type what you'd like to do—assess the patient,
-ask questions, provide care, or manage the situation. The simulation tracks
-your progress and dynamically responds to your choices."""
-
-        context_content = format_scenario_intro(scenario) + how_to_play
+        context_content = format_scenario_intro(scenario)
 
         await cl.Message(
             content=context_content,

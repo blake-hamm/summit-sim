@@ -39,7 +39,12 @@ def format_scenario_intro(scenario: ScenarioDraft) -> str:
 **Scene State:** {scene_display}
 
 #### 🏥 Patient
-**Summary:** {scenario.patient_summary}"""
+**Summary:** {scenario.patient_summary}
+
+#### 🎮 How to Play
+You're the responder on scene. Type what you'd like to do—assess the patient,
+ask questions, provide care, or manage the situation. The simulation tracks
+your progress and dynamically responds to your choices."""
 
 
 SCENARIO_CONFIG_DEFAULTS: dict[str, Any] = get_config_defaults(ScenarioConfig)

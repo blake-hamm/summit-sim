@@ -52,13 +52,7 @@ async def show_scenario_intro(scenario: ScenarioDraft) -> None:
     """Display scenario intro and start simulation immediately."""
     content = format_scenario_intro(scenario)
 
-    how_to_play = """
-#### 🎮 How to Play
-You're the responder on scene. Type what you'd like to do—assess the patient,
-ask questions, provide care, or manage the situation. The simulation tracks
-your progress and dynamically responds to your choices."""
-
-    await cl.Message(content=content + how_to_play).send()
+    await cl.Message(content=content).send()
 
     await run_simulation()
 
