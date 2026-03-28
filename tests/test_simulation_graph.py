@@ -6,7 +6,6 @@ import pytest
 
 from summit_sim.graphs.simulation import (
     SimulationState,
-    _build_transcript_context,
     check_simulation_ending,
     create_simulation_graph,
     initialize_simulation,
@@ -14,8 +13,7 @@ from summit_sim.graphs.simulation import (
     process_player_action,
     update_simulation_state,
 )
-from summit_sim.graphs.utils import TranscriptEntry
-from summit_sim.schemas import DynamicTurnResult, ScenarioDraft
+from summit_sim.schemas import DynamicTurnResult, ScenarioDraft, TranscriptEntry
 
 
 class TestSimulationState:
@@ -23,48 +21,72 @@ class TestSimulationState:
 
     def test_simulation_state_creation(self):
         """Test creating a SimulationState instance."""
+        scenario = ScenarioDraft(
+            title="Test Emergency",
+            setting="Mountain trail",
+            patient_summary="30yo male",
+            hidden_truth="Fracture",
+            learning_objectives=["Assess injury", "Treat patient"],
+            initial_narrative="You find a hiker...",
+            hidden_state="Patient unconscious",
+            scene_state="Clear weather",
+        )
         state = SimulationState(
-            scenario_draft={"title": "Test"},
+            scenario=scenario,
             turn_count=0,
             transcript=[],
             scenario_id="test-123",
             hidden_state="Initial hidden state",
-            scene_state="Initial scene state",
         )
 
         assert state.scenario_id == "test-123"
         assert state.turn_count == 0
         assert state.is_complete is False
         assert state.hidden_state == "Initial hidden state"
-        assert state.scene_state == "Initial scene state"
 
     def test_simulation_state_defaults(self):
         """Test SimulationState default values."""
+        scenario = ScenarioDraft(
+            title="Test Emergency",
+            setting="Mountain trail",
+            patient_summary="30yo male",
+            hidden_truth="Fracture",
+            learning_objectives=["Assess injury", "Treat patient"],
+            initial_narrative="You find a hiker...",
+            hidden_state="Patient unconscious",
+            scene_state="Clear weather",
+        )
         state = SimulationState(
-            scenario_draft={"title": "Test"},
+            scenario=scenario,
         )
 
         assert state.turn_count == 0
         assert state.transcript == []
         assert state.is_complete is False
-        assert state.key_learning_moments == []
-        assert state.last_student_action is None
         assert state.action_result is None
         assert state.scenario_id == ""
         assert state.debrief_report is None
         assert state.hidden_state == ""
-        assert state.scene_state == ""
 
     def test_from_graph_result(self):
         """Test creating state from graph result."""
+        scenario = ScenarioDraft(
+            title="Test Scenario",
+            setting="Mountain trail",
+            patient_summary="30yo male",
+            hidden_truth="Fracture",
+            learning_objectives=["Assess injury", "Treat patient"],
+            initial_narrative="You find a hiker...",
+            hidden_state="Patient unconscious",
+            scene_state="Clear weather",
+        )
         result = {
-            "scenario_draft": {"title": "Test Scenario"},
+            "scenario": scenario,
             "turn_count": 3,
             "transcript": [],
             "is_complete": True,
             "scenario_id": "scn-456",
             "hidden_state": "Updated hidden state",
-            "scene_state": "Updated scene state",
             "extra_field": "should be filtered",
         }
 
@@ -74,7 +96,6 @@ class TestSimulationState:
         assert state.is_complete is True
         assert state.scenario_id == "scn-456"
         assert state.hidden_state == "Updated hidden state"
-        assert state.scene_state == "Updated scene state"
         # extra_field should be filtered out
         assert not hasattr(state, "extra_field")
 
@@ -83,8 +104,8 @@ class TestInitializeSimulation:
     """Tests for initialize_simulation function."""
 
     @pytest.fixture
-    def sample_scenario_draft(self):
-        """Create a sample scenario draft."""
+    def sample_scenario(self):
+        """Create a sample scenario."""
         return ScenarioDraft(
             title="Test Emergency",
             setting="Mountain trail",
@@ -96,10 +117,10 @@ class TestInitializeSimulation:
             scene_state="Clear weather",
         )
 
-    def test_initialize_simulation(self, sample_scenario_draft):
+    def test_initialize_simulation(self, sample_scenario):
         """Test simulation initialization."""
         initial_state = SimulationState(
-            scenario_draft=sample_scenario_draft.model_dump(),
+            scenario=sample_scenario,
             scenario_id="test-scenario-123",
         )
 
@@ -110,23 +131,11 @@ class TestInitializeSimulation:
         assert result.is_complete is False
         assert result.scenario_id == "test-scenario-123"
         assert result.hidden_state == "Patient unconscious"
-        assert result.scene_state == "Clear weather"
 
-    def test_initialize_simulation_preserves_scenario_id(self):
+    def test_initialize_simulation_preserves_scenario_id(self, sample_scenario):
         """Test that scenario ID is preserved during initialization."""
-        draft = ScenarioDraft(
-            title="Test",
-            setting="Location",
-            patient_summary="Patient",
-            hidden_truth="Truth",
-            learning_objectives=["Objective", "Secondary objective"],
-            initial_narrative="Initial narrative",
-            hidden_state="Hidden",
-            scene_state="Scene",
-        )
-
         initial_state = SimulationState(
-            scenario_draft=draft.model_dump(),
+            scenario=sample_scenario,
             scenario_id="my-scenario-id",
         )
 
@@ -139,8 +148,8 @@ class TestPresentPrompt:
     """Tests for present_prompt function."""
 
     @pytest.fixture
-    def sample_scenario_draft(self):
-        """Create a sample scenario draft."""
+    def sample_scenario(self):
+        """Create a sample scenario."""
         return ScenarioDraft(
             title="Test Emergency",
             setting="Mountain trail",
@@ -152,13 +161,12 @@ class TestPresentPrompt:
             scene_state="Clear weather, 2 hours to sunset",
         )
 
-    def test_present_initial_prompt(self, sample_scenario_draft):
+    def test_present_initial_prompt(self, sample_scenario):
         """Test presenting initial prompt (turn 0)."""
         state = SimulationState(
-            scenario_draft=sample_scenario_draft.model_dump(),
+            scenario=sample_scenario,
             turn_count=0,
             hidden_state="Patient unconscious, GCS 8",
-            scene_state="Clear weather, 2 hours to sunset",
         )
 
         with patch("summit_sim.graphs.simulation.interrupt") as mock_interrupt:
@@ -175,28 +183,27 @@ class TestPresentPrompt:
                 call_args["narrative"]
                 == "You find an unconscious hiker on the trail..."
             )
-            assert call_args["scene_state"] == "Clear weather, 2 hours to sunset"
 
-            # Verify result
-            assert result["last_student_action"] == "I check the patient's airway"
+            # Verify transcript was updated with student action
+            assert len(result["transcript"]) == 1
+            assert (
+                result["transcript"][0].student_action == "I check the patient's airway"
+            )
 
-    def test_present_subsequent_prompt(self, sample_scenario_draft):
+    def test_present_subsequent_prompt(self, sample_scenario):
         """Test presenting prompt after first turn."""
         action_result = DynamicTurnResult(
             was_correct=True,
             completion_score=0.3,
             feedback="Good first step",
             narrative_text="You check the airway and find it's clear...",
-            updated_hidden_state="Airway clear",
-            updated_scene_state="Weather stable",
         )
 
         state = SimulationState(
-            scenario_draft=sample_scenario_draft.model_dump(),
+            scenario=sample_scenario,
             turn_count=1,
             action_result=action_result.model_dump(),
             hidden_state="Airway clear",
-            scene_state="Weather stable",
         )
 
         with patch("summit_sim.graphs.simulation.interrupt") as mock_interrupt:
@@ -212,12 +219,12 @@ class TestPresentPrompt:
                 call_args["narrative"] == "You check the airway and find it's clear..."
             )
 
-            assert result["last_student_action"] == "I check for breathing"
+            assert result["transcript"][-1].student_action == "I check for breathing"
 
-    def test_present_prompt_empty_action_raises(self, sample_scenario_draft):
+    def test_present_prompt_empty_action_raises(self, sample_scenario):
         """Test that empty action raises ValueError."""
         state = SimulationState(
-            scenario_draft=sample_scenario_draft.model_dump(),
+            scenario=sample_scenario,
             turn_count=0,
         )
 
@@ -232,8 +239,8 @@ class TestProcessPlayerAction:
     """Tests for process_player_action function."""
 
     @pytest.fixture
-    def sample_scenario_draft(self):
-        """Create a sample scenario draft."""
+    def sample_scenario(self):
+        """Create a sample scenario."""
         return ScenarioDraft(
             title="Test Emergency",
             setting="Mountain trail",
@@ -246,24 +253,29 @@ class TestProcessPlayerAction:
         )
 
     @pytest.mark.asyncio
-    async def test_process_action(self, sample_scenario_draft):
+    async def test_process_action(self, sample_scenario):
         """Test processing a player action."""
         expected_result = DynamicTurnResult(
             was_correct=True,
             completion_score=0.4,
             feedback="Good assessment",
             narrative_text="You assess the patient...",
-            updated_hidden_state="Vitals stable",
-            updated_scene_state="Weather unchanged",
+        )
+
+        transcript_entry = TranscriptEntry(
+            turn_id=1,
+            turn_narrative="",
+            student_action="I check vital signs",
+            was_correct=False,
+            feedback="",
+            learning_moments=[],
         )
 
         state = SimulationState(
-            scenario_draft=sample_scenario_draft.model_dump(),
+            scenario=sample_scenario,
             turn_count=0,
-            last_student_action="I check vital signs",
             hidden_state="Patient unconscious",
-            scene_state="Clear weather",
-            transcript=[],
+            transcript=[transcript_entry],
         )
 
         with (
@@ -281,7 +293,7 @@ class TestProcessPlayerAction:
             mock_process.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_process_action_with_transcript(self, sample_scenario_draft):
+    async def test_process_action_with_transcript(self, sample_scenario):
         """Test processing action with existing transcript."""
         transcript_entry = TranscriptEntry(
             turn_id=1,
@@ -297,16 +309,12 @@ class TestProcessPlayerAction:
             completion_score=0.6,
             feedback="Continuing well",
             narrative_text="Next narrative...",
-            updated_hidden_state="Updated",
-            updated_scene_state="Updated scene",
         )
 
         state = SimulationState(
-            scenario_draft=sample_scenario_draft.model_dump(),
+            scenario=sample_scenario,
             turn_count=1,
-            last_student_action="Second action",
             hidden_state="Previous state",
-            scene_state="Previous scene",
             transcript=[transcript_entry],
         )
 
@@ -322,9 +330,6 @@ class TestProcessPlayerAction:
             result = await process_player_action(state)
 
             assert result["action_result"] == expected_result.model_dump()
-            # Verify process_action was called with transcript context
-            call_args = mock_process.call_args
-            assert call_args[1]["context"].transcript_history  # type: ignore
 
 
 class TestUpdateSimulationState:
@@ -337,19 +342,34 @@ class TestUpdateSimulationState:
             completion_score=0.5,
             feedback="Good action",
             narrative_text="The patient responds well...",
-            updated_hidden_state="Vitals improving",
-            updated_scene_state="Weather stable",
+        )
+
+        transcript_entry = TranscriptEntry(
+            turn_id=1,
+            turn_narrative="",
+            student_action="I treat the patient",
+            was_correct=False,
+            feedback="",
+            learning_moments=[],
+        )
+
+        scenario = ScenarioDraft(
+            title="Test Emergency",
+            setting="Mountain trail",
+            patient_summary="30yo male",
+            hidden_truth="Fracture",
+            learning_objectives=["Assess injury", "Treat patient"],
+            initial_narrative="You find a hiker...",
+            hidden_state="Previous hidden",
+            scene_state="Clear weather",
         )
 
         state = SimulationState(
-            scenario_draft={"title": "Test"},
+            scenario=scenario,
             turn_count=0,
-            transcript=[],
-            key_learning_moments=[],
-            last_student_action="I treat the patient",
+            transcript=[transcript_entry],
             action_result=action_result.model_dump(),
             hidden_state="Previous hidden",
-            scene_state="Previous scene",
         )
 
         with patch("summit_sim.graphs.simulation.get_settings") as mock_get_settings:
@@ -362,9 +382,6 @@ class TestUpdateSimulationState:
             assert result["turn_count"] == 1
             assert len(result["transcript"]) == 1
             assert result["is_complete"] is False
-            assert result["hidden_state"] == "Vitals improving"
-            assert result["scene_state"] == "Weather stable"
-            assert result["last_student_action"] is None  # Reset
 
             transcript_entry = result["transcript"][0]
             assert transcript_entry.student_action == "I treat the patient"
@@ -377,19 +394,34 @@ class TestUpdateSimulationState:
             completion_score=1.0,
             feedback="Scenario complete!",
             narrative_text="Patient evacuated successfully...",
-            updated_hidden_state="Patient evacuated",
-            updated_scene_state="Rescue complete",
+        )
+
+        transcript_entry = TranscriptEntry(
+            turn_id=4,
+            turn_narrative="",
+            student_action="Evacuate patient",
+            was_correct=False,
+            feedback="",
+            learning_moments=[],
+        )
+
+        scenario = ScenarioDraft(
+            title="Test Emergency",
+            setting="Mountain trail",
+            patient_summary="30yo male",
+            hidden_truth="Fracture",
+            learning_objectives=["Assess injury", "Treat patient"],
+            initial_narrative="You find a hiker...",
+            hidden_state="Previous",
+            scene_state="Clear weather",
         )
 
         state = SimulationState(
-            scenario_draft={"title": "Test"},
+            scenario=scenario,
             turn_count=3,
-            transcript=[],
-            key_learning_moments=[],
-            last_student_action="Evacuate patient",
+            transcript=[transcript_entry],
             action_result=action_result.model_dump(),
             hidden_state="Previous",
-            scene_state="Previous scene",
         )
 
         with patch("summit_sim.graphs.simulation.get_settings") as mock_get_settings:
@@ -410,19 +442,34 @@ class TestUpdateSimulationState:
             # Not naturally complete
             feedback="Good progress",
             narrative_text="Continuing...",
-            updated_hidden_state="State",
-            updated_scene_state="Scene",
+        )
+
+        transcript_entry = TranscriptEntry(
+            turn_id=5,
+            turn_narrative="",
+            student_action="Action",
+            was_correct=False,
+            feedback="",
+            learning_moments=[],
+        )
+
+        scenario = ScenarioDraft(
+            title="Test Emergency",
+            setting="Mountain trail",
+            patient_summary="30yo male",
+            hidden_truth="Fracture",
+            learning_objectives=["Assess injury", "Treat patient"],
+            initial_narrative="You find a hiker...",
+            hidden_state="Previous",
+            scene_state="Clear weather",
         )
 
         state = SimulationState(
-            scenario_draft={"title": "Test"},
+            scenario=scenario,
             turn_count=4,  # Will become 5, which equals max_turns
-            transcript=[],
-            key_learning_moments=[],
-            last_student_action="Action",
+            transcript=[transcript_entry],
             action_result=action_result.model_dump(),
             hidden_state="Previous",
-            scene_state="Previous scene",
         )
 
         with patch("summit_sim.graphs.simulation.get_settings") as mock_get_settings:
@@ -436,83 +483,23 @@ class TestUpdateSimulationState:
             assert result["is_complete"] is True  # Forced complete due to max turns
 
 
-class TestBuildTranscriptContext:
-    """Tests for _build_transcript_context function."""
-
-    def test_empty_transcript(self):
-        """Test building context from empty transcript."""
-        result = _build_transcript_context([])
-        assert result == []
-
-    def test_single_entry(self):
-        """Test building context from single entry."""
-        transcript = [
-            TranscriptEntry(
-                turn_id=1,
-                turn_narrative="Narrative 1",
-                student_action="Action 1",
-                was_correct=True,
-                feedback="Feedback 1",
-                learning_moments=["Lesson 1"],
-            )
-        ]
-
-        result = _build_transcript_context(transcript)
-
-        assert len(result) == 1
-        assert result[0]["action"] == "Action 1"
-        assert result[0]["feedback"] == "Feedback 1"
-        assert result[0]["narrative"] == "Narrative 1"
-        assert result[0]["was_correct"] is True
-
-    def test_multiple_entries(self):
-        """Test building context from multiple entries."""
-        transcript = [
-            TranscriptEntry(
-                turn_id=i,
-                turn_narrative=f"Narrative {i}",
-                student_action=f"Action {i}",
-                was_correct=i % 2 == 0,
-                feedback=f"Feedback {i}",
-                learning_moments=[f"Lesson {i}"],
-            )
-            for i in range(1, 4)
-        ]
-
-        result = _build_transcript_context(transcript)
-
-        assert len(result) == 3
-        assert result[0]["action"] == "Action 1"
-        assert result[2]["action"] == "Action 3"
-
-    def test_truncates_to_last_five(self):
-        """Test that only last 5 entries are included."""
-        transcript = [
-            TranscriptEntry(
-                turn_id=i,
-                turn_narrative=f"Narrative {i}",
-                student_action=f"Action {i}",
-                was_correct=True,
-                feedback=f"Feedback {i}",
-                learning_moments=[],
-            )
-            for i in range(1, 11)  # 10 entries
-        ]
-
-        result = _build_transcript_context(transcript)
-
-        assert len(result) == 5
-        assert result[0]["action"] == "Action 6"  # First of last 5
-        assert result[4]["action"] == "Action 10"  # Last
-
-
 class TestCheckSimulationEnding:
     """Tests for check_simulation_ending function."""
 
     def test_returns_generate_debrief_when_complete(self):
         """Test routing to debrief when simulation is complete."""
+        scenario = ScenarioDraft(
+            title="Test Emergency",
+            setting="Mountain trail",
+            patient_summary="30yo male",
+            hidden_truth="Fracture",
+            learning_objectives=["Assess injury", "Treat patient"],
+            initial_narrative="You find a hiker...",
+            hidden_state="Patient unconscious",
+            scene_state="Clear weather",
+        )
         state = SimulationState(
-            scenario_draft={"title": "Test"},
+            scenario=scenario,
             is_complete=True,
         )
 
@@ -522,8 +509,18 @@ class TestCheckSimulationEnding:
 
     def test_returns_present_prompt_when_not_complete(self):
         """Test routing back to present prompt when not complete."""
+        scenario = ScenarioDraft(
+            title="Test Emergency",
+            setting="Mountain trail",
+            patient_summary="30yo male",
+            hidden_truth="Fracture",
+            learning_objectives=["Assess injury", "Treat patient"],
+            initial_narrative="You find a hiker...",
+            hidden_state="Patient unconscious",
+            scene_state="Clear weather",
+        )
         state = SimulationState(
-            scenario_draft={"title": "Test"},
+            scenario=scenario,
         )
 
         result = check_simulation_ending(state)

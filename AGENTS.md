@@ -16,6 +16,8 @@ These rules are absolute. Do not violate them under any circumstances.
 - **No bypassing the agent factory.** All agents must be created via `get_agent()` from `agents/config.py`. Never instantiate `Agent(...)` directly in application code.
 - **Use Nix-provided ruff only.** The `.venv` installs a dynamically-linked `ruff` binary that does NOT work on NixOS. Always use the `ruff` binary from the Nix dev shell. Do not rely on `.venv/bin/ruff` or run pre-commit hooks for linting -- run ruff and coverage checks manually instead.
 - **No external API calls in tests.** All LLM calls must be mocked via `unittest.mock.AsyncMock`. Patch at `summit_sim.agents.config.Agent`, not at import sites.
+- **Never modify pyproject.toml.** Lint issues must be fixed in the source code. Do not change ruff configuration, add ignores, or modify tool settings without explicit permission. If unable to fix an issue, ask before adding `noqa` comments.
+- **Use uv add for dependencies.** Never edit pyproject.toml directly to add packages. Always use `uv add <package>` (or `uv add --dev <package>` for dev dependencies).
 
 ## Environment Setup
 
@@ -73,6 +75,7 @@ That's it. If those pass, you're good. Ruff config is in `pyproject.toml` -- let
 - **Absolute imports** within the package
 - **pathlib** over `os.path`
 - **Specific exceptions** -- no bare `except:`; use `raise from` when re-raising
+- **Fail fast, not silently** -- Don't add defensive checks, extra `if` statements, or try/except blocks to "handle" edge cases that shouldn't happen. If something is wrong, let it fail with a clear error. No silent fallbacks, no default values that mask bugs, no defensive coding
 - 4 spaces, 88-char lines, ruff handles the rest
 
 ### Tech Stack

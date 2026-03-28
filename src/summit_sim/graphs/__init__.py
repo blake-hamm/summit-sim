@@ -8,12 +8,10 @@ from summit_sim.graphs.simulation import (
     SimulationState,
     create_simulation_graph,
 )
-from summit_sim.graphs.utils import TranscriptEntry
 
 __all__ = [
     "SimulationState",
     "create_simulation_graph",
     "AuthorState",
     "create_author_graph",
-    "TranscriptEntry",
 ]

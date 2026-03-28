@@ -105,8 +105,6 @@ class TestDynamicTurnResult:
             completion_score=0.75,
             feedback="Good job assessing the patient.",
             narrative_text="You check the patient's pulse and find it weak.",
-            updated_hidden_state="Patient has weak pulse and BP 90/60",
-            updated_scene_state="5 minutes elapsed since arrival",
         )
 
         assert result.was_correct is True
@@ -115,7 +113,6 @@ class TestDynamicTurnResult:
         assert (
             result.narrative_text == "You check the patient's pulse and find it weak."
         )
-        assert "weak pulse" in result.updated_hidden_state
 
     def test_dynamic_turn_result_complete(self):
         """Test creating a completed scenario result."""
@@ -124,8 +121,6 @@ class TestDynamicTurnResult:
             completion_score=1.0,
             feedback="Scenario complete. Patient evacuated successfully.",
             narrative_text="The evacuation helicopter arrives and takes the patient.",
-            updated_hidden_state="Patient evacuated to medical facility",
-            updated_scene_state="Rescue operation complete",
         )
 
         assert result.completion_score == 1.0
@@ -138,8 +133,6 @@ class TestDynamicTurnResult:
                 completion_score=1.5,
                 feedback="Test",
                 narrative_text="Test",
-                updated_hidden_state="Test state",
-                updated_scene_state="Test scene",
             )
 
         with pytest.raises(
@@ -150,6 +143,4 @@ class TestDynamicTurnResult:
                 completion_score=-0.1,
                 feedback="Test",
                 narrative_text="Test",
-                updated_hidden_state="Test state",
-                updated_scene_state="Test scene",
             )

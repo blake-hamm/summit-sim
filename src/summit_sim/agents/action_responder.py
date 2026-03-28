@@ -3,25 +3,15 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from summit_sim.agents.utils import setup_agent_and_prompts
-from summit_sim.schemas import DynamicTurnResult, ScenarioDraft
+from summit_sim.schemas import DynamicTurnResult, ScenarioDraft, TranscriptEntry
+
+if TYPE_CHECKING:
+    from summit_sim.graphs.simulation import SimulationState
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass
-class TurnContext:
-    """Context for a single simulation turn."""
-
-    hidden_state: str
-    scene_state: str
-    transcript_history: list[dict]
-    turn_count: int
-    max_turns: int
-    previous_score: float = 0.0
-
 
 AGENT_NAME = "action-responder"
 
@@ -122,13 +112,12 @@ SYSTEM_PROMPT = (
     "=== NARRATIVE & STATE EVOLUTION ===\n\n"
     "NARRATIVE_TEXT (3-5 sentences):\n"
     "- Describe what happens based on student actions\n"
+    "- Progressively reveal hidden information as student performs assessments\n"
     "- Show realistic patient responses and environmental changes\n"
     "- If was_correct=False: show mild consequences, not disasters\n"
     "- If was_correct=True: show stabilization or appropriate findings\n"
-    "- End with an open question inviting the next action\n\n"
-    "STATE UPDATES:\n"
-    "- updated_hidden_state: Medical state reflecting assessments performed\n"
-    "- updated_scene_state: Environmental changes, time elapsed, resources used\n\n"
+    "- End with an open question inviting the next action\n"
+    "- Do NOT repeat information already revealed in conversation history\n\n"
     "=== CONTINUITY ===\n\n"
     "- Reference previous actions and their effects\n"
     "- Maintain consistency with established facts\n"
@@ -137,55 +126,53 @@ SYSTEM_PROMPT = (
 
 USER_PROMPT_TEMPLATE = (
     "Evaluate the following student action in the wilderness rescue "
-    "scenario:\n\n"
+    "scenario.\n\n"
     "=== SCENARIO CONTEXT ===\n"
     "Title: {{title}}\n"
     "Setting: {{setting}}\n"
     "Patient Summary: {{patient_summary}}\n"
     "Hidden Truth: {{hidden_truth}}\n"
     "Learning Objectives: {{learning_objectives}}\n\n"
-    "=== CURRENT STATE ===\n"
-    "Hidden State (medical details known only to AI):\n"
+    "=== GROUND TRUTH (AI Reference Only - Reveal Progressively) ===\n"
+    "Complete medical information to reveal based on student actions:\n"
     "{{hidden_state}}\n\n"
-    "Scene State (environmental conditions):\n"
-    "{{scene_state}}\n\n"
-    "=== TRANSCRIPT HISTORY (last 3-5 turns) ===\n"
-    "{{transcript_history}}\n\n"
-    "=== STUDENT ACTION ===\n"
-    '"{{student_action}}"\n\n'
-    "=== TURN COUNT ===\n"
-    "Turn {{turn_count}} of maximum {{max_turns}} turns\n\n"
-    "=== PROGRESS TRACKING ===\n"
+    "=== CONVERSATION HISTORY ===\n"
+    "{{conversation_history}}\n\n"
+    "=== CURRENT TURN ===\n"
+    "Turn {{turn_count}} of {{max_turns}}\n"
     "Previous completion_score: {{previous_score}}\n\n"
-    "=== EVALUATION GUIDELINES ===\n"
-    "1. CUMULATIVE ASSESSMENT: Consider ALL previous actions in the transcript. "
-    "   Students build toward milestones across turns.\n\n"
-    "2. BE LENIENT: Only flag was_correct=False for explicit treatment without "
-    "   assessment (splint, bandage, medication). Identifying injuries or "
-    "   checking vitals is GOOD assessment, not treatment.\n\n"
-    "3. BUNDLE REWARD: If student completes multiple steps at once, jump to "
-    "   the highest milestone reached. Efficiency should be rewarded!\n\n"
-    "4. CLOSE ENOUGH = FULL CREDIT: Partial milestone completion counts. "
-    "   Don't require perfection before awarding progress.\n\n"
-    "5. 70% PASS THRESHOLD: completion_score >= 0.70 completes the scenario. "
-    "   Perfect 1.0 is not required.\n\n"
-    "6. NEVER DECREASE SCORE: New score MUST be >= {{previous_score}}\n\n"
-    "7. ENCOURAGING FEEDBACK: Acknowledge what they did right, describe findings "
-    "   realistically, then provide gentle guidance on next steps.\n\n"
-    "Evaluate this action and generate the next turn."
+    "Student: {{student_action}}\n\n"
+    "=== YOUR TASK ===\n"
+    "1. Review conversation history to see what has already been discovered\n"
+    "2. Based on the student's action, determine what NEW information to reveal\n"
+    "3. Write narrative_text that describes discoveries naturally\n"
+    "4. Provide encouraging feedback and update completion_score\n"
+    "5. End narrative with an open question inviting the next action\n\n"
+    "Guidelines:\n"
+    "- CUMULATIVE SCORING: Consider all previous actions (not just current)\n"
+    "- BE LENIENT: Only flag was_correct=False for explicit treatment without "
+    "  assessment (splint, bandage, medication). Assessment is always good.\n"
+    "- BUNDLE REWARD: Multiple steps in one action = jump to highest milestone\n"
+    "- CLOSE ENOUGH = FULL CREDIT: Partial completion counts\n"
+    "- 70% PASS THRESHOLD: Score >= 0.70 completes scenario\n"
+    "- NEVER DECREASE: New score must be >= previous_score\n"
+    "- PROGRESSIVE REVELATION: Only reveal what's discovered this turn, "
+    "  don't repeat previously known facts\n\n"
+    "Generate the response following the narrative_text examples in the schema."
 )
 
 
 async def process_action(
     student_action: str,
     scenario: ScenarioDraft,
-    context: TurnContext,
+    simulation_state: SimulationState,
+    max_turns: int,
 ) -> DynamicTurnResult:
     """Process a student action and generate the next simulation turn."""
     logger.info(
         "Processing student action: turn=%d/%d, action_length=%d",
-        context.turn_count,
-        context.max_turns,
+        simulation_state.turn_count + 1,
+        max_turns,
         len(student_action),
     )
 
@@ -196,8 +183,13 @@ async def process_action(
         user_prompt_template=USER_PROMPT_TEMPLATE,
     )
 
-    # Format transcript history as string
-    history_str = _format_transcript_history(context.transcript_history)
+    # Format conversation history from transcript
+    conversation_history = _format_conversation_history(simulation_state.transcript)
+
+    # Get previous score
+    previous_score = 0.0
+    if simulation_state.action_result:
+        previous_score = simulation_state.action_result.get("completion_score", 0.0)
 
     prompt = str(
         user_prompt.format(
@@ -206,13 +198,12 @@ async def process_action(
             patient_summary=scenario.patient_summary,
             hidden_truth=scenario.hidden_truth,
             learning_objectives=", ".join(scenario.learning_objectives),
-            hidden_state=context.hidden_state,
-            scene_state=context.scene_state,
-            transcript_history=history_str,
+            hidden_state=simulation_state.hidden_state,
+            conversation_history=conversation_history,
             student_action=student_action,
-            turn_count=context.turn_count,
-            max_turns=context.max_turns,
-            previous_score=context.previous_score,
+            turn_count=simulation_state.turn_count + 1,
+            max_turns=max_turns,
+            previous_score=previous_score,
         )
     )
 
@@ -225,16 +216,17 @@ async def process_action(
     return result.output
 
 
-def _format_transcript_history(transcript_history: list[dict]) -> str:
-    """Format transcript history for prompt context."""
-    if not transcript_history:
-        return "No previous actions (initial turn)."
+def _format_conversation_history(transcript: list[TranscriptEntry]) -> str:
+    """Format transcript as conversation history for prompt context."""
+    if not transcript:
+        return "Initial turn - no previous actions."
 
     lines = []
-    for i, entry in enumerate(transcript_history[-5:], 1):
-        lines.append(f"\nTurn {i}:")
-        lines.append(f"  Student: {entry.get('action', 'N/A')}")
-        lines.append(f"  Feedback: {entry.get('feedback', 'N/A')[:100]}...")
-        lines.append(f"  Result: {entry.get('narrative', 'N/A')[:150]}...")
+    for entry in transcript[-5:]:
+        lines.append(f"Student: {entry.student_action}")
+        if entry.turn_narrative:
+            lines.append(f"AI: {entry.turn_narrative}")
+            lines.append(f"    ({entry.feedback[:80]}...)")
+        lines.append("")
 
     return "\n".join(lines)
