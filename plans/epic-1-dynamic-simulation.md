@@ -33,20 +33,33 @@ Replace rigid multiple-choice turns with an interactive, free-text simulation lo
 
 Complete these before starting Phase 1:
 
-### 1. Prompt Versioning System
-**File**: `agents/config.py`
+### 1. Prompt Versioning System ✅ COMPLETED
+**File**: `src/summit_sim/agents/config.py`
 
-Current implementation auto-registers prompts but doesn't detect changes. Update to:
-- **System prompts**: Compare hash of current system_prompt with registered version; if different, register new version
-- **User prompts**: Store in MLflow with hash comparison before each agent call
-- **Semantic versioning**: Use `prompts:/{agent_name}-system@latest` but track version history
+**Implementation**:
+- **System prompts**: `_get_or_register_system_prompt()` compares current system_prompt string with registered version; if different, registers new version
+- **User prompts**: New `_get_or_register_user_prompt()` handles user prompt templates (Jinja2 format)
+- **API Change**: `get_agent()` now accepts optional `user_prompt_template` parameter and returns `(agent, user_prompt_uri)` tuple when provided
+- **Versioning**: Both use `prompts:/{agent_name}-{system|user}@latest` with automatic version updates on change detection
+
+**Usage**:
+```python
+agent, user_prompt_uri = get_agent(
+    agent_name="my-agent",
+    output_type=MySchema,
+    system_prompt=SYSTEM_PROMPT,
+    user_prompt_template=USER_PROMPT_TEMPLATE,  # Optional
+)
+user_prompt = mlflow.genai.load_prompt(user_prompt_uri)
+prompt = str(user_prompt.format(var=value))
+```
 
 **Why**: Prevents stale prompts from being used after code changes. Required before Phase 2 when ActionResponder is created.
 
-### 2. Settings Structure
-**File**: `settings.py`
+### 2. Settings Structure ✅ COMPLETED
+**File**: `src/summit_sim/settings.py`
 
-Add global configuration:
+**Implementation**:
 ```python
 class Settings(BaseSettings):
     # ... existing settings ...
@@ -55,14 +68,61 @@ class Settings(BaseSettings):
 
 **Why**: Required for Phase 2 turn limit logic.
 
-### 3. Test Infrastructure
-**Files**: `tests/`
+### 3. Test Infrastructure ✅ COMPLETED
+**Files**: `tests/conftest.py`, `tests/test_agents_config.py`
 
-Ensure existing tests pass and add:
-- Mock LLM infrastructure for ActionResponder testing
-- E2E test helpers for author/student flows
+**Implementation**:
+- **New file**: `tests/conftest.py` with reusable fixtures:
+  - `mock_api_key`: Mocks OpenRouter API key
+  - `clear_agent_cache`: Clears agent container between tests  
+  - `mock_mlflow_prompts`: Mocks MLflow prompt loading/registration
+  - `mock_agent`: Creates mock PydanticAI agent
+  - `mock_generator_prompts`, `mock_simulation_prompts`, `mock_debrief_prompts`: Agent-specific prompt mocks
+
+- **Updated**: `tests/test_agents_config.py` with comprehensive tests:
+  - System prompt versioning (unchanged vs changed vs new)
+  - User prompt versioning (unchanged vs changed vs new)
+  - `get_agent()` with and without `user_prompt_template`
 
 **Why**: Each phase requires E2E validation; need infrastructure ready.
+
+---
+
+## Pre-requisites Completion Summary
+
+All pre-requisites have been implemented and tested:
+
+### Files Modified
+
+| File | Changes | Lines |
+|------|---------|-------|
+| `src/summit_sim/agents/config.py` | Added prompt versioning for system + user prompts, @overload decorators | +84 |
+| `src/summit_sim/settings.py` | Added `max_turns` setting with Field() | +4 |
+| `src/summit_sim/agents/generator.py` | Updated to use new `get_agent()` API with user prompt | +5/-6 |
+| `src/summit_sim/agents/simulation.py` | Updated to use new `get_agent()` API with user prompt | +5/-5 |
+| `src/summit_sim/agents/debrief.py` | Updated to use new `get_agent()` API with user prompt | +6/-6 |
+| `tests/conftest.py` | NEW - Reusable mock fixtures | +124 |
+| `tests/test_agents_config.py` | Added comprehensive tests for prompt versioning | +77/-14 |
+
+### Test Results
+- **88 tests passing** (added 5 new tests for prompt versioning)
+- All existing tests continue to pass
+- Coverage maintained
+
+### Key Implementation Details
+
+1. **Prompt Versioning**: Uses simple string comparison (not hashing). When content differs from registered version, automatically registers new version in MLflow.
+
+2. **get_agent() API**: 
+   - Without `user_prompt_template`: returns `Agent`
+   - With `user_prompt_template`: returns `(Agent, user_prompt_uri)`
+   - Uses `@overload` for proper type hints
+
+3. **User Prompt Pattern**: Agents now receive `user_prompt_uri` and call:
+   ```python
+   user_prompt = mlflow.genai.load_prompt(user_prompt_uri)
+   prompt = str(user_prompt.format(var=value))
+   ```
 
 ---
 
@@ -229,18 +289,20 @@ Student Action Text
 
 ## File Changes Summary
 
-| File | Changes | Phase |
-|------|---------|-------|
-| `schemas.py` | Add DynamicTurnResult; update ScenarioDraft | 1 |
-| `agents/generator.py` | Remove multi-turn logic, output initial_narrative | 1 |
-| `ui/author.py` | Display initial_narrative in review | 1 |
-| `agents/action_responder.py` | NEW - ActionResponder agent | 2 |
-| `agents/config.py` | Register ActionResponder | 2 |
-| `settings.py` | Add global max_turns (default: 5) | 2 |
-| `graphs/simulation.py` | Refactor state, nodes, graph flow | 2 |
-| `ui/simulation.py` | Replace buttons with text input | 2 |
-| `public/hide-chat.css` | Scope to author mode | 2 |
-| `main.py` | Set body class based on mode | 2 |
+| File | Changes | Phase | Status |
+|------|---------|-------|--------|
+| `agents/config.py` | Prompt versioning for system + user prompts | Pre-req | ✅ Complete |
+| `settings.py` | Add global max_turns (default: 5) | Pre-req | ✅ Complete |
+| `tests/conftest.py` | Reusable mock fixtures | Pre-req | ✅ Complete |
+| `schemas.py` | Add DynamicTurnResult; update ScenarioDraft | 1 | Pending |
+| `agents/generator.py` | Remove multi-turn logic, output initial_narrative | 1 | Pending |
+| `ui/author.py` | Display initial_narrative in review | 1 | Pending |
+| `agents/action_responder.py` | NEW - ActionResponder agent | 2 | Pending |
+| `agents/config.py` | Register ActionResponder | 2 | Pending |
+| `graphs/simulation.py` | Refactor state, nodes, graph flow | 2 | Pending |
+| `ui/simulation.py` | Replace buttons with text input | 2 | Pending |
+| `public/hide-chat.css` | Scope to author mode | 2 | Pending |
+| `main.py` | Set body class based on mode | 2 | Pending |
 
 ---
 
