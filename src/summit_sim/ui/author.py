@@ -42,6 +42,7 @@ async def ask_scenario_config() -> None:
     res = await cl.AskElementMessage(
         content="",
         element=element,
+        timeout=settings.ui_timeout,
     ).send()
 
     if res and res.get("submitted"):
@@ -158,6 +159,7 @@ async def show_completion(state: AuthorState) -> None:
             cl.Action(name=a["name"], payload=a["payload"], label=a["label"])
             for a in get_satisfaction_actions()
         ],
+        timeout=settings.ui_timeout,
     ).send()
 
     if res and res.get("payload"):
@@ -215,6 +217,7 @@ async def handle_revision(state: AuthorState) -> None:
     res = await cl.AskElementMessage(
         content="Please provide specific feedback on what you'd like changed:",
         element=element,
+        timeout=settings.ui_timeout,
     ).send()
 
     if not res or not res.get("submitted"):
@@ -324,6 +327,7 @@ async def show_review_screen(state: AuthorState) -> None:
             cl.Action(name=a["name"], payload=a["payload"], label=a["label"])
             for a in get_review_actions()
         ],
+        timeout=settings.ui_timeout,
     ).send()
 
     if res and res.get("payload"):

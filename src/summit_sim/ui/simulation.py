@@ -12,6 +12,7 @@ from summit_sim.graphs.simulation import (
 )
 from summit_sim.graphs.utils import scenario_store
 from summit_sim.schemas import DebriefReport, DynamicTurnResult, ScenarioDraft
+from summit_sim.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -168,7 +169,7 @@ async def handle_simulation_loop(
         # Get free-text action from student with character limit
         res = await cl.AskUserMessage(
             content=prompt_content,
-            timeout=300,  # 5 minute timeout
+            timeout=settings.ui_timeout,
         ).send()
 
         if not res or not res.get("output"):
