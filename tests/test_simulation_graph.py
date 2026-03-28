@@ -27,7 +27,6 @@ class TestSimulationState:
             scenario_draft={"title": "Test"},
             turn_count=0,
             transcript=[],
-            is_complete=False,
             scenario_id="test-123",
             hidden_state="Initial hidden state",
             scene_state="Initial scene state",
@@ -186,7 +185,6 @@ class TestPresentPrompt:
         action_result = DynamicTurnResult(
             was_correct=True,
             completion_score=0.3,
-            is_complete=False,
             feedback="Good first step",
             narrative_text="You check the airway and find it's clear...",
             updated_hidden_state="Airway clear",
@@ -253,7 +251,6 @@ class TestProcessPlayerAction:
         expected_result = DynamicTurnResult(
             was_correct=True,
             completion_score=0.4,
-            is_complete=False,
             feedback="Good assessment",
             narrative_text="You assess the patient...",
             updated_hidden_state="Vitals stable",
@@ -298,7 +295,6 @@ class TestProcessPlayerAction:
         expected_result = DynamicTurnResult(
             was_correct=True,
             completion_score=0.6,
-            is_complete=False,
             feedback="Continuing well",
             narrative_text="Next narrative...",
             updated_hidden_state="Updated",
@@ -339,7 +335,6 @@ class TestUpdateSimulationState:
         action_result = DynamicTurnResult(
             was_correct=True,
             completion_score=0.5,
-            is_complete=False,
             feedback="Good action",
             narrative_text="The patient responds well...",
             updated_hidden_state="Vitals improving",
@@ -380,7 +375,6 @@ class TestUpdateSimulationState:
         action_result = DynamicTurnResult(
             was_correct=True,
             completion_score=1.0,
-            is_complete=True,
             feedback="Scenario complete!",
             narrative_text="Patient evacuated successfully...",
             updated_hidden_state="Patient evacuated",
@@ -413,7 +407,7 @@ class TestUpdateSimulationState:
         action_result = DynamicTurnResult(
             was_correct=True,
             completion_score=0.7,
-            is_complete=False,  # Not naturally complete
+            # Not naturally complete
             feedback="Good progress",
             narrative_text="Continuing...",
             updated_hidden_state="State",
@@ -530,7 +524,6 @@ class TestCheckSimulationEnding:
         """Test routing back to present prompt when not complete."""
         state = SimulationState(
             scenario_draft={"title": "Test"},
-            is_complete=False,
         )
 
         result = check_simulation_ending(state)

@@ -103,7 +103,6 @@ class TestDynamicTurnResult:
         result = DynamicTurnResult(
             was_correct=True,
             completion_score=0.75,
-            is_complete=False,
             feedback="Good job assessing the patient.",
             narrative_text="You check the patient's pulse and find it weak.",
             updated_hidden_state="Patient has weak pulse and BP 90/60",
@@ -112,7 +111,6 @@ class TestDynamicTurnResult:
 
         assert result.was_correct is True
         assert result.completion_score == 0.75
-        assert result.is_complete is False
         assert result.feedback == "Good job assessing the patient."
         assert (
             result.narrative_text == "You check the patient's pulse and find it weak."
@@ -124,14 +122,12 @@ class TestDynamicTurnResult:
         result = DynamicTurnResult(
             was_correct=True,
             completion_score=1.0,
-            is_complete=True,
             feedback="Scenario complete. Patient evacuated successfully.",
             narrative_text="The evacuation helicopter arrives and takes the patient.",
             updated_hidden_state="Patient evacuated to medical facility",
             updated_scene_state="Rescue operation complete",
         )
 
-        assert result.is_complete is True
         assert result.completion_score == 1.0
 
     def test_dynamic_turn_result_score_bounds(self):
@@ -140,7 +136,6 @@ class TestDynamicTurnResult:
             DynamicTurnResult(
                 was_correct=True,
                 completion_score=1.5,
-                is_complete=False,
                 feedback="Test",
                 narrative_text="Test",
                 updated_hidden_state="Test state",
@@ -153,7 +148,6 @@ class TestDynamicTurnResult:
             DynamicTurnResult(
                 was_correct=True,
                 completion_score=-0.1,
-                is_complete=False,
                 feedback="Test",
                 narrative_text="Test",
                 updated_hidden_state="Test state",

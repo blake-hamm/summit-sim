@@ -118,9 +118,7 @@ class DynamicTurnResult(BaseModel):
         le=1.0,
         description="Progress toward scenario completion (0.0-1.0 scale)",
     )
-    is_complete: bool = Field(
-        ..., description="Whether the scenario has reached a natural conclusion"
-    )
+
     feedback: str = Field(
         ..., description="AI-generated personalized feedback on the action"
     )
