@@ -53,7 +53,6 @@ async def ask_scenario_config() -> None:
         available_personnel = res.get("available_personnel")
         evac_distance = res.get("evac_distance")
         complexity = res.get("complexity")
-        mode = res.get("mode", "Instructor (Review & Share)")
 
         if not all(
             [primary_focus, environment, available_personnel, evac_distance, complexity]
@@ -65,7 +64,6 @@ async def ask_scenario_config() -> None:
         cl.user_session.set("available_personnel", available_personnel)
         cl.user_session.set("evac_distance", evac_distance)
         cl.user_session.set("complexity", complexity)
-        cl.user_session.set("mode", mode)
         await generate_scenario()
 
 
@@ -123,8 +121,8 @@ async def generate_scenario() -> None:
 
         if result.get("scenario_draft"):
             state = AuthorState.from_graph_result(result)
-            mode = cl.user_session.get("mode", "Instructor (Review & Share)")
-            is_student = mode == "Student (Play Now)"
+            mode = cl.user_session.get("mode", "instructor")
+            is_student = mode == "student"
             params_text = (
                 f"**Role:** {mode}\n"
                 f"**Focus:** {config.primary_focus}\n**Env:** {config.environment}\n"
