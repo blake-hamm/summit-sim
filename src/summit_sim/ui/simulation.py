@@ -13,6 +13,7 @@ from summit_sim.graphs.simulation import (
 from summit_sim.graphs.utils import scenario_store
 from summit_sim.schemas import DebriefReport, DynamicTurnResult, ScenarioDraft
 from summit_sim.settings import settings
+from summit_sim.ui.utils import format_scenario_intro
 
 logger = logging.getLogger(__name__)
 
@@ -49,38 +50,20 @@ async def start_simulation_session() -> None:
 
 async def show_scenario_intro(scenario: ScenarioDraft) -> None:
     """Display scenario intro and start simulation immediately."""
-    objectives_text = "\n".join(f"• {obj}" for obj in scenario.learning_objectives)
+    content = format_scenario_intro(scenario)
 
-    scene_display = (
-        scenario.scene_state if scenario.scene_state else "*No special conditions*"
-    )
-
-    content = f"""## 🏔️ {scenario.title}
-
-#### 🎯 Learning Objectives
-{objectives_text}
-
-#### 🏔️ Environment
-**Setting:** {scenario.setting}
-
-**Scene State:** {scene_display}
-
-#### 🏥 Patient
-**Summary:** {scenario.patient_summary}
-
-**Opening Narrative:** {scenario.initial_narrative}
-
+    how_to_play = """
 #### 🎮 How to Play
 You're the responder on scene. Type what you'd like to do—assess the patient,
 ask questions, provide care, or manage the situation. The simulation tracks
 your progress and dynamically responds to your choices."""
 
-    await cl.Message(content=content).send()
+    await cl.Message(content=content + how_to_play).send()
 
     await run_simulation()
 
 
-async def run_simulation(skip_intro: bool = False) -> None:
+async def run_simulation() -> None:
     """Run the simulation graph with player interactions."""
     scenario = cl.user_session.get("scenario")
     scenario_id = cl.user_session.get("scenario_id") or ""
@@ -112,7 +95,7 @@ async def run_simulation(skip_intro: bool = False) -> None:
 
     try:
         result = await graph.ainvoke(initial_state, config)
-        await handle_simulation_loop(result, graph, config, skip_intro=skip_intro)
+        await handle_simulation_loop(result, graph, config)
     except Exception as e:
         await cl.Message(content=f"❌ Error during simulation: {e!s}").send()
 
@@ -121,7 +104,6 @@ async def handle_simulation_loop(  # noqa: PLR0912
     state: SimulationState | dict,
     graph: CompiledStateGraph,
     config: RunnableConfig,
-    skip_intro: bool = False,
 ) -> None:
     """Handle simulation interrupts and player free-text actions."""
     if isinstance(state, dict):
@@ -159,15 +141,8 @@ async def handle_simulation_loop(  # noqa: PLR0912
             result = DynamicTurnResult.model_validate(state.action_result)
             current_narrative = result.narrative_text
 
-        # Skip scene conditions for students who just reviewed
-        if skip_intro and state.turn_count == 0:
-            prompt_content = current_narrative
-        elif state.scene_state:
-            prompt_content = (
-                f"**Scene Conditions:**\n{state.scene_state}\n\n{current_narrative}"
-            )
-        else:
-            prompt_content = current_narrative
+        # Scene conditions are shown in the intro; narrative is the prompt
+        prompt_content = current_narrative
 
         # Get free-text action from student with character limit
         res = await cl.AskUserMessage(

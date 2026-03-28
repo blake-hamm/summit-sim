@@ -17,6 +17,7 @@ from summit_sim.schemas import ScenarioConfig, ScenarioDraft
 from summit_sim.settings import settings
 from summit_sim.ui import simulation
 from summit_sim.ui.utils import (
+    format_scenario_intro,
     get_author_form_fields,
     get_review_actions,
     get_review_content,
@@ -225,30 +226,18 @@ async def handle_student_start(_state: AuthorState) -> None:
         cl.user_session.set("scenario", scenario)
 
         # Show scenario context for student before starting
-        objectives_text = "\n".join(f"• {obj}" for obj in scenario.learning_objectives)
-        scene_display = (
-            scenario.scene_state if scenario.scene_state else "*No special conditions*"
-        )
+        how_to_play = """
+#### 🎮 How to Play
+You're the responder on scene. Type what you'd like to do—assess the patient,
+ask questions, provide care, or manage the situation. The simulation tracks
+your progress and dynamically responds to your choices."""
 
-        context_content = f"""## 🏔️ {scenario.title}
-
-#### 🎯 Learning Objectives
-{objectives_text}
-
-#### 🏔️ Environment
-**Setting:** {scenario.setting}
-
-**Scene State:** {scene_display}
-
-#### 🏥 Patient
-**Summary:** {scenario.patient_summary}
-
-‌"""  # Zero-width non-joiner signals simulation is ready
+        context_content = format_scenario_intro(scenario) + how_to_play
 
         await cl.Message(content=context_content).send()
 
         # Start simulation (skip intro since we just showed context)
-        await simulation.run_simulation(skip_intro=True)
+        await simulation.run_simulation()
 
     except Exception as e:
         await cl.Message(
