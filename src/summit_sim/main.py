@@ -16,14 +16,32 @@ from summit_sim.ui import author, simulation
 
 logger = logging.getLogger(__name__)
 
-mlflow.set_tracking_uri(settings.mlflow_tracking_uri)
-mlflow.set_experiment(settings.mlflow_experiment_name)
-mlflow.pydantic_ai.autolog()
+
+class _MLflowState:
+    """Track MLflow initialization state to avoid creating resources at import time."""
+
+    def __init__(self) -> None:
+        """Initialize state container."""
+        self.initialized = False
+
+    def init(self) -> None:
+        """Initialize MLflow - only runs once when chat session starts."""
+        if not self.initialized:
+            mlflow.set_tracking_uri(settings.mlflow_tracking_uri)
+            mlflow.set_experiment(settings.mlflow_experiment_name)
+            mlflow.pydantic_ai.autolog()  # type: ignore[attr-defined]
+            self.initialized = True
+            logger.debug("MLflow initialized")
+
+
+# Module-level state container for lazy initialization
+_mlflow_state = _MLflowState()
 
 
 @on_chat_start
 async def start() -> None:
     """Initialize chat session - routes to author or player flow."""
+    _mlflow_state.init()
     logger.info("New chat session started")
     query_string = ""
     environ = cl.context.session.environ if hasattr(cl.context, "session") else {}

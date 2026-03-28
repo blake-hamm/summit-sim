@@ -7,10 +7,13 @@ import pytest
 
 from summit_sim.agents import utils as agent_utils
 
-# Disable MLflow tracing entirely in tests to prevent export warnings
+# Disable MLflow tracing entirely in tests to prevent database creation
 os.environ["MLFLOW_TRACING_ENABLE"] = "false"
-os.environ["MLFLOW_TRACKING_URI"] = ""
-os.environ["MLFLOW_ARTIFACT_URI"] = ""
+# Use in-memory SQLite to avoid creating mlflow.db file
+os.environ["MLFLOW_TRACKING_URI"] = "sqlite:///:memory:"
+os.environ["MLFLOW_ARTIFACT_URI"] = "file:///tmp/mlflow_test_artifacts"
+# Disable PydanticAI autologging which creates its own database
+os.environ["MLFLOW_PYDANTICAI_AUTOLOG_DISABLED"] = "true"
 
 
 class MockPrompt:
