@@ -3,11 +3,9 @@
 import pytest
 
 from summit_sim.schemas import (
-    ChoiceOption,
+    DynamicTurnResult,
     ScenarioConfig,
     ScenarioDraft,
-    ScenarioTurn,
-    SimulationResult,
 )
 
 
@@ -52,221 +50,112 @@ class TestScenarioConfig:
             assert config.complexity == complexity
 
 
-class TestScenarioTurn:
-    """Tests for ScenarioTurn schema."""
-
-    def test_scenario_turn_creation(self):
-        """Test creating a scenario turn with choices."""
-        choices = [
-            ChoiceOption(
-                choice_id="choice_a",
-                description="Apply tourniquet",
-                is_correct=True,
-                next_turn_id=2,
-            ),
-            ChoiceOption(
-                choice_id="choice_b",
-                description="Apply pressure bandage",
-                is_correct=False,
-                next_turn_id=2,
-            ),
-            ChoiceOption(
-                choice_id="panic",
-                description="Panic",
-                is_correct=False,
-                next_turn_id=2,
-            ),
-        ]
-
-        turn = ScenarioTurn(
-            turn_id=0,
-            narrative_text="Patient has severe leg bleeding.",
-            choices=choices,
-            scene_state={"patient_position": "sitting"},
-            hidden_state={"bleeding_rate": "severe"},
-        )
-
-        assert turn.turn_id == 0
-        assert len(turn.choices) == 3
-
-    def test_scenario_turn_min_choices(self):
-        """Test that turns require at least 3 choices."""
-        with pytest.raises(ValueError, match="List should have at least 3 items"):
-            ScenarioTurn(
-                turn_id=1,
-                narrative_text="Test",
-                choices=[
-                    ChoiceOption(
-                        choice_id="choice_a",
-                        description="Only option",
-                        is_correct=True,
-                        next_turn_id=2,
-                    )
-                ],
-            )
-
-
 class TestScenarioDraft:
     """Tests for ScenarioDraft schema."""
 
     @pytest.fixture
     def sample_scenario(self):
         """Create a sample scenario for testing."""
-        choices = [
-            ChoiceOption(
-                choice_id="treat",
-                description="Treat the patient",
-                is_correct=True,
-                next_turn_id=2,
-            ),
-            ChoiceOption(
-                choice_id="wait",
-                description="Wait and observe",
-                is_correct=False,
-                next_turn_id=2,
-            ),
-            ChoiceOption(
-                choice_id="panic",
-                description="Panic",
-                is_correct=False,
-                next_turn_id=2,
-            ),
-        ]
-
-        turn1 = ScenarioTurn(
-            turn_id=0,
-            narrative_text="Patient is bleeding.",
-            choices=choices,
-        )
-
-        turn2 = ScenarioTurn(
-            turn_id=1,
-            narrative_text="Treatment applied.",
-            choices=[
-                ChoiceOption(
-                    choice_id="monitor",
-                    description="Monitor patient",
-                    is_correct=True,
-                    next_turn_id=2,
-                ),
-                ChoiceOption(
-                    choice_id="evac",
-                    description="Evacuate immediately",
-                    is_correct=True,
-                    next_turn_id=2,
-                ),
-                ChoiceOption(
-                    choice_id="panic",
-                    description="Panic",
-                    is_correct=False,
-                    next_turn_id=2,
-                ),
-            ],
-        )
-
-        turn3 = ScenarioTurn(
-            turn_id=2,
-            narrative_text="Patient is stable for transport.",
-            choices=[
-                ChoiceOption(
-                    choice_id="package",
-                    description="Package for transport",
-                    is_correct=True,
-                    next_turn_id=None,
-                ),
-                ChoiceOption(
-                    choice_id="wait",
-                    description="Wait for more help",
-                    is_correct=False,
-                    next_turn_id=None,
-                ),
-                ChoiceOption(
-                    choice_id="panic",
-                    description="Panic",
-                    is_correct=False,
-                    next_turn_id=None,
-                ),
-            ],
-        )
-
         return ScenarioDraft(
             title="Test Scenario",
             setting="Test Location",
             patient_summary="Test Patient",
             hidden_truth="Test Truth",
             learning_objectives=["Objective 1"],
-            turns=[turn1, turn2, turn3],
+            initial_narrative=(
+                "You arrive at the scene and see a patient lying on the ground."
+            ),
+            hidden_state="Patient has weak pulse and labored breathing",
+            scene_state="Clear weather, 65F temperature",
         )
 
     def test_scenario_draft_creation(self, sample_scenario):
         """Test creating a complete scenario draft."""
         assert sample_scenario.title == "Test Scenario"
-        assert len(sample_scenario.turns) == 3
-        assert sample_scenario.get_starting_turn().turn_id == 0
+        assert (
+            sample_scenario.initial_narrative
+            == "You arrive at the scene and see a patient lying on the ground."
+        )
+        assert "weak pulse" in sample_scenario.hidden_state
+        assert "clear" in sample_scenario.scene_state.lower()
 
-    def test_get_turn(self, sample_scenario):
-        """Test retrieving turns by ID."""
-        turn = sample_scenario.get_turn(0)
-        assert turn is not None
-        assert turn.turn_id == 0
-        turn = sample_scenario.get_turn(2)
-        assert turn is not None
-        assert turn.turn_id == 2
+    def test_scenario_draft_minimal(self):
+        """Test creating scenario with minimal fields."""
+        scenario = ScenarioDraft(
+            title="Minimal Scenario",
+            setting="Somewhere",
+            patient_summary="A patient",
+            hidden_truth="Something",
+            learning_objectives=["Learn something"],
+            initial_narrative="The scene opens.",
+            hidden_state="Initial hidden state",
+            scene_state="Initial scene state",
+        )
+        assert scenario.hidden_state == "Initial hidden state"
+        assert scenario.scene_state == "Initial scene state"
 
-    def test_get_turn_not_found(self, sample_scenario):
-        """Test retrieving non-existent turn."""
-        turn = sample_scenario.get_turn(999)
-        assert turn is None
 
+class TestDynamicTurnResult:
+    """Tests for DynamicTurnResult schema."""
 
-class TestSimulationResult:
-    """Tests for SimulationResult schema."""
-
-    def test_simulation_result_creation(self):
-        """Test creating a simulation result."""
-        choice = ChoiceOption(
-            choice_id="choice_1",
-            description="Test choice",
-            is_correct=True,
-            next_turn_id=None,
+    def test_dynamic_turn_result_creation(self):
+        """Test creating a dynamic turn result."""
+        result = DynamicTurnResult(
+            was_correct=True,
+            completion_score=0.75,
+            is_complete=False,
+            feedback="Good job assessing the patient.",
+            narrative_text="You check the patient's pulse and find it weak.",
+            updated_hidden_state="Patient has weak pulse and BP 90/60",
+            updated_scene_state="5 minutes elapsed since arrival",
         )
 
-        result = SimulationResult(
-            selected_choice=choice,
-            feedback="Good work!",
-            learning_moments=["Key insight"],
-            next_turn=None,
+        assert result.was_correct is True
+        assert result.completion_score == 0.75
+        assert result.is_complete is False
+        assert result.feedback == "Good job assessing the patient."
+        assert (
+            result.narrative_text == "You check the patient's pulse and find it weak."
+        )
+        assert "weak pulse" in result.updated_hidden_state
+
+    def test_dynamic_turn_result_complete(self):
+        """Test creating a completed scenario result."""
+        result = DynamicTurnResult(
+            was_correct=True,
+            completion_score=1.0,
             is_complete=True,
+            feedback="Scenario complete. Patient evacuated successfully.",
+            narrative_text="The evacuation helicopter arrives and takes the patient.",
+            updated_hidden_state="Patient evacuated to medical facility",
+            updated_scene_state="Rescue operation complete",
         )
 
-        assert result.selected_choice.choice_id == "choice_1"
-        assert result.feedback == "Good work!"
         assert result.is_complete is True
+        assert result.completion_score == 1.0
 
+    def test_dynamic_turn_result_score_bounds(self):
+        """Test that completion_score must be between 0.0 and 1.0."""
+        with pytest.raises(ValueError, match="Input should be less than or equal to 1"):
+            DynamicTurnResult(
+                was_correct=True,
+                completion_score=1.5,
+                is_complete=False,
+                feedback="Test",
+                narrative_text="Test",
+                updated_hidden_state="Test state",
+                updated_scene_state="Test scene",
+            )
 
-class TestChoiceOption:
-    """Tests for ChoiceOption schema."""
-
-    def test_choice_option_creation(self):
-        """Test creating a choice option."""
-        choice = ChoiceOption(
-            choice_id="apply_tourniquet",
-            description="Apply a tourniquet to the bleeding leg",
-            is_correct=True,
-            next_turn_id=2,
-        )
-
-        assert choice.choice_id == "apply_tourniquet"
-        assert choice.is_correct is True
-        assert choice.next_turn_id == 2
-
-    def test_choice_option_end_scenario(self):
-        """Test creating a choice that ends the scenario."""
-        choice = ChoiceOption(
-            choice_id="evacuate",
-            description="Evacuate the patient",
-            is_correct=True,
-            next_turn_id=None,
-        )
-
-        assert choice.next_turn_id is None
+        with pytest.raises(
+            ValueError, match="Input should be greater than or equal to 0"
+        ):
+            DynamicTurnResult(
+                was_correct=True,
+                completion_score=-0.1,
+                is_complete=False,
+                feedback="Test",
+                narrative_text="Test",
+                updated_hidden_state="Test state",
+                updated_scene_state="Test scene",
+            )

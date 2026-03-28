@@ -4,9 +4,7 @@ from __future__ import annotations
 
 import logging
 
-import mlflow
-
-from summit_sim.agents.config import get_agent
+from summit_sim.agents.utils import setup_agent_and_prompts
 from summit_sim.schemas import ScenarioConfig, ScenarioDraft
 
 logger = logging.getLogger(__name__)
@@ -17,54 +15,62 @@ SYSTEM_PROMPT = """\
 You are an expert wilderness rescue scenario designer.
 
 Your task is to create a realistic, medically accurate wilderness rescue scenario
-based on minimal teacher inputs. You must generate a complete scenario with ALL
-turns pre-written.
+based on minimal teacher inputs. You generate ONLY the initial scenario setup -
+the turns and narrative progression will be handled dynamically during simulation.
 
 Guidelines for scenario generation:
 
-1. Create 3-5 turns total for a cohesive learning experience
-2. Each turn must have 3-5 multiple choice options:
-   - One medically optimal choice (is_correct=true)
-   - Others suboptimal but plausible choices (is_correct=false)
-   - Choices should be realistic first-responder decisions
-
-3. Turn structure:
-   - First turn has turn_id=0
-   - Middle turns: branch based on choices
-   - Final turns: end the scenario (next_turn_id=null)
-
-4. TURN NARRATIVES: Keep them SHORT and ACTIONABLE
-   - Each turn's narrative_text: 1-3 sentences max
-   - Focus on the immediate decision point, not scene-setting
-   - Students already know the context from previous turns
-   - Example GOOD: "Patient grimaces when you touch their forearm.
-     Swelling increased. What do you do?"
-   - Example BAD: Multi-paragraph description of location, weather,
-     patient history, etc.
-
-5. STATE TRACKING: Use hidden_state and scene_state meaningfully
-   - hidden_state: Patient condition details that emerge through assessment
-     (e.g., "given aspirin 30min ago", "pulse irregularity", "breath sounds diminished")
-   - scene_state: Environmental changes (weather deteriorating, new hazards
-     appearing, time passing)
-   - These add depth for teachers reviewing the scenario
-
-6. SCENARIO-LEVEL CONTENT (can be rich and detailed):
+1. SCENARIO-LEVEL CONTENT (rich and detailed):
+   - Title: Compelling and descriptive
    - Setting: Specific location with environmental details
-   - Patient: Age, relevant medical history, visible injuries
-   - Hidden truth: The actual medical condition students must discover
-   - Learning objectives: 2-3 specific wilderness first aid skills
+   - Patient Summary: Age, relevant medical history, visible injuries
+   - Hidden Truth: The actual medical condition students must discover
+   - Learning Objectives: 2-3 specific wilderness first aid skills
 
-7. Turn IDs: Sequential integers starting from 0 (e.g., 0, 1, 2, 3, 4).
-   Use 0 for the starting turn.
+2. INITIAL NARRATIVE: Create an immersive opening scene
+   - Set the stage: Where are we? What's the environment like?
+   - Introduce the patient: What do we see/know immediately?
+   - Establish the situation: What's happening right now?
+    - End with a direct question that invites immediate action\n"
+    "      (e.g., \"What is your first move?\", \"How do you respond?\",\n"
+    "      \"What will you do first?\")
+   - Length: 3-5 sentences to provide context without overwhelming
+   - Students will respond to this narrative with free-text actions
 
-8. Medical accuracy:
+3. STATE TRACKING: Initialize hidden_state and scene_state as narrative strings
+   - hidden_state: Complete patient condition description known only to AI.
+     Write this as a cohesive narrative paragraph covering all relevant medical details:
+     mechanism of injury, vital signs, underlying conditions, medications given, etc.
+     Example: "Patient is a 34-year-old with a closed fracture of the left radius with
+     dorsal angulation and displacement. Pulse is present but weak distal to injury.
+     Blood pressure 140/90, heart rate 88, respiratory rate 16. Patient reports no
+     allergies and has not taken any pain medication. Time since injury: 45 minutes."
+   - scene_state: Complete environmental and situational description.
+     Write this as a cohesive narrative paragraph covering relevant scene details:
+      weather, time of day, available resources, group dynamics, evacuation logistics,
+      etc.
+     Example: "Clear skies, 65°F, light breeze from the west. Approximately 3 hours
+     until sunset. Cell phone coverage is unavailable. Group of 4 hikers, morale is
+     concerned but stable. Basic first aid kit available with standard supplies.
+     Nearest trailhead is 4 hours hike away."
+   - These states will be completely replaced each turn based on student actions
+    - Maintain continuity: new state descriptions should reference\n"
+    "      and build upon previous conditions
+
+4. Medical accuracy:
    - Base scenarios on common wilderness emergencies
    - Ensure correct symptoms for the condition
    - Treatment options should reflect actual wilderness protocols
+   - Account for environmental factors in patient presentation
 
-Complexity comes from the branching choices and cumulative patient state,
-not from lengthy turn narratives."""
+5. Open-ended design:
+   - Do NOT create multiple choice options
+   - Do NOT pre-write turns or branching paths
+   - Focus on creating a rich initial situation that can go many directions
+   - The student's free-text actions will drive the narrative
+
+Your output provides the foundation for dynamic, interactive learning where
+AI responds to each student decision in real-time."""
 
 
 USER_PROMPT_TEMPLATE = """\
@@ -76,17 +82,22 @@ Available Personnel: {{available_personnel}}
 Evacuation Distance: {{evac_distance}}
 Complexity: {{complexity}}
 
-Create a complete scenario with:
-- Compelling title and setting appropriate for {{environment}}
-- Realistic patient case matching the {{complexity}} complexity
-- 3-5 turns with multiple choice decision points
-- Medically accurate content
-- Clear learning objectives
-        - Consider {{available_personnel}} for resource-based decisions
-          (litter carries, runners)
-        - Account for {{evac_distance}} in stay-and-play vs load-and-go decisions
+Create the initial scenario setup with:
+- Compelling title and rich setting description for {{environment}}
+- Detailed patient case matching {{complexity}} complexity
+- Initial narrative (3-5 sentences) that immerses the student in the situation
+- Initial hidden_state with complete patient medical information
+- Initial scene_state with environmental and situational context
+- 2-3 specific learning objectives for wilderness first aid skills
 
-The scenario should be challenging but educational for wilderness first responders."""
+Consider {{available_personnel}} for resource limitations and {{evac_distance}}
+for evacuation logistics in your scenario design.
+
+Focus on creating a rich, open-ended starting point where students will
+respond with free-text actions and AI will dynamically generate outcomes.
+
+The scenario should be medically accurate and educational for wilderness
+first responders."""
 
 
 async def generate_scenario(scenario_config: ScenarioConfig) -> ScenarioDraft:
@@ -100,24 +111,20 @@ async def generate_scenario(scenario_config: ScenarioConfig) -> ScenarioDraft:
         scenario_config.evac_distance,
         scenario_config.complexity,
     )
-    agent = get_agent(
+    agent, user_prompt = setup_agent_and_prompts(
         agent_name=AGENT_NAME,
         output_type=ScenarioDraft,
         system_prompt=SYSTEM_PROMPT,
+        user_prompt_template=USER_PROMPT_TEMPLATE,
         reasoning_effort="high",
     )
 
-    user_prompt = mlflow.genai.load_prompt(  # type: ignore[attr-defined]
-        f"prompts:/{AGENT_NAME}-user@latest"
-    )
-    prompt = str(
-        user_prompt.format(
-            primary_focus=scenario_config.primary_focus,
-            environment=scenario_config.environment,
-            available_personnel=scenario_config.available_personnel,
-            evac_distance=scenario_config.evac_distance,
-            complexity=scenario_config.complexity,
-        )
+    prompt = user_prompt.format(
+        primary_focus=scenario_config.primary_focus,
+        environment=scenario_config.environment,
+        available_personnel=scenario_config.available_personnel,
+        evac_distance=scenario_config.evac_distance,
+        complexity=scenario_config.complexity,
     )
 
     result = await agent.run(prompt)

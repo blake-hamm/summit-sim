@@ -151,46 +151,10 @@ async def show_review_screen(state: AuthorState) -> None:
     learning_obj_text = "\n".join(f"• {obj}" for obj in scenario.learning_objectives)
     attempt_text = f" (Attempt {retry_count + 1}/3)" if retry_count > 0 else ""
 
-    turns_sections = []
-    for i, turn in enumerate(scenario.turns, 1):
-        choices_lines = []
-        for j, choice in enumerate(turn.choices, 1):
-            correct_indicator = "✅" if choice.is_correct else "❌"
-            next_info = (
-                f"→ Turn {choice.next_turn_id}"
-                if choice.next_turn_id is not None
-                else "→ END"
-            )
-            choices_lines.append(
-                f"   {j}. {correct_indicator} {choice.description} ({next_info})"
-            )
-
-        scene_lines = []
-        if turn.scene_state:
-            for key, value in turn.scene_state.items():
-                scene_lines.append(f"   • {key.replace('_', ' ').title()}: {value}")
-        scene_display = (
-            "\n".join(scene_lines) if scene_lines else "   *No special conditions*"
-        )
-
-        hidden_lines = []
-        if turn.hidden_state:
-            for key, value in turn.hidden_state.items():
-                hidden_lines.append(f"   • {key.replace('_', ' ').title()}: {value}")
-        hidden_display = "\n".join(hidden_lines) if hidden_lines else "   *None*"
-
-        turn_section = (
-            f"**Turn {i}** (ID: {turn.turn_id})\n"
-            f"{turn.narrative_text}\n\n"
-            f"👁️ **Visible Scene Conditions:**\n"
-            f"{scene_display}\n\n"
-            f"🕵️ **Hidden State (Author View):**\n"
-            f"{hidden_display}\n\n"
-            f"📋 **Available Choices:**\n" + "\n".join(choices_lines)
-        )
-        turns_sections.append(turn_section)
-
-    turns_content = "\n\n---\n\n".join(turns_sections)
+    scene_display = (
+        scenario.scene_state if scenario.scene_state else "*No special conditions*"
+    )
+    hidden_display = scenario.hidden_state if scenario.hidden_state else "*None*"
 
     await cl.Message(
         content=(
@@ -200,10 +164,14 @@ async def show_review_screen(state: AuthorState) -> None:
             f"{learning_obj_text}\n"
             f"\n**Patient:** {scenario.patient_summary}\n"
             f"\n**Hidden Truth:** {scenario.hidden_truth}\n"
-            f"\n**Total Turns:** {len(scenario.turns)}\n\n"
+            f"\n---\n"
+            f"### Opening Narrative\n\n"
+            f"{scenario.initial_narrative}\n\n"
             f"---\n"
-            f"### Scenario Flow\n\n"
-            f"{turns_content}"
+            f"### Initial Scene State\n"
+            f"{scene_display}\n\n"
+            f"### Hidden State (Author View)\n"
+            f"{hidden_display}"
         ),
     ).send()
 

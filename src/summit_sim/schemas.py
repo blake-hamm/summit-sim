@@ -102,56 +102,47 @@ class ScenarioConfig(BaseModel):
     )
 
 
-class ChoiceOption(BaseModel):
-    """A multiple choice option for a scenario turn.
+class DynamicTurnResult(BaseModel):
+    """Result from ActionResponder agent after evaluating student action.
 
-    Each option includes the action description and the next turn ID
-    that follows if this option is selected.
+    Single schema enforces evaluation → narrative → state evolution order.
+    Generated dynamically for each student action in free-text simulation.
     """
 
-    choice_id: str = Field(..., description="Unique identifier for this choice")
-    description: str = Field(..., description="Description of the action")
-    is_correct: bool = Field(
-        ..., description="Whether this is the medically optimal choice"
+    was_correct: bool = Field(
+        ..., description="Whether the student's action was medically correct"
     )
-    next_turn_id: int | None = Field(
-        default=None, description="ID of next turn (null if scenario ends)"
-    )
-
-
-class ScenarioTurn(BaseModel):
-    """A single turn in a pre-generated scenario.
-
-    Contains the narrative setup and multiple choice options for the student.
-    The actual simulation uses these pre-written turns, but AI generates
-    personalized feedback when a choice is made.
-    """
-
-    turn_id: int = Field(..., description="Unique identifier for this turn")
-    narrative_text: str = Field(
-        ..., description="Story description of the current situation"
-    )
-    hidden_state: dict[str, str] = Field(
-        default_factory=dict,
-        description="Secret medical information not visible to students",
-    )
-    scene_state: dict[str, str] = Field(
-        default_factory=dict, description="Current visible scene conditions"
-    )
-    choices: list[ChoiceOption] = Field(
+    completion_score: float = Field(
         ...,
-        description="3-5 multiple choice actions available",
-        min_length=3,
-        max_length=5,
+        ge=0.0,
+        le=1.0,
+        description="Progress toward scenario completion (0.0-1.0 scale)",
+    )
+    is_complete: bool = Field(
+        ..., description="Whether the scenario has reached a natural conclusion"
+    )
+    feedback: str = Field(
+        ..., description="AI-generated personalized feedback on the action"
+    )
+    narrative_text: str = Field(
+        ..., description="Generated narrative describing the outcome"
+    )
+    updated_hidden_state: str = Field(
+        ...,
+        description="Updated secret medical info after this turn (full replacement)",
+    )
+    updated_scene_state: str = Field(
+        ...,
+        description="Updated scene conditions after this turn (full replacement)",
     )
 
 
 class ScenarioDraft(BaseModel):
     """Complete AI-generated wilderness rescue scenario.
 
-    Generated from TeacherConfig and contains all turns pre-written.
-    The scenario follows a branching path based on student choices,
-    but all content is generated upfront.
+    Generated from ScenarioConfig for dynamic open-ended simulation.
+    Contains only initial setup - turns are generated dynamically
+    based on student free-text actions.
     """
 
     title: str = Field(..., description="Short name for the scenario")
@@ -163,43 +154,16 @@ class ScenarioDraft(BaseModel):
     learning_objectives: list[str] = Field(
         ..., description="List of skills students should practice"
     )
-    turns: list[ScenarioTurn] = Field(
-        ..., description="All turns in this scenario (at least 3)", min_length=3
+    initial_narrative: str = Field(
+        ..., description="Opening narrative that sets the scene for the student"
     )
-
-    def get_turn(self, turn_id: int) -> ScenarioTurn | None:
-        """Get a turn by its ID."""
-        for turn in self.turns:
-            if turn.turn_id == turn_id:
-                return turn
-        return None
-
-    def get_starting_turn(self) -> ScenarioTurn | None:
-        """Get the starting turn (turn_id=0)."""
-        return self.get_turn(0)
-
-
-class SimulationResult(BaseModel):
-    """Result after a student makes a choice in the simulation.
-
-    Contains AI-generated personalized feedback and the next turn
-    (or completion status).
-    """
-
-    selected_choice: ChoiceOption = Field(
-        ..., description="The choice the student selected"
+    hidden_state: str = Field(
+        ...,
+        description="Initial secret medical info for AI reference",
     )
-    feedback: str = Field(
-        ..., description="AI-generated personalized feedback on the choice"
-    )
-    learning_moments: list[str] = Field(
-        ..., description="Educational insights from this turn"
-    )
-    next_turn: ScenarioTurn | None = Field(
-        default=None, description="Next turn (null if scenario complete)"
-    )
-    is_complete: bool = Field(
-        ..., description="Whether the scenario has reached a conclusion"
+    scene_state: str = Field(
+        ...,
+        description="Initial visible scene conditions",
     )
 
 
