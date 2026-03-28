@@ -6,8 +6,39 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from summit_sim.agents import utils as agent_utils
-from summit_sim.agents.generator import generate_scenario
+from summit_sim.agents.generator import (
+    AGENT_NAME,
+    SYSTEM_PROMPT,
+    USER_PROMPT_TEMPLATE,
+    generate_scenario,
+)
 from summit_sim.schemas import ScenarioConfig, ScenarioDraft
+
+
+class TestAgentConstants:
+    """Tests for agent constants."""
+
+    def test_agent_name(self):
+        """Test that AGENT_NAME is set correctly."""
+        assert AGENT_NAME == "generator-draft"
+
+    def test_system_prompt_contains_key_elements(self):
+        """Test that system prompt contains required elements."""
+        assert "wilderness rescue" in SYSTEM_PROMPT.lower()
+        assert (
+            "initial_narrative" in SYSTEM_PROMPT.lower()
+            or "initial narrative" in SYSTEM_PROMPT.lower()
+        )
+        assert "hidden_state" in SYSTEM_PROMPT
+        assert "scene_state" in SYSTEM_PROMPT
+
+    def test_user_prompt_template_contains_placeholders(self):
+        """Test that user prompt template has all required placeholders."""
+        assert "{{primary_focus}}" in USER_PROMPT_TEMPLATE
+        assert "{{environment}}" in USER_PROMPT_TEMPLATE
+        assert "{{available_personnel}}" in USER_PROMPT_TEMPLATE
+        assert "{{evac_distance}}" in USER_PROMPT_TEMPLATE
+        assert "{{complexity}}" in USER_PROMPT_TEMPLATE
 
 
 class TestGeneratorAgent:
@@ -68,16 +99,10 @@ class TestGeneratorAgent:
                 "The patient reports chest pain that started 20 minutes ago "
                 "while hiking."
             ),
-            hidden_state={
-                "diagnosis": "possible cardiac event",
-                "vitals": "bp 140/90, hr 110",
-                "pain_level": "8/10",
-            },
-            scene_state={
-                "elevation": "8000ft",
-                "weather": "clear",
-                "cell_coverage": "none",
-            },
+            hidden_state="Patient is a 45-year-old male with possible cardiac event. "
+            "Blood pressure 140/90, heart rate 110. Pain level 8/10.",
+            scene_state="Mountain trail at 8000ft elevation. Weather clear. "
+            "No cell coverage available. Temperature 65F.",
         )
 
         with patch("summit_sim.agents.utils.Agent") as mock_agent_class:
@@ -90,6 +115,8 @@ class TestGeneratorAgent:
         assert result.title == "Hiking Emergency"
         assert result.initial_narrative is not None
         assert len(result.initial_narrative) > 0
+        assert isinstance(result.hidden_state, str)
+        assert isinstance(result.scene_state, str)
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("focus", ["Trauma", "Medical", "Environmental", "Mixed"])
@@ -113,6 +140,8 @@ class TestGeneratorAgent:
             hidden_truth="Test truth",
             learning_objectives=["Objective"],
             initial_narrative=f"A {focus.lower()} emergency scenario begins.",
+            hidden_state="Test hidden state",
+            scene_state="Test scene state",
         )
 
         with patch("summit_sim.agents.utils.Agent") as mock_agent_class:
@@ -147,6 +176,8 @@ class TestGeneratorAgent:
             hidden_truth="Test truth",
             learning_objectives=["Objective"],
             initial_narrative=f"A {complexity.lower()} complexity scenario begins.",
+            hidden_state="Test hidden",
+            scene_state="Test scene",
         )
 
         with patch("summit_sim.agents.utils.Agent") as mock_agent_class:
@@ -161,7 +192,7 @@ class TestGeneratorAgent:
 
     @pytest.mark.asyncio
     async def test_generate_scenario_with_state(self):
-        """Test that generated scenario includes state fields."""
+        """Test that generated scenario includes state fields as strings."""
         teacher_config = ScenarioConfig(
             primary_focus="Trauma",
             environment="Alpine/Mountain",
@@ -178,17 +209,10 @@ class TestGeneratorAgent:
             hidden_truth="Fractured tibia",
             learning_objectives=["Assess injury", "Immobilize limb"],
             initial_narrative="You find a hiker with a leg injury on the trail.",
-            hidden_state={
-                "injury": "fractured tibia",
-                "pain_scale": "7/10",
-                "time_since_injury": "30 minutes",
-            },
-            scene_state={
-                "weather": "partly cloudy",
-                "temperature": "55F",
-                "sunset_hours": "3",
-                "cell_coverage": "spotty",
-            },
+            hidden_state="Patient has fractured tibia with 7/10 pain. "
+            "30 minutes since injury occurred. No medications given.",
+            scene_state="Partly cloudy weather, 55F. Sunset in 3 hours. "
+            "Spotty cell coverage. Nearest help 4 hours away.",
         )
 
         with patch("summit_sim.agents.utils.Agent") as mock_agent_class:
@@ -198,5 +222,105 @@ class TestGeneratorAgent:
             result = await generate_scenario(teacher_config)
 
         assert isinstance(result, ScenarioDraft)
-        assert "injury" in result.hidden_state
-        assert "weather" in result.scene_state
+        assert isinstance(result.hidden_state, str)
+        assert isinstance(result.scene_state, str)
+        assert "fractured tibia" in result.hidden_state
+        assert "cloudy" in result.scene_state.lower()
+
+    @pytest.mark.asyncio
+    async def test_generate_scenario_prompt_formatting(self):
+        """Test that prompt is formatted with config values."""
+        teacher_config = ScenarioConfig(
+            primary_focus="Medical",
+            environment="Desert",
+            available_personnel="Solo Rescuer (1)",
+            evac_distance="Remote (1 day)",
+            complexity="Critical",
+        )
+
+        mock_result = AsyncMock()
+        mock_result.output = ScenarioDraft(
+            title="Formatted Prompt Test",
+            setting="Desert Canyon",
+            patient_summary="Solo hiker",
+            hidden_truth="Heat stroke",
+            learning_objectives=["Recognize heat illness"],
+            initial_narrative="A solo hiker collapses in the desert heat.",
+            hidden_state="Severe dehydration and heat stroke",
+            scene_state="Desert canyon, extreme heat, no shade",
+        )
+
+        with patch("summit_sim.agents.generator.setup_agent_and_prompts") as mock_setup:
+            mock_agent = AsyncMock()
+            mock_agent.run.return_value = mock_result
+
+            class MockPrompt:
+                def __init__(self, template):
+                    self.template = template
+
+                def format(self, **kwargs):
+                    return self.template.format(**kwargs)
+
+            mock_user_prompt = MockPrompt(USER_PROMPT_TEMPLATE)
+            mock_setup.return_value = (mock_agent, mock_user_prompt)
+
+            await generate_scenario(teacher_config)
+
+            # Verify setup was called with high reasoning effort
+            mock_setup.assert_called_once()
+            call_kwargs = mock_setup.call_args.kwargs
+            assert call_kwargs["reasoning_effort"] == "high"
+            assert call_kwargs["agent_name"] == "generator-draft"
+
+    @pytest.mark.asyncio
+    async def test_generate_scenario_all_config_combinations(self):
+        """Test scenario generation with various config combinations."""
+        configs = [
+            ScenarioConfig(
+                primary_focus="Trauma",
+                environment="Alpine/Mountain",
+                available_personnel="Partner (2)",
+                evac_distance="Short (< 2 hours)",
+                complexity="Standard",
+            ),
+            ScenarioConfig(
+                primary_focus="Environmental",
+                environment="Forest/Trail",
+                available_personnel="Small Group (3-5)",
+                evac_distance="Remote (1 day)",
+                complexity="Complicated",
+            ),
+            ScenarioConfig(
+                primary_focus="Mixed",
+                environment="Desert",
+                available_personnel="Large Expedition (6+)",
+                evac_distance="Expedition (2+ days)",
+                complexity="Critical",
+            ),
+        ]
+
+        for config in configs:
+            # Clear agent cache for each config iteration
+            agent_utils._agent_container.clear()
+
+            mock_result = AsyncMock()
+            mock_result.output = ScenarioDraft(
+                title=f"Test {config.primary_focus}",
+                setting=config.environment,
+                patient_summary="Test patient",
+                hidden_truth="Test condition",
+                learning_objectives=["Learn"],
+                initial_narrative="Test narrative",
+                hidden_state="Test hidden state",
+                scene_state="Test scene state",
+            )
+
+            with patch("summit_sim.agents.utils.Agent") as mock_agent_class:
+                mock_agent = AsyncMock()
+                mock_agent.run.return_value = mock_result
+                mock_agent_class.return_value = mock_agent
+
+                result = await generate_scenario(config)
+
+                assert isinstance(result, ScenarioDraft)
+                assert result.setting == config.environment

@@ -65,8 +65,8 @@ class TestScenarioDraft:
             initial_narrative=(
                 "You arrive at the scene and see a patient lying on the ground."
             ),
-            hidden_state={"pulse": "weak", "breathing": "labored"},
-            scene_state={"weather": "clear", "temperature": "65F"},
+            hidden_state="Patient has weak pulse and labored breathing",
+            scene_state="Clear weather, 65F temperature",
         )
 
     def test_scenario_draft_creation(self, sample_scenario):
@@ -76,8 +76,8 @@ class TestScenarioDraft:
             sample_scenario.initial_narrative
             == "You arrive at the scene and see a patient lying on the ground."
         )
-        assert sample_scenario.hidden_state["pulse"] == "weak"
-        assert sample_scenario.scene_state["weather"] == "clear"
+        assert "weak pulse" in sample_scenario.hidden_state
+        assert "clear" in sample_scenario.scene_state.lower()
 
     def test_scenario_draft_minimal(self):
         """Test creating scenario with minimal fields."""
@@ -88,9 +88,11 @@ class TestScenarioDraft:
             hidden_truth="Something",
             learning_objectives=["Learn something"],
             initial_narrative="The scene opens.",
+            hidden_state="Initial hidden state",
+            scene_state="Initial scene state",
         )
-        assert scenario.hidden_state == {}
-        assert scenario.scene_state == {}
+        assert scenario.hidden_state == "Initial hidden state"
+        assert scenario.scene_state == "Initial scene state"
 
 
 class TestDynamicTurnResult:
@@ -104,8 +106,8 @@ class TestDynamicTurnResult:
             is_complete=False,
             feedback="Good job assessing the patient.",
             narrative_text="You check the patient's pulse and find it weak.",
-            updated_hidden_state={"pulse": "weak", "bp": "90/60"},
-            updated_scene_state={"time_elapsed": "5 minutes"},
+            updated_hidden_state="Patient has weak pulse and BP 90/60",
+            updated_scene_state="5 minutes elapsed since arrival",
         )
 
         assert result.was_correct is True
@@ -115,7 +117,7 @@ class TestDynamicTurnResult:
         assert (
             result.narrative_text == "You check the patient's pulse and find it weak."
         )
-        assert result.updated_hidden_state["pulse"] == "weak"
+        assert "weak pulse" in result.updated_hidden_state
 
     def test_dynamic_turn_result_complete(self):
         """Test creating a completed scenario result."""
@@ -125,6 +127,8 @@ class TestDynamicTurnResult:
             is_complete=True,
             feedback="Scenario complete. Patient evacuated successfully.",
             narrative_text="The evacuation helicopter arrives and takes the patient.",
+            updated_hidden_state="Patient evacuated to medical facility",
+            updated_scene_state="Rescue operation complete",
         )
 
         assert result.is_complete is True
@@ -139,6 +143,8 @@ class TestDynamicTurnResult:
                 is_complete=False,
                 feedback="Test",
                 narrative_text="Test",
+                updated_hidden_state="Test state",
+                updated_scene_state="Test scene",
             )
 
         with pytest.raises(
@@ -150,4 +156,6 @@ class TestDynamicTurnResult:
                 is_complete=False,
                 feedback="Test",
                 narrative_text="Test",
+                updated_hidden_state="Test state",
+                updated_scene_state="Test scene",
             )
