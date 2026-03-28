@@ -209,26 +209,23 @@ async def handle_revision(state: AuthorState) -> None:
         await cl.Message(content="❌ Error: Session expired. Please start over.").send()
         return
 
-    # Show chat input for revision feedback
-    await cl.CustomElement(name="ChatVisibilityToggle", props={"visible": True}).send()
+    # Create feedback form element
+    element = cl.CustomElement(name="RevisionFeedbackForm", props={})
 
-    # Ask author what they want changed
-    feedback_res = await cl.AskUserMessage(
-        content="What would you like me to change? (e.g., 'Make the injuries more severe', 'Change the setting to winter')",
-        timeout=120,
+    # Ask author for revision feedback using form
+    res = await cl.AskElementMessage(
+        content="Please provide specific feedback on what you'd like changed:",
+        element=element,
     ).send()
 
-    # Hide chat input after feedback received (or timeout)
-    await cl.CustomElement(name="ChatVisibilityToggle", props={"visible": False}).send()
-
-    if not feedback_res or not feedback_res.get("output"):
+    if not res or not res.get("submitted"):
         await cl.Message(
             content="❌ No feedback provided. Returning to review screen.",
         ).send()
         await show_review_screen(state)
         return
 
-    feedback = feedback_res.get("output")
+    feedback = res.get("output")
 
     thread_id = cl.user_session.get("id")
     config_dict: RunnableConfig = {"configurable": {"thread_id": thread_id}}
