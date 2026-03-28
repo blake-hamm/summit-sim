@@ -34,27 +34,26 @@ Replace rigid multiple-choice turns with an interactive, free-text simulation lo
 Complete these before starting Phase 1:
 
 ### 1. Prompt Versioning System ✅ COMPLETED
-**File**: `src/summit_sim/agents/config.py`
+**File**: `src/summit_sim/agents/utils.py`
 
 **Implementation**:
-- **System prompts**: `_get_or_register_system_prompt()` compares current system_prompt string with registered version; if different, registers new version
-- **User prompts**: New `_get_or_register_user_prompt()` handles user prompt templates (Jinja2 format)
-- **API Change**: `get_agent()` now accepts optional `user_prompt_template` parameter and returns `(agent, user_prompt_uri)` tuple when provided
+- **Unified helper**: `_get_or_register_prompt()` handles both system and user prompts, comparing template content with registered versions
+- **API**: `setup_agent_and_prompts()` returns `(agent, user_prompt)` tuple where `user_prompt` is a loaded `PromptVersion` object
 - **Versioning**: Both use `prompts:/{agent_name}-{system|user}@latest` with automatic version updates on change detection
+- **Type safety**: Uses `mlflow.entities.model_registry.prompt_version.PromptVersion` for proper typing
 
 **Usage**:
 ```python
-agent, user_prompt_uri = get_agent(
+agent, user_prompt = setup_agent_and_prompts(
     agent_name="my-agent",
     output_type=MySchema,
     system_prompt=SYSTEM_PROMPT,
-    user_prompt_template=USER_PROMPT_TEMPLATE,  # Optional
+    user_prompt_template=USER_PROMPT_TEMPLATE,
 )
-user_prompt = mlflow.genai.load_prompt(user_prompt_uri)
 prompt = str(user_prompt.format(var=value))
 ```
 
-**Why**: Prevents stale prompts from being used after code changes. Required before Phase 2 when ActionResponder is created.
+**Why**: Prevents stale prompts from being used after code changes. Returns loaded prompt objects directly for immediate use. Required before Phase 2 when ActionResponder is created.
 
 ### 2. Settings Structure ✅ COMPLETED
 **File**: `src/summit_sim/settings.py`
@@ -80,9 +79,8 @@ class Settings(BaseSettings):
   - `mock_generator_prompts`, `mock_simulation_prompts`, `mock_debrief_prompts`: Agent-specific prompt mocks
 
 - **Updated**: `tests/test_agents_config.py` with comprehensive tests:
-  - System prompt versioning (unchanged vs changed vs new)
-  - User prompt versioning (unchanged vs changed vs new)
-  - `get_agent()` with and without `user_prompt_template`
+  - Prompt versioning (unchanged vs changed vs new)
+  - `setup_agent_and_prompts()` creates new agent and returns cached agent
 
 **Why**: Each phase requires E2E validation; need infrastructure ready.
 
@@ -96,33 +94,36 @@ All pre-requisites have been implemented and tested:
 
 | File | Changes | Lines |
 |------|---------|-------|
-| `src/summit_sim/agents/config.py` | Added prompt versioning for system + user prompts, @overload decorators | +84 |
+| `src/summit_sim/agents/utils.py` | NEW - Unified prompt versioning with `setup_agent_and_prompts()` | +83 |
+| `src/summit_sim/agents/config.py` | DELETED - Functionality moved to utils.py | -108 |
 | `src/summit_sim/settings.py` | Added `max_turns` setting with Field() | +4 |
-| `src/summit_sim/agents/generator.py` | Updated to use new `get_agent()` API with user prompt | +5/-6 |
-| `src/summit_sim/agents/simulation.py` | Updated to use new `get_agent()` API with user prompt | +5/-5 |
-| `src/summit_sim/agents/debrief.py` | Updated to use new `get_agent()` API with user prompt | +6/-6 |
-| `tests/conftest.py` | NEW - Reusable mock fixtures | +124 |
-| `tests/test_agents_config.py` | Added comprehensive tests for prompt versioning | +77/-14 |
+| `src/summit_sim/agents/generator.py` | Updated to use `setup_agent_and_prompts()` API | +3/-5 |
+| `src/summit_sim/agents/simulation.py` | Updated to use `setup_agent_and_prompts()` API | +2/-5 |
+| `src/summit_sim/agents/debrief.py` | Updated to use `setup_agent_and_prompts()` API | +4/-8 |
+| `tests/conftest.py` | NEW - Reusable mock fixtures | +108 |
+| `tests/test_agents_config.py` | Updated tests for unified prompt versioning | +81/-98 |
 
 ### Test Results
-- **88 tests passing** (added 5 new tests for prompt versioning)
+- **84 tests passing** (refactored from 8 tests to 5 focused tests)
 - All existing tests continue to pass
-- Coverage maintained
+- Coverage: 93% overall, 100% for agent utils
 
 ### Key Implementation Details
 
 1. **Prompt Versioning**: Uses simple string comparison (not hashing). When content differs from registered version, automatically registers new version in MLflow.
 
-2. **get_agent() API**: 
-   - Without `user_prompt_template`: returns `Agent`
-   - With `user_prompt_template`: returns `(Agent, user_prompt_uri)`
-   - Uses `@overload` for proper type hints
+2. **setup_agent_and_prompts() API**: 
+   - Always returns `(Agent, PromptVersion)` tuple
+   - `PromptVersion` is the loaded prompt object from MLflow (type: `mlflow.entities.model_registry.prompt_version.PromptVersion`)
+   - No need for separate `mlflow.genai.load_prompt()` calls in agent code
 
-3. **User Prompt Pattern**: Agents now receive `user_prompt_uri` and call:
+3. **User Prompt Pattern**: Agents receive the loaded prompt object directly:
    ```python
-   user_prompt = mlflow.genai.load_prompt(user_prompt_uri)
+   agent, user_prompt = setup_agent_and_prompts(...)
    prompt = str(user_prompt.format(var=value))
    ```
+
+4. **Unified Helper**: Single `_get_or_register_prompt()` function handles both system and user prompts, eliminating code duplication.
 
 ---
 
@@ -261,8 +262,8 @@ Student Action Text
    - Output: `DynamicTurnResult` schema (single call)
    - Register prompt in MLflow as `prompts:/action-responder-user@latest`
 
-2. `agents/config.py`:
-   - Register ActionResponder via `get_agent()`
+2. `agents/utils.py`:
+   - Register ActionResponder via `setup_agent_and_prompts()`
 
 3. `settings.py`:
    - Add `max_turns` global config (default: 5)
@@ -291,14 +292,15 @@ Student Action Text
 
 | File | Changes | Phase | Status |
 |------|---------|-------|--------|
-| `agents/config.py` | Prompt versioning for system + user prompts | Pre-req | ✅ Complete |
+| `agents/utils.py` | Unified prompt versioning with `setup_agent_and_prompts()` | Pre-req | ✅ Complete |
+| `agents/config.py` | DELETED - Moved to utils.py | Pre-req | ✅ Complete |
 | `settings.py` | Add global max_turns (default: 5) | Pre-req | ✅ Complete |
-| `tests/conftest.py` | Reusable mock fixtures | Pre-req | ✅ Complete |
+| `tests/conftest.py` | Reusable mock fixtures for utils module | Pre-req | ✅ Complete |
 | `schemas.py` | Add DynamicTurnResult; update ScenarioDraft | 1 | Pending |
 | `agents/generator.py` | Remove multi-turn logic, output initial_narrative | 1 | Pending |
 | `ui/author.py` | Display initial_narrative in review | 1 | Pending |
 | `agents/action_responder.py` | NEW - ActionResponder agent | 2 | Pending |
-| `agents/config.py` | Register ActionResponder | 2 | Pending |
+| `agents/utils.py` | Register ActionResponder | 2 | Pending |
 | `graphs/simulation.py` | Refactor state, nodes, graph flow | 2 | Pending |
 | `ui/simulation.py` | Replace buttons with text input | 2 | Pending |
 | `public/hide-chat.css` | Scope to author mode | 2 | Pending |

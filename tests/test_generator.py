@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from summit_sim.agents import config as agent_config
+from summit_sim.agents import utils as agent_utils
 from summit_sim.agents.generator import generate_scenario
 from summit_sim.schemas import ChoiceOption, ScenarioConfig, ScenarioDraft, ScenarioTurn
 
@@ -17,22 +17,18 @@ class TestGeneratorAgent:
     def mock_api_key(self):
         """Mock the API key to avoid errors during agent creation."""
         with patch(
-            "summit_sim.agents.config.settings.openrouter_api_key", "test-api-key"
+            "summit_sim.agents.utils.settings.openrouter_api_key", "test-api-key"
         ):
             yield
 
     @pytest.fixture(autouse=True)
     def clear_agent_cache(self):
         """Clear the agent cache before each test."""
-        agent_config._agent_container.clear()
+        agent_utils._agent_container.clear()
 
     @pytest.fixture(autouse=True)
     def mock_prompts(self):
         """Mock MLflow prompt loading."""
-        user_prompt = (
-            "Test user prompt with {primary_focus} {environment} {available_personnel} "
-            "{evac_distance} {complexity}"
-        )
 
         class MockPrompt:
             def __init__(self, template):
@@ -41,17 +37,11 @@ class TestGeneratorAgent:
             def format(self, **kwargs):
                 return self.template.format(**kwargs)
 
-        mock_prompt_obj = MockPrompt(user_prompt)
-
         with (
-            patch("summit_sim.agents.config.mlflow.genai.load_prompt") as mock_load,
-            patch("summit_sim.agents.config.mlflow.genai.register_prompt"),
-            patch(
-                "summit_sim.agents.generator.mlflow.genai.load_prompt"
-            ) as mock_load_gen,
+            patch("summit_sim.agents.utils.mlflow.genai.load_prompt") as mock_load,
+            patch("summit_sim.agents.utils.mlflow.genai.register_prompt"),
         ):
             mock_load.return_value = MockPrompt("Test system prompt")
-            mock_load_gen.return_value = mock_prompt_obj
             yield
 
     @pytest.mark.asyncio
@@ -148,7 +138,7 @@ class TestGeneratorAgent:
             ],
         )
 
-        with patch("summit_sim.agents.config.Agent") as mock_agent_class:
+        with patch("summit_sim.agents.utils.Agent") as mock_agent_class:
             mock_agent = AsyncMock()
             mock_agent.run.return_value = mock_result
             mock_agent_class.return_value = mock_agent
@@ -255,7 +245,7 @@ class TestGeneratorAgent:
             ],
         )
 
-        with patch("summit_sim.agents.config.Agent") as mock_agent_class:
+        with patch("summit_sim.agents.utils.Agent") as mock_agent_class:
             mock_agent = AsyncMock()
             mock_agent.run.return_value = mock_result
             mock_agent_class.return_value = mock_agent
@@ -361,7 +351,7 @@ class TestGeneratorAgent:
             ],
         )
 
-        with patch("summit_sim.agents.config.Agent") as mock_agent_class:
+        with patch("summit_sim.agents.utils.Agent") as mock_agent_class:
             mock_agent = AsyncMock()
             mock_agent.run.return_value = mock_result
             mock_agent_class.return_value = mock_agent

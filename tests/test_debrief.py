@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from summit_sim.agents import config as agent_config
+from summit_sim.agents import utils as agent_utils
 from summit_sim.agents.debrief import calculate_score, generate_debrief
 from summit_sim.graphs.utils import TranscriptEntry
 from summit_sim.schemas import (
@@ -22,14 +22,14 @@ class TestDebriefAgent:
     def mock_api_key(self):
         """Mock the API key to avoid errors during agent creation."""
         with patch(
-            "summit_sim.agents.config.settings.openrouter_api_key", "test-api-key"
+            "summit_sim.agents.utils.settings.openrouter_api_key", "test-api-key"
         ):
             yield
 
     @pytest.fixture(autouse=True)
     def clear_agent_cache(self):
         """Clear the agent cache before each test."""
-        agent_config._agent_container.clear()
+        agent_utils._agent_container.clear()
 
     @pytest.fixture(autouse=True)
     def mock_prompts(self):
@@ -50,8 +50,8 @@ class TestDebriefAgent:
         mock_prompt_obj = MockPrompt(user_prompt)
 
         with (
-            patch("summit_sim.agents.config.mlflow.genai.load_prompt") as mock_load,
-            patch("summit_sim.agents.config.mlflow.genai.register_prompt"),
+            patch("summit_sim.agents.utils.mlflow.genai.load_prompt") as mock_load,
+            patch("summit_sim.agents.utils.mlflow.genai.register_prompt"),
             patch(
                 "summit_sim.agents.debrief.mlflow.genai.load_prompt"
             ) as mock_load_deb,
@@ -230,7 +230,7 @@ class TestDebriefAgent:
             final_score=100.0,
         )
 
-        with patch("summit_sim.agents.config.Agent") as mock_agent_class:
+        with patch("summit_sim.agents.utils.Agent") as mock_agent_class:
             mock_agent = AsyncMock()
             mock_agent.run.return_value = AsyncMock(output=mock_report)
             mock_agent_class.return_value = mock_agent
@@ -258,7 +258,7 @@ class TestDebriefAgent:
             final_score=33.33,
         )
 
-        with patch("summit_sim.agents.config.Agent") as mock_agent_class:
+        with patch("summit_sim.agents.utils.Agent") as mock_agent_class:
             mock_agent = AsyncMock()
             mock_agent.run.return_value = AsyncMock(output=mock_report)
             mock_agent_class.return_value = mock_agent
@@ -286,7 +286,7 @@ class TestDebriefAgent:
             final_score=33.33,
         )
 
-        with patch("summit_sim.agents.config.Agent") as mock_agent_class:
+        with patch("summit_sim.agents.utils.Agent") as mock_agent_class:
             mock_agent = AsyncMock()
             mock_agent.run.return_value = AsyncMock(output=mock_report)
             mock_agent_class.return_value = mock_agent
@@ -312,7 +312,7 @@ class TestDebriefAgent:
             final_score=33.33,
         )
 
-        with patch("summit_sim.agents.config.Agent") as mock_agent_class:
+        with patch("summit_sim.agents.utils.Agent") as mock_agent_class:
             mock_agent = AsyncMock()
             mock_agent.run.return_value = AsyncMock(output=mock_report)
             mock_agent_class.return_value = mock_agent

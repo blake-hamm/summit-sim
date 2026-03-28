@@ -13,7 +13,7 @@ import logging
 import mlflow
 from mlflow.entities import SpanType
 
-from summit_sim.agents.config import get_agent
+from summit_sim.agents.utils import setup_agent_and_prompts
 from summit_sim.schemas import (
     ChoiceOption,
     ScenarioDraft,
@@ -85,10 +85,11 @@ async def process_choice(
         current_turn.turn_id,
         selected_choice.choice_id,
     )
-    agent = get_agent(
+    agent, user_prompt = setup_agent_and_prompts(
         agent_name=AGENT_NAME,
         output_type=SimulationResult,
         system_prompt=SYSTEM_PROMPT,
+        user_prompt_template=USER_PROMPT_TEMPLATE,
         reasoning_effort="medium",
     )
 
@@ -97,9 +98,6 @@ async def process_choice(
         for c in current_turn.choices
     )
 
-    user_prompt = mlflow.genai.load_prompt(  # type: ignore[attr-defined]
-        f"prompts:/{AGENT_NAME}-user@latest"
-    )
     prompt = user_prompt.format(
         title=scenario.title,
         setting=scenario.setting,
@@ -112,7 +110,7 @@ async def process_choice(
         selected_choice_description=selected_choice.description,
     )
 
-    result = await agent.run(prompt)
+    result = await agent.run(prompt)  # type: ignore[arg-type]
 
     simulation_result = result.output
 

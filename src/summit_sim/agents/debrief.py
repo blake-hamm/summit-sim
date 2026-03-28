@@ -6,8 +6,9 @@ import logging
 
 import mlflow
 from mlflow.entities import SpanType
+from mlflow.entities.model_registry.prompt_version import PromptVersion
 
-from summit_sim.agents.config import get_agent
+from summit_sim.agents.utils import setup_agent_and_prompts
 from summit_sim.graphs.utils import TranscriptEntry
 from summit_sim.schemas import DebriefReport, ScenarioDraft
 
@@ -69,16 +70,17 @@ async def generate_debrief(
     logger.info(
         "Generating debrief: scenario_id=%s, turns=%d", scenario_id, len(transcript)
     )
-    agent = get_agent(
+    agent, user_prompt = setup_agent_and_prompts(
         agent_name=AGENT_NAME,
         output_type=DebriefReport,
         system_prompt=SYSTEM_PROMPT,
+        user_prompt_template=USER_PROMPT_TEMPLATE,
         reasoning_effort="medium",
     )
 
-    prompt = _build_debrief_prompt(transcript, scenario_draft, scenario_id)
+    prompt = _build_debrief_prompt(transcript, scenario_draft, scenario_id, user_prompt)
 
-    result = await agent.run(prompt)
+    result = await agent.run(prompt)  # type: ignore[arg-type]
     logger.info("Debrief generated: scenario_id=%s", scenario_id)
     return result.output
 
@@ -87,6 +89,7 @@ def _build_debrief_prompt(
     transcript: list[TranscriptEntry],
     scenario_draft: ScenarioDraft,
     scenario_id: str,
+    user_prompt: PromptVersion,
 ) -> str:
     """Build prompt for debrief agent."""
     score = calculate_score(transcript)
@@ -97,9 +100,6 @@ def _build_debrief_prompt(
     scenario_context = _format_scenario_context(scenario_draft)
     transcript_summary = _format_transcript_summary(transcript)
 
-    user_prompt = mlflow.genai.load_prompt(  # type: ignore[attr-defined]
-        f"prompts:/{AGENT_NAME}-user@latest"
-    )
     return user_prompt.format(
         scenario_context=scenario_context,
         scenario_id=scenario_id,

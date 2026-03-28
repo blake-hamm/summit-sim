@@ -4,9 +4,7 @@ from __future__ import annotations
 
 import logging
 
-import mlflow
-
-from summit_sim.agents.config import get_agent
+from summit_sim.agents.utils import setup_agent_and_prompts
 from summit_sim.schemas import ScenarioConfig, ScenarioDraft
 
 logger = logging.getLogger(__name__)
@@ -100,24 +98,20 @@ async def generate_scenario(scenario_config: ScenarioConfig) -> ScenarioDraft:
         scenario_config.evac_distance,
         scenario_config.complexity,
     )
-    agent = get_agent(
+    agent, user_prompt = setup_agent_and_prompts(
         agent_name=AGENT_NAME,
         output_type=ScenarioDraft,
         system_prompt=SYSTEM_PROMPT,
+        user_prompt_template=USER_PROMPT_TEMPLATE,
         reasoning_effort="high",
     )
 
-    user_prompt = mlflow.genai.load_prompt(  # type: ignore[attr-defined]
-        f"prompts:/{AGENT_NAME}-user@latest"
-    )
-    prompt = str(
-        user_prompt.format(
-            primary_focus=scenario_config.primary_focus,
-            environment=scenario_config.environment,
-            available_personnel=scenario_config.available_personnel,
-            evac_distance=scenario_config.evac_distance,
-            complexity=scenario_config.complexity,
-        )
+    prompt = user_prompt.format(
+        primary_focus=scenario_config.primary_focus,
+        environment=scenario_config.environment,
+        available_personnel=scenario_config.available_personnel,
+        evac_distance=scenario_config.evac_distance,
+        complexity=scenario_config.complexity,
     )
 
     result = await agent.run(prompt)

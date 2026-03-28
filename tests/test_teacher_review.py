@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from langgraph.types import Command
 
-from summit_sim.agents import config as agent_config
+from summit_sim.agents import utils as agent_utils
 from summit_sim.graphs.author import (
     AuthorState,
     create_author_graph,
@@ -392,7 +392,7 @@ class TestTeacherReviewGraphFullCycle:
     def mock_api_key(self):
         """Mock the API key to avoid errors during agent creation."""
         with patch(
-            "summit_sim.agents.config.settings.openrouter_api_key", "test-api-key"
+            "summit_sim.agents.utils.settings.openrouter_api_key", "test-api-key"
         ):
             yield
 
@@ -408,17 +408,13 @@ class TestTeacherReviewGraphFullCycle:
             patch(
                 "summit_sim.graphs.author.mlflow.log_feedback",
             ),
-            patch(
-                "summit_sim.agents.generator.mlflow.get_current_active_span",
-                return_value=mock_span,
-            ),
         ):
             yield
 
     @pytest.fixture(autouse=True)
     def clear_agent_cache(self):
         """Clear the agent cache before each test."""
-        agent_config._agent_container.clear()
+        agent_utils._agent_container.clear()
 
     @pytest.fixture(autouse=True)
     def mock_prompts(self):
@@ -431,20 +427,11 @@ class TestTeacherReviewGraphFullCycle:
             def format(self, **kwargs):
                 return self.template.format(**kwargs)
 
-        user_prompt = (
-            "Test user prompt with {num_participants} {activity_type} {difficulty}"
-        )
-        mock_prompt_obj = MockPrompt(user_prompt)
-
         with (
-            patch("summit_sim.agents.config.mlflow.genai.load_prompt") as mock_load,
-            patch("summit_sim.agents.config.mlflow.genai.register_prompt"),
-            patch(
-                "summit_sim.agents.generator.mlflow.genai.load_prompt"
-            ) as mock_load_gen,
+            patch("summit_sim.agents.utils.mlflow.genai.load_prompt") as mock_load,
+            patch("summit_sim.agents.utils.mlflow.genai.register_prompt"),
         ):
             mock_load.return_value = MockPrompt("Test system prompt")
-            mock_load_gen.return_value = mock_prompt_obj
             yield
 
     @pytest.mark.asyncio

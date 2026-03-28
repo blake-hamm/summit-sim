@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 import pytest
 
-from summit_sim.agents import config as agent_config
+from summit_sim.agents import utils as agent_utils
 from summit_sim.graphs.simulation import (
     SimulationState,
     TranscriptEntry,
@@ -388,14 +388,14 @@ class TestStudentGraphFullCycle:
     def mock_api_key(self):
         """Mock the API key to avoid errors during agent creation."""
         with patch(
-            "summit_sim.agents.config.settings.openrouter_api_key", "test-api-key"
+            "summit_sim.agents.utils.settings.openrouter_api_key", "test-api-key"
         ):
             yield
 
     @pytest.fixture(autouse=True)
     def clear_agent_cache(self):
         """Clear the agent cache before each test."""
-        agent_config._agent_container.clear()
+        agent_utils._agent_container.clear()
 
     @pytest.mark.asyncio
     async def test_full_three_turn_simulation(self, sample_scenario):

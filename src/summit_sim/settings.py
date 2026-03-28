@@ -2,6 +2,7 @@
 
 import logging
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -14,6 +15,7 @@ class Settings(BaseSettings):
     mlflow_experiment_name: str = "summit-sim"
     base_url: str = "http://localhost:8000"
     log_level: str = "INFO"
+    max_turns: int = Field(default=5, description="Maximum turns per scenario")
 
     model_config = SettingsConfigDict(
         env_file=".env",
