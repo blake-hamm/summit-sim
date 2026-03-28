@@ -26,6 +26,17 @@ class Settings(BaseSettings):
 
 settings = Settings()
 
+
+def get_settings() -> Settings:
+    """Get application settings.
+
+    Returns:
+        Settings instance
+
+    """
+    return settings
+
+
 logging.basicConfig(
     level=settings.log_level,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",

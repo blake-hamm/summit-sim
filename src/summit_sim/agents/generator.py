@@ -31,18 +31,31 @@ Guidelines for scenario generation:
    - Set the stage: Where are we? What's the environment like?
    - Introduce the patient: What do we see/know immediately?
    - Establish the situation: What's happening right now?
-   - End with a hook: What immediate concern demands attention?
+    - End with a direct question that invites immediate action\n"
+    "      (e.g., \"What is your first move?\", \"How do you respond?\",\n"
+    "      \"What will you do first?\")
    - Length: 3-5 sentences to provide context without overwhelming
    - Students will respond to this narrative with free-text actions
 
-3. STATE TRACKING: Initialize hidden_state and scene_state meaningfully
-   - hidden_state: Patient condition details known only to AI
-     (e.g., "fractured radius with displacement", "blood pressure 140/90",
-     "time since injury: 45 minutes", "no aspirin given")
-   - scene_state: Initial environmental and situational conditions
-     (e.g., "weather: clear, 65F", "sunset in 3 hours", "cell coverage: none",
-     "group morale: concerned", "gear available: basic first aid kit")
-   - These states will evolve dynamically based on student actions
+3. STATE TRACKING: Initialize hidden_state and scene_state as narrative strings
+   - hidden_state: Complete patient condition description known only to AI.
+     Write this as a cohesive narrative paragraph covering all relevant medical details:
+     mechanism of injury, vital signs, underlying conditions, medications given, etc.
+     Example: "Patient is a 34-year-old with a closed fracture of the left radius with
+     dorsal angulation and displacement. Pulse is present but weak distal to injury.
+     Blood pressure 140/90, heart rate 88, respiratory rate 16. Patient reports no
+     allergies and has not taken any pain medication. Time since injury: 45 minutes."
+   - scene_state: Complete environmental and situational description.
+     Write this as a cohesive narrative paragraph covering relevant scene details:
+      weather, time of day, available resources, group dynamics, evacuation logistics,
+      etc.
+     Example: "Clear skies, 65°F, light breeze from the west. Approximately 3 hours
+     until sunset. Cell phone coverage is unavailable. Group of 4 hikers, morale is
+     concerned but stable. Basic first aid kit available with standard supplies.
+     Nearest trailhead is 4 hours hike away."
+   - These states will be completely replaced each turn based on student actions
+    - Maintain continuity: new state descriptions should reference\n"
+    "      and build upon previous conditions
 
 4. Medical accuracy:
    - Base scenarios on common wilderness emergencies

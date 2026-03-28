@@ -14,12 +14,10 @@ class TranscriptEntry:
 
     turn_id: int
     turn_narrative: str
-    choice_id: str
-    choice_description: str
+    student_action: str
     was_correct: bool
     feedback: str
     learning_moments: list[str]
-    next_turn_id: int | None
 
 
 scenario_store = InMemoryStore()

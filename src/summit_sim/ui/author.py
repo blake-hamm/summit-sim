@@ -151,19 +151,10 @@ async def show_review_screen(state: AuthorState) -> None:
     learning_obj_text = "\n".join(f"• {obj}" for obj in scenario.learning_objectives)
     attempt_text = f" (Attempt {retry_count + 1}/3)" if retry_count > 0 else ""
 
-    scene_lines = []
-    if scenario.scene_state:
-        for key, value in scenario.scene_state.items():
-            scene_lines.append(f"   • {key.replace('_', ' ').title()}: {value}")
     scene_display = (
-        "\n".join(scene_lines) if scene_lines else "   *No special conditions*"
+        scenario.scene_state if scenario.scene_state else "*No special conditions*"
     )
-
-    hidden_lines = []
-    if scenario.hidden_state:
-        for key, value in scenario.hidden_state.items():
-            hidden_lines.append(f"   • {key.replace('_', ' ').title()}: {value}")
-    hidden_display = "\n".join(hidden_lines) if hidden_lines else "   *None*"
+    hidden_display = scenario.hidden_state if scenario.hidden_state else "*None*"
 
     await cl.Message(
         content=(

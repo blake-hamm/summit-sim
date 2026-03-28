@@ -127,13 +127,13 @@ class DynamicTurnResult(BaseModel):
     narrative_text: str = Field(
         ..., description="Generated narrative describing the outcome"
     )
-    updated_hidden_state: dict[str, str] = Field(
-        default_factory=dict,
-        description="Updated secret medical information after this turn",
+    updated_hidden_state: str = Field(
+        ...,
+        description="Updated secret medical info after this turn (full replacement)",
     )
-    updated_scene_state: dict[str, str] = Field(
-        default_factory=dict,
-        description="Updated visible scene conditions after this turn",
+    updated_scene_state: str = Field(
+        ...,
+        description="Updated scene conditions after this turn (full replacement)",
     )
 
 
@@ -157,12 +157,13 @@ class ScenarioDraft(BaseModel):
     initial_narrative: str = Field(
         ..., description="Opening narrative that sets the scene for the student"
     )
-    hidden_state: dict[str, str] = Field(
-        default_factory=dict,
-        description="Initial secret medical information for AI reference",
+    hidden_state: str = Field(
+        ...,
+        description="Initial secret medical info for AI reference",
     )
-    scene_state: dict[str, str] = Field(
-        default_factory=dict, description="Initial visible scene conditions"
+    scene_state: str = Field(
+        ...,
+        description="Initial visible scene conditions",
     )
 
 
@@ -195,52 +196,3 @@ class DebriefReport(BaseModel):
         le=100,
         description="Percentage score (correct choices / total turns * 100)",
     )
-
-
-# STUB CLASSES - Phase 1 compatibility
-# These are placeholders to allow Phase 2 code to import without errors
-# They will be properly implemented in Phase 2
-# TODO: Remove these stubs when Phase 2 is complete
-
-
-class ChoiceOption(BaseModel):
-    """STUB: Multiple choice option for scenario turn.
-
-    Phase 1 uses dynamic simulation - this stub allows Phase 2 imports.
-    TODO: Remove when Phase 2 implemented.
-    """
-
-    choice_id: str = Field(default="", description="STUB")
-    description: str = Field(default="", description="STUB")
-    is_correct: bool = Field(default=False, description="STUB")
-    next_turn_id: int | None = Field(default=None, description="STUB")
-
-
-class ScenarioTurn(BaseModel):
-    """STUB: Single turn in pre-generated scenario.
-
-    Phase 1 uses dynamic simulation - this stub allows Phase 2 imports.
-    TODO: Remove when Phase 2 implemented.
-    """
-
-    turn_id: int = Field(default=0, description="STUB")
-    narrative_text: str = Field(default="", description="STUB")
-    hidden_state: dict[str, str] = Field(default_factory=dict, description="STUB")
-    scene_state: dict[str, str] = Field(default_factory=dict, description="STUB")
-    choices: list[ChoiceOption] = Field(default_factory=list, description="STUB")
-
-
-class SimulationResult(BaseModel):
-    """STUB: Result after student choice in simulation.
-
-    Phase 1 uses dynamic simulation - this stub allows Phase 2 imports.
-    TODO: Remove when Phase 2 implemented.
-    """
-
-    selected_choice: ChoiceOption = Field(
-        default_factory=ChoiceOption, description="STUB"
-    )
-    feedback: str = Field(default="", description="STUB")
-    learning_moments: list[str] = Field(default_factory=list, description="STUB")
-    next_turn: ScenarioTurn | None = Field(default=None, description="STUB")
-    is_complete: bool = Field(default=False, description="STUB")

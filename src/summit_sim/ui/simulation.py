@@ -11,11 +11,12 @@ from summit_sim.graphs.simulation import (
     create_simulation_graph,
 )
 from summit_sim.graphs.utils import scenario_store
-from summit_sim.schemas import DebriefReport, ScenarioDraft
+from summit_sim.schemas import DebriefReport, DynamicTurnResult, ScenarioDraft
 
 logger = logging.getLogger(__name__)
 
 PASS_SCORE_THRESHOLD = 70
+MAX_ACTION_LENGTH = 500
 
 if TYPE_CHECKING:
     import chainlit as cl
@@ -46,7 +47,7 @@ async def start_simulation_session() -> None:
 
 
 async def show_scenario_intro(scenario: ScenarioDraft) -> None:
-    """Display scenario intro with start button."""
+    """Display scenario intro and start simulation immediately."""
     objectives_text = "\n".join(f"• {obj}" for obj in scenario.learning_objectives)
     await cl.Message(
         content=(
@@ -57,19 +58,7 @@ async def show_scenario_intro(scenario: ScenarioDraft) -> None:
         ),
     ).send()
 
-    res = await cl.AskActionMessage(
-        content="Ready to begin the simulation?",
-        actions=[
-            cl.Action(
-                name="start_simulation",
-                payload={"value": "start"},
-                label="▶️ Start Scenario",
-            ),
-        ],
-    ).send()
-
-    if res and res.get("payload", {}).get("value") == "start":
-        await run_simulation()
+    await run_simulation()
 
 
 async def run_simulation() -> None:
@@ -89,20 +78,17 @@ async def run_simulation() -> None:
     thread_id = cl.user_session.get("id")
     config: RunnableConfig = {"configurable": {"thread_id": thread_id}}
 
-    starting_turn = scenario.get_starting_turn()
-    if starting_turn is None:
-        await cl.Message(content="❌ Invalid scenario: no starting turn found.").send()
-        return
-
     initial_state = SimulationState(
         scenario_draft=scenario.model_dump(),
-        current_turn_id=starting_turn.turn_id,
+        turn_count=0,
         transcript=[],
         is_complete=False,
         key_learning_moments=[],
-        last_selected_choice=None,
-        simulation_result=None,
+        last_student_action=None,
+        action_result=None,
         scenario_id=scenario_id,
+        hidden_state=scenario.hidden_state,
+        scene_state=scenario.scene_state,
     )
 
     try:
@@ -117,23 +103,20 @@ async def handle_simulation_loop(
     graph: CompiledStateGraph,
     config: RunnableConfig,
 ) -> None:
-    """Handle simulation interrupts and player choices."""
+    """Handle simulation interrupts and player free-text actions."""
     if isinstance(state, dict):
         state = SimulationState.from_graph_result(state)
 
     while True:
-        if state.simulation_result:
-            result_dict = state.simulation_result
-            feedback = result_dict.get("feedback", "")
-            learning_moments = result_dict.get("learning_moments", [])
-            moments_text = "\n".join(f"• {m}" for m in learning_moments) or "None"
+        # Display feedback from previous action if available
+        if state.action_result:
+            result = DynamicTurnResult.model_validate(state.action_result)
 
             await cl.Message(
                 content=(
                     f"### Feedback\n\n"
-                    f"{feedback}\n\n"
-                    f"### Learning Moments\n\n"
-                    f"{moments_text}"
+                    f"{result.feedback}\n\n"
+                    f"**Progress:** {result.completion_score:.0%} complete"
                 ),
             ).send()
 
@@ -141,56 +124,64 @@ async def handle_simulation_loop(
             await show_debrief(state)
             break
 
+        # Get current narrative to display
         scenario = cl.user_session.get("scenario")
         if scenario is None:
             await cl.Message(content="❌ Error: Scenario lost.").send()
             break
         assert isinstance(scenario, ScenarioDraft)
 
-        current_turn = scenario.get_turn(state.current_turn_id)
-
-        if current_turn is None:
-            await cl.Message(content="❌ Error: Turn not found.").send()
-            break
-
-        if scene_state := current_turn.scene_state:
-            scene_text = ", ".join(f"**{k}:** {v}" for k, v in scene_state.items())
-            await cl.Message(
-                content=(
-                    f"**Conditions:** {scene_text}\n\n{current_turn.narrative_text}"
-                ),
-            ).send()
+        if state.turn_count == 0:
+            # Initial turn - show the opening narrative
+            current_narrative = scenario.initial_narrative
         else:
-            await cl.Message(content=current_turn.narrative_text).send()
+            # Subsequent turns - show narrative from last action result
+            result = DynamicTurnResult.model_validate(state.action_result)
+            current_narrative = result.narrative_text
 
-        actions = [
-            cl.Action(
-                name=choice.choice_id,
-                payload={"choice_id": choice.choice_id},
-                label=choice.description,
+        # Combine scene state and narrative for the prompt
+        if state.scene_state:
+            prompt_content = (
+                f"**Scene Conditions:**\n{state.scene_state}\n\n{current_narrative}"
             )
-            for choice in current_turn.choices
-        ]
+        else:
+            prompt_content = current_narrative
 
-        res = await cl.AskActionMessage(
-            content="What would you do?",
-            actions=actions,
+        # Get free-text action from student with character limit
+        res = await cl.AskUserMessage(
+            content=prompt_content,
+            timeout=300,  # 5 minute timeout
         ).send()
 
-        if not res or not res.get("payload"):
+        if not res or not res.get("output"):
+            await cl.Message(content="⏱️ Simulation timed out.").send()
             break
 
-        choice_id = res.get("payload", {}).get("choice_id")
+        student_action = res.get("output", "").strip()
 
-        loading_msg = await cl.Message(content="⏳ Processing choice...").send()
+        # Validate action length
+        if len(student_action) > MAX_ACTION_LENGTH:
+            await cl.Message(
+                content=(
+                    f"⚠️ Action too long ({len(student_action)} chars). "
+                    f"Please keep it under {MAX_ACTION_LENGTH} characters."
+                ),
+            ).send()
+            continue
 
+        if not student_action:
+            await cl.Message(content="⚠️ Please enter an action.").send()
+            continue
+
+        loading_msg = await cl.Message(content="⏳ Evaluating your action...").send()
+
+        # Resume graph with student action
         result = await graph.ainvoke(
-            Command(resume={"choice_id": choice_id}),
+            Command(resume={"action": student_action}),
             config=config,
         )
 
-        loading_msg.content = "✅ Choice recorded"
-        await loading_msg.update()
+        await loading_msg.remove()
 
         state = SimulationState.from_graph_result(result)
 

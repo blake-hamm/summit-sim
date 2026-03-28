@@ -1,9 +1,9 @@
-/* Hide the message composer/chat input */
-#message-composer,
-#message-composer *,
-#message-composer input,
-#message-composer textarea,
-#message-composer form,
-#message-composer button {
+/* Hide the message composer/chat input in author mode only */
+body.author-mode #message-composer,
+body.author-mode #message-composer *,
+body.author-mode #message-composer input,
+body.author-mode #message-composer textarea,
+body.author-mode #message-composer form,
+body.author-mode #message-composer button {
     display: none !important;
 }

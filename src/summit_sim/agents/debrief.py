@@ -24,14 +24,14 @@ Your task is to review the complete simulation transcript and provide a \
 constructive, learning-focused debrief.
 
 Analysis guidelines:
-1. Review each turn's choice and the AI feedback provided
+1. Review each turn's free-text action and the AI feedback provided
 2. Identify patterns in decision-making
-3. Tally correct vs incorrect choices for scoring
+3. Tally correct vs incorrect actions for scoring
 4. Highlight both strengths and areas for improvement
 5. Provide specific, actionable recommendations
 
 Scoring:
-- Calculate final_score as: (number of correct choices / total turns) * 100
+- Calculate final_score as: (number of correct actions / total turns) * 100
 - Determine completion_status: "pass" if final_score >= 70, "fail" otherwise
 
 Tone: Encouraging but honest. Focus on learning, not grading."""
@@ -128,7 +128,7 @@ def _format_transcript_summary(transcript: list[TranscriptEntry]) -> str:
         status = "CORRECT" if entry.was_correct else "INCORRECT"
         lines.append(
             f"Turn {entry.turn_id}: {status}\n"
-            f"  Choice: {entry.choice_description}\n"
+            f"  Action: {entry.student_action}\n"
             f"  Feedback: {entry.feedback}"
         )
     return "\n".join(lines)
