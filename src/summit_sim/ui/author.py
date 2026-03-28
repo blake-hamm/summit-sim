@@ -177,7 +177,7 @@ async def show_completion(state: AuthorState) -> None:
             )
 
 
-async def handle_approval(state: AuthorState) -> None:
+async def handle_approval(_state: AuthorState) -> None:
     """Handle scenario approval and save to store."""
     graph = cl.user_session.get("graph")
     if graph is None:
@@ -302,7 +302,9 @@ async def show_review_screen(state: AuthorState) -> None:
         cl.Text(name="🎯 Goals", content=learning_obj_text, display="inline"),
         cl.Text(
             name="🏔️ Environment",
-            content=f"**Setting:** {scenario.setting}\n\n**Scene State:** {scene_display}",
+            content=(
+                f"**Setting:** {scenario.setting}\n\n**Scene State:** {scene_display}"
+            ),
             display="inline",
         ),
         cl.Text(name="🏥 Subject", content=scenario.patient_summary, display="inline"),
