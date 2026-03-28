@@ -7,7 +7,7 @@ import pytest
 
 from summit_sim.agents import utils as agent_utils
 from summit_sim.agents.generator import generate_scenario
-from summit_sim.schemas import ChoiceOption, ScenarioConfig, ScenarioDraft, ScenarioTurn
+from summit_sim.schemas import ScenarioConfig, ScenarioDraft
 
 
 class TestGeneratorAgent:
@@ -62,80 +62,22 @@ class TestGeneratorAgent:
             patient_summary="45yo male with chest pain",
             hidden_truth="Possible cardiac event",
             learning_objectives=["Assess chest pain", "Monitor vitals"],
-            turns=[
-                ScenarioTurn(
-                    turn_id=0,
-                    narrative_text="Patient complains of chest pain.",
-                    choices=[
-                        ChoiceOption(
-                            choice_id="assess",
-                            description="Assess ABCs",
-                            is_correct=True,
-                            next_turn_id=1,
-                        ),
-                        ChoiceOption(
-                            choice_id="ignore",
-                            description="Tell them to rest",
-                            is_correct=False,
-                            next_turn_id=1,
-                        ),
-                        ChoiceOption(
-                            choice_id="panic",
-                            description="Panic",
-                            is_correct=False,
-                            next_turn_id=1,
-                        ),
-                    ],
-                ),
-                ScenarioTurn(
-                    turn_id=1,
-                    narrative_text="Patient is now stable.",
-                    choices=[
-                        ChoiceOption(
-                            choice_id="monitor",
-                            description="Monitor vitals",
-                            is_correct=True,
-                            next_turn_id=2,
-                        ),
-                        ChoiceOption(
-                            choice_id="evac",
-                            description="Evacuate immediately",
-                            is_correct=True,
-                            next_turn_id=2,
-                        ),
-                        ChoiceOption(
-                            choice_id="panic",
-                            description="Panic",
-                            is_correct=False,
-                            next_turn_id=2,
-                        ),
-                    ],
-                ),
-                ScenarioTurn(
-                    turn_id=2,
-                    narrative_text="Transport arriving.",
-                    choices=[
-                        ChoiceOption(
-                            choice_id="prepare",
-                            description="Prepare for transport",
-                            is_correct=True,
-                            next_turn_id=None,
-                        ),
-                        ChoiceOption(
-                            choice_id="wait",
-                            description="Wait for instructions",
-                            is_correct=False,
-                            next_turn_id=None,
-                        ),
-                        ChoiceOption(
-                            choice_id="panic",
-                            description="Panic",
-                            is_correct=False,
-                            next_turn_id=None,
-                        ),
-                    ],
-                ),
-            ],
+            initial_narrative=(
+                "You arrive at a mountain trail to find a 45-year-old male "
+                "clutching his chest. He appears pale and is sweating profusely. "
+                "The patient reports chest pain that started 20 minutes ago "
+                "while hiking."
+            ),
+            hidden_state={
+                "diagnosis": "possible cardiac event",
+                "vitals": "bp 140/90, hr 110",
+                "pain_level": "8/10",
+            },
+            scene_state={
+                "elevation": "8000ft",
+                "weather": "clear",
+                "cell_coverage": "none",
+            },
         )
 
         with patch("summit_sim.agents.utils.Agent") as mock_agent_class:
@@ -146,7 +88,8 @@ class TestGeneratorAgent:
 
         assert isinstance(result, ScenarioDraft)
         assert result.title == "Hiking Emergency"
-        assert len(result.turns) >= 1
+        assert result.initial_narrative is not None
+        assert len(result.initial_narrative) > 0
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("focus", ["Trauma", "Medical", "Environmental", "Mixed"])
@@ -169,80 +112,7 @@ class TestGeneratorAgent:
             patient_summary="Test patient",
             hidden_truth="Test truth",
             learning_objectives=["Objective"],
-            turns=[
-                ScenarioTurn(
-                    turn_id=0,
-                    narrative_text="Test scenario.",
-                    choices=[
-                        ChoiceOption(
-                            choice_id="choice_1",
-                            description="Option 1",
-                            is_correct=True,
-                            next_turn_id=1,
-                        ),
-                        ChoiceOption(
-                            choice_id="choice_2",
-                            description="Option 2",
-                            is_correct=False,
-                            next_turn_id=1,
-                        ),
-                        ChoiceOption(
-                            choice_id="panic",
-                            description="Panic",
-                            is_correct=False,
-                            next_turn_id=1,
-                        ),
-                    ],
-                ),
-                ScenarioTurn(
-                    turn_id=1,
-                    narrative_text="Next turn.",
-                    choices=[
-                        ChoiceOption(
-                            choice_id="continue",
-                            description="Continue",
-                            is_correct=True,
-                            next_turn_id=2,
-                        ),
-                        ChoiceOption(
-                            choice_id="stop",
-                            description="Stop",
-                            is_correct=False,
-                            next_turn_id=2,
-                        ),
-                        ChoiceOption(
-                            choice_id="panic",
-                            description="Panic",
-                            is_correct=False,
-                            next_turn_id=2,
-                        ),
-                    ],
-                ),
-                ScenarioTurn(
-                    turn_id=2,
-                    narrative_text="Final turn.",
-                    choices=[
-                        ChoiceOption(
-                            choice_id="finish",
-                            description="Finish",
-                            is_correct=True,
-                            next_turn_id=None,
-                        ),
-                        ChoiceOption(
-                            choice_id="continue",
-                            description="Continue",
-                            is_correct=True,
-                            next_turn_id=None,
-                        ),
-                        ChoiceOption(
-                            choice_id="panic",
-                            description="Panic",
-                            is_correct=False,
-                            next_turn_id=None,
-                        ),
-                    ],
-                ),
-            ],
+            initial_narrative=f"A {focus.lower()} emergency scenario begins.",
         )
 
         with patch("summit_sim.agents.utils.Agent") as mock_agent_class:
@@ -253,6 +123,7 @@ class TestGeneratorAgent:
 
         assert isinstance(result, ScenarioDraft)
         assert focus.lower() in result.title.lower()
+        assert result.initial_narrative is not None
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("complexity", ["Standard", "Complicated", "Critical"])
@@ -275,80 +146,7 @@ class TestGeneratorAgent:
             patient_summary="Test patient",
             hidden_truth="Test truth",
             learning_objectives=["Objective"],
-            turns=[
-                ScenarioTurn(
-                    turn_id=0,
-                    narrative_text="Test scenario.",
-                    choices=[
-                        ChoiceOption(
-                            choice_id="choice_1",
-                            description="Option 1",
-                            is_correct=True,
-                            next_turn_id=1,
-                        ),
-                        ChoiceOption(
-                            choice_id="choice_2",
-                            description="Option 2",
-                            is_correct=False,
-                            next_turn_id=1,
-                        ),
-                        ChoiceOption(
-                            choice_id="panic",
-                            description="Panic",
-                            is_correct=False,
-                            next_turn_id=1,
-                        ),
-                    ],
-                ),
-                ScenarioTurn(
-                    turn_id=1,
-                    narrative_text="Next turn.",
-                    choices=[
-                        ChoiceOption(
-                            choice_id="continue",
-                            description="Continue",
-                            is_correct=True,
-                            next_turn_id=2,
-                        ),
-                        ChoiceOption(
-                            choice_id="stop",
-                            description="Stop",
-                            is_correct=False,
-                            next_turn_id=2,
-                        ),
-                        ChoiceOption(
-                            choice_id="panic",
-                            description="Panic",
-                            is_correct=False,
-                            next_turn_id=2,
-                        ),
-                    ],
-                ),
-                ScenarioTurn(
-                    turn_id=2,
-                    narrative_text="Final turn.",
-                    choices=[
-                        ChoiceOption(
-                            choice_id="finish",
-                            description="Finish",
-                            is_correct=True,
-                            next_turn_id=None,
-                        ),
-                        ChoiceOption(
-                            choice_id="wait",
-                            description="Wait",
-                            is_correct=False,
-                            next_turn_id=None,
-                        ),
-                        ChoiceOption(
-                            choice_id="panic",
-                            description="Panic",
-                            is_correct=False,
-                            next_turn_id=None,
-                        ),
-                    ],
-                ),
-            ],
+            initial_narrative=f"A {complexity.lower()} complexity scenario begins.",
         )
 
         with patch("summit_sim.agents.utils.Agent") as mock_agent_class:
@@ -359,3 +157,46 @@ class TestGeneratorAgent:
 
         assert isinstance(result, ScenarioDraft)
         assert complexity.lower() in result.title.lower()
+        assert result.initial_narrative is not None
+
+    @pytest.mark.asyncio
+    async def test_generate_scenario_with_state(self):
+        """Test that generated scenario includes state fields."""
+        teacher_config = ScenarioConfig(
+            primary_focus="Trauma",
+            environment="Alpine/Mountain",
+            available_personnel="Small Group (3-5)",
+            evac_distance="Remote (1 day)",
+            complexity="Standard",
+        )
+
+        mock_result = AsyncMock()
+        mock_result.output = ScenarioDraft(
+            title="State Test Scenario",
+            setting="Mountain trail",
+            patient_summary="Patient with injury",
+            hidden_truth="Fractured tibia",
+            learning_objectives=["Assess injury", "Immobilize limb"],
+            initial_narrative="You find a hiker with a leg injury on the trail.",
+            hidden_state={
+                "injury": "fractured tibia",
+                "pain_scale": "7/10",
+                "time_since_injury": "30 minutes",
+            },
+            scene_state={
+                "weather": "partly cloudy",
+                "temperature": "55F",
+                "sunset_hours": "3",
+                "cell_coverage": "spotty",
+            },
+        )
+
+        with patch("summit_sim.agents.utils.Agent") as mock_agent_class:
+            mock_agent = AsyncMock()
+            mock_agent.run.return_value = mock_result
+            mock_agent_class.return_value = mock_agent
+            result = await generate_scenario(teacher_config)
+
+        assert isinstance(result, ScenarioDraft)
+        assert "injury" in result.hidden_state
+        assert "weather" in result.scene_state

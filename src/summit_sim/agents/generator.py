@@ -15,54 +15,49 @@ SYSTEM_PROMPT = """\
 You are an expert wilderness rescue scenario designer.
 
 Your task is to create a realistic, medically accurate wilderness rescue scenario
-based on minimal teacher inputs. You must generate a complete scenario with ALL
-turns pre-written.
+based on minimal teacher inputs. You generate ONLY the initial scenario setup -
+the turns and narrative progression will be handled dynamically during simulation.
 
 Guidelines for scenario generation:
 
-1. Create 3-5 turns total for a cohesive learning experience
-2. Each turn must have 3-5 multiple choice options:
-   - One medically optimal choice (is_correct=true)
-   - Others suboptimal but plausible choices (is_correct=false)
-   - Choices should be realistic first-responder decisions
-
-3. Turn structure:
-   - First turn has turn_id=0
-   - Middle turns: branch based on choices
-   - Final turns: end the scenario (next_turn_id=null)
-
-4. TURN NARRATIVES: Keep them SHORT and ACTIONABLE
-   - Each turn's narrative_text: 1-3 sentences max
-   - Focus on the immediate decision point, not scene-setting
-   - Students already know the context from previous turns
-   - Example GOOD: "Patient grimaces when you touch their forearm.
-     Swelling increased. What do you do?"
-   - Example BAD: Multi-paragraph description of location, weather,
-     patient history, etc.
-
-5. STATE TRACKING: Use hidden_state and scene_state meaningfully
-   - hidden_state: Patient condition details that emerge through assessment
-     (e.g., "given aspirin 30min ago", "pulse irregularity", "breath sounds diminished")
-   - scene_state: Environmental changes (weather deteriorating, new hazards
-     appearing, time passing)
-   - These add depth for teachers reviewing the scenario
-
-6. SCENARIO-LEVEL CONTENT (can be rich and detailed):
+1. SCENARIO-LEVEL CONTENT (rich and detailed):
+   - Title: Compelling and descriptive
    - Setting: Specific location with environmental details
-   - Patient: Age, relevant medical history, visible injuries
-   - Hidden truth: The actual medical condition students must discover
-   - Learning objectives: 2-3 specific wilderness first aid skills
+   - Patient Summary: Age, relevant medical history, visible injuries
+   - Hidden Truth: The actual medical condition students must discover
+   - Learning Objectives: 2-3 specific wilderness first aid skills
 
-7. Turn IDs: Sequential integers starting from 0 (e.g., 0, 1, 2, 3, 4).
-   Use 0 for the starting turn.
+2. INITIAL NARRATIVE: Create an immersive opening scene
+   - Set the stage: Where are we? What's the environment like?
+   - Introduce the patient: What do we see/know immediately?
+   - Establish the situation: What's happening right now?
+   - End with a hook: What immediate concern demands attention?
+   - Length: 3-5 sentences to provide context without overwhelming
+   - Students will respond to this narrative with free-text actions
 
-8. Medical accuracy:
+3. STATE TRACKING: Initialize hidden_state and scene_state meaningfully
+   - hidden_state: Patient condition details known only to AI
+     (e.g., "fractured radius with displacement", "blood pressure 140/90",
+     "time since injury: 45 minutes", "no aspirin given")
+   - scene_state: Initial environmental and situational conditions
+     (e.g., "weather: clear, 65F", "sunset in 3 hours", "cell coverage: none",
+     "group morale: concerned", "gear available: basic first aid kit")
+   - These states will evolve dynamically based on student actions
+
+4. Medical accuracy:
    - Base scenarios on common wilderness emergencies
    - Ensure correct symptoms for the condition
    - Treatment options should reflect actual wilderness protocols
+   - Account for environmental factors in patient presentation
 
-Complexity comes from the branching choices and cumulative patient state,
-not from lengthy turn narratives."""
+5. Open-ended design:
+   - Do NOT create multiple choice options
+   - Do NOT pre-write turns or branching paths
+   - Focus on creating a rich initial situation that can go many directions
+   - The student's free-text actions will drive the narrative
+
+Your output provides the foundation for dynamic, interactive learning where
+AI responds to each student decision in real-time."""
 
 
 USER_PROMPT_TEMPLATE = """\
@@ -74,17 +69,22 @@ Available Personnel: {{available_personnel}}
 Evacuation Distance: {{evac_distance}}
 Complexity: {{complexity}}
 
-Create a complete scenario with:
-- Compelling title and setting appropriate for {{environment}}
-- Realistic patient case matching the {{complexity}} complexity
-- 3-5 turns with multiple choice decision points
-- Medically accurate content
-- Clear learning objectives
-        - Consider {{available_personnel}} for resource-based decisions
-          (litter carries, runners)
-        - Account for {{evac_distance}} in stay-and-play vs load-and-go decisions
+Create the initial scenario setup with:
+- Compelling title and rich setting description for {{environment}}
+- Detailed patient case matching {{complexity}} complexity
+- Initial narrative (3-5 sentences) that immerses the student in the situation
+- Initial hidden_state with complete patient medical information
+- Initial scene_state with environmental and situational context
+- 2-3 specific learning objectives for wilderness first aid skills
 
-The scenario should be challenging but educational for wilderness first responders."""
+Consider {{available_personnel}} for resource limitations and {{evac_distance}}
+for evacuation logistics in your scenario design.
+
+Focus on creating a rich, open-ended starting point where students will
+respond with free-text actions and AI will dynamically generate outcomes.
+
+The scenario should be medically accurate and educational for wilderness
+first responders."""
 
 
 async def generate_scenario(scenario_config: ScenarioConfig) -> ScenarioDraft:
