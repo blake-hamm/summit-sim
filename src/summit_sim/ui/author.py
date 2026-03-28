@@ -241,7 +241,9 @@ async def handle_student_start(_state: AuthorState) -> None:
 **Scene State:** {scene_display}
 
 #### 🏥 Patient
-**Summary:** {scenario.patient_summary}"""
+**Summary:** {scenario.patient_summary}
+
+‌"""  # Zero-width non-joiner signals simulation is ready
 
         await cl.Message(content=context_content).send()
 
