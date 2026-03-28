@@ -27,6 +27,8 @@ class ScenarioConfig(BaseModel):
                 "label": "Role",
                 "options": ["Instructor (Review & Share)", "Student (Play Now)"],
                 "value": "Instructor (Review & Share)",
+                "description": "Students won't see hidden medical details - "
+                "they must discover these through assessment.",
             }
         },
     )

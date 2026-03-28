@@ -12,6 +12,7 @@ from summit_sim.graphs.author import (
     AuthorState,
     create_author_graph,
 )
+from summit_sim.graphs.utils import scenario_store
 from summit_sim.schemas import ScenarioConfig, ScenarioDraft
 from summit_sim.settings import settings
 from summit_sim.ui import simulation
@@ -122,14 +123,22 @@ async def generate_scenario() -> None:
 
         if result.get("scenario_draft"):
             state = AuthorState.from_graph_result(result)
+            mode = cl.user_session.get("mode", "Instructor (Review & Share)")
+            is_student = mode == "Student (Play Now)"
             params_text = (
+                f"**Role:** {mode}\n"
                 f"**Focus:** {config.primary_focus}\n**Env:** {config.environment}\n"
                 f"**Team:** {config.available_personnel}\n**Evac:** "
                 f"{config.evac_distance}\n**Complexity:** {config.complexity}"
             )
             loading_msg.content = f"✅ *Scenario ready for review!*\n\n{params_text}"
             await loading_msg.update()
-            await show_review_screen(state)
+
+            # Route students directly to simulation, instructors to review screen
+            if is_student:
+                await handle_student_start(state)
+            else:
+                await show_review_screen(state)
         else:
             loading_msg.content = (
                 "❌ Error: Scenario generation failed. Please try again."
@@ -205,8 +214,41 @@ async def handle_student_start(_state: AuthorState) -> None:
         cl.user_session.set("scenario_id", scenario_id)
         cl.user_session.set("mode", "player")
 
-        # Start simulation
-        await simulation.start_simulation_session()
+        # Load scenario from store (it was just saved during approval)
+        store_result = scenario_store.get(("scenarios",), scenario_id)
+        if store_result is None:
+            await cl.Message(
+                content="❌ Error: Scenario not found in store.",
+            ).send()
+            return
+
+        scenario_data = store_result.value
+        scenario = ScenarioDraft.model_validate(scenario_data["scenario_draft"])
+        cl.user_session.set("scenario", scenario)
+
+        # Show scenario context for student before starting
+        objectives_text = "\n".join(f"• {obj}" for obj in scenario.learning_objectives)
+        scene_display = (
+            scenario.scene_state if scenario.scene_state else "*No special conditions*"
+        )
+
+        context_content = f"""## 🏔️ {scenario.title}
+
+#### 🎯 Learning Objectives
+{objectives_text}
+
+#### 🏔️ Environment
+**Setting:** {scenario.setting}
+
+**Scene State:** {scene_display}
+
+#### 🏥 Patient
+**Summary:** {scenario.patient_summary}"""
+
+        await cl.Message(content=context_content).send()
+
+        # Start simulation (skip intro since we just showed context)
+        await simulation.run_simulation(skip_intro=True)
 
     except Exception as e:
         await cl.Message(
@@ -335,10 +377,6 @@ async def show_review_screen(state: AuthorState) -> None:
         scenario.scene_state if scenario.scene_state else "*No special conditions*"
     )
 
-    # Check mode - student mode hides instructor-only information
-    mode = cl.user_session.get("mode", "Instructor (Review & Share)")
-    is_student = mode == "Student (Play Now)"
-
     content = f"""## 🏔️ {scenario.title}{attempt_text}
 
 #### 🎯 Learning Objectives
@@ -352,11 +390,7 @@ async def show_review_screen(state: AuthorState) -> None:
 #### 🏥 Patient
 **Summary:** {scenario.patient_summary}
 
-**Opening Narrative:** {scenario.initial_narrative}"""
-
-    # Only show instructor-only info in instructor mode
-    if not is_student:
-        content += f"""
+**Opening Narrative:** {scenario.initial_narrative}
 
 #### 🔒 Instructor Only
 **Hidden Truth:** {scenario.hidden_truth}
@@ -365,37 +399,18 @@ async def show_review_screen(state: AuthorState) -> None:
 
     await cl.Message(content=content).send()
 
-    # Show different actions based on mode
-    if is_student:
-        res = await cl.AskActionMessage(
-            content="Ready to start the simulation?",
-            actions=[
-                cl.Action(
-                    name="start",
-                    payload={"action": "start"},
-                    label="▶️ Start Simulation",
-                ),
-            ],
-            timeout=settings.ui_timeout,
-        ).send()
+    res = await cl.AskActionMessage(
+        content=get_review_content(),
+        actions=[
+            cl.Action(name=a["name"], payload=a["payload"], label=a["label"])
+            for a in get_review_actions()
+        ],
+        timeout=settings.ui_timeout,
+    ).send()
 
-        if res and res.get("payload"):
-            action = res.get("payload", {}).get("action")
-            if action == "start":
-                await handle_student_start(state)
-    else:
-        res = await cl.AskActionMessage(
-            content=get_review_content(),
-            actions=[
-                cl.Action(name=a["name"], payload=a["payload"], label=a["label"])
-                for a in get_review_actions()
-            ],
-            timeout=settings.ui_timeout,
-        ).send()
-
-        if res and res.get("payload"):
-            action = res.get("payload", {}).get("action")
-            if action == "approve":
-                await handle_approval(state)
-            elif action == "revise":
-                await handle_revision(state)
+    if res and res.get("payload"):
+        action = res.get("payload", {}).get("action")
+        if action == "approve":
+            await handle_approval(state)
+        elif action == "revise":
+            await handle_revision(state)

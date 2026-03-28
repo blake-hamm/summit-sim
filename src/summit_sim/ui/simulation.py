@@ -80,7 +80,7 @@ your progress and dynamically responds to your choices."""
     await run_simulation()
 
 
-async def run_simulation() -> None:
+async def run_simulation(skip_intro: bool = False) -> None:
     """Run the simulation graph with player interactions."""
     scenario = cl.user_session.get("scenario")
     scenario_id = cl.user_session.get("scenario_id") or ""
@@ -112,15 +112,16 @@ async def run_simulation() -> None:
 
     try:
         result = await graph.ainvoke(initial_state, config)
-        await handle_simulation_loop(result, graph, config)
+        await handle_simulation_loop(result, graph, config, skip_intro=skip_intro)
     except Exception as e:
         await cl.Message(content=f"❌ Error during simulation: {e!s}").send()
 
 
-async def handle_simulation_loop(
+async def handle_simulation_loop(  # noqa: PLR0912
     state: SimulationState | dict,
     graph: CompiledStateGraph,
     config: RunnableConfig,
+    skip_intro: bool = False,
 ) -> None:
     """Handle simulation interrupts and player free-text actions."""
     if isinstance(state, dict):
@@ -158,8 +159,10 @@ async def handle_simulation_loop(
             result = DynamicTurnResult.model_validate(state.action_result)
             current_narrative = result.narrative_text
 
-        # Combine scene state and narrative for the prompt
-        if state.scene_state:
+        # Skip scene conditions for students who just reviewed
+        if skip_intro and state.turn_count == 0:
+            prompt_content = current_narrative
+        elif state.scene_state:
             prompt_content = (
                 f"**Scene Conditions:**\n{state.scene_state}\n\n{current_narrative}"
             )

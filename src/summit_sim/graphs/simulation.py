@@ -12,6 +12,7 @@ from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import interrupt
 
 from summit_sim.agents.action_responder import TurnContext, process_action
+from summit_sim.agents.debrief import generate_debrief
 from summit_sim.graphs.utils import TranscriptEntry
 from summit_sim.schemas import DynamicTurnResult, ScenarioDraft
 from summit_sim.settings import get_settings
@@ -217,8 +218,6 @@ async def generate_debrief_report(state: SimulationState) -> dict:
     Calls the Debrief Agent to analyze the complete simulation transcript
     and generate a structured performance report.
     """
-    from summit_sim.agents.debrief import generate_debrief  # noqa: PLC0415
-
     debrief_report = await generate_debrief(
         transcript=state.transcript,
         scenario_draft=ScenarioDraft.model_validate(state.scenario_draft),

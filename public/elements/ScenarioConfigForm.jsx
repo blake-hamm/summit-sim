@@ -19,7 +19,7 @@ export default function ScenarioConfigForm() {
             if (f.value) {
                 init[f.id] = f.value;
             } else if (f.type === 'select' && f.options && f.options.length > 0) {
-                init[f.id] = f.options[1];
+                init[f.id] = f.options[0];
             } else {
                 init[f.id] = '';
             }
