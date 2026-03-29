@@ -3,45 +3,65 @@
 Entry point for the Chainlit application.
 """
 
+import asyncio
 import logging
 from urllib.parse import parse_qs, urlparse
 
 import chainlit as cl  # noqa: E402
 import mlflow
 from chainlit import on_chat_start, on_message  # noqa: E402
+from langgraph.checkpoint.redis.aio import AsyncRedisSaver
 
-from summit_sim.graphs.utils import scenario_store
+from summit_sim.graphs.utils import get_scenario_store
 from summit_sim.settings import settings
 from summit_sim.ui import author, simulation
 
 logger = logging.getLogger(__name__)
 
 
-class _MLflowState:
-    """Track MLflow initialization state to avoid creating resources at import time."""
+class _AppState:
+    """Track global app init state to avoid creating resources at import time."""
 
     def __init__(self) -> None:
         """Initialize state container."""
         self.initialized = False
+        self._lock = asyncio.Lock()
 
-    def init(self) -> None:
-        """Initialize MLflow - only runs once when chat session starts."""
-        if not self.initialized:
+    async def init(self) -> None:
+        """Initialize global services - only runs once per server lifespan."""
+        if self.initialized:
+            return
+
+        async with self._lock:
+            if self.initialized:
+                return
+
+            # 1. Initialize MLflow
             mlflow.set_tracking_uri(settings.mlflow_tracking_uri)
             mlflow.set_experiment(settings.mlflow_experiment_name)
             mlflow.pydantic_ai.autolog()  # type: ignore[attr-defined]
+            logger.debug("MLflow initialized")
+
+            # 2. Initialize Redis store
+            await get_scenario_store()
+            # 3. Initialize checkpointer indices (must be done once)
+            async with AsyncRedisSaver.from_conn_string(
+                settings.redis_url
+            ) as checkpointer:
+                await checkpointer.setup()
+            logger.debug("Redis LangGraph persistence initialized")
+
             self.initialized = True
-            logger.info("MLflow initialized")
 
 
 # Module-level state container for lazy initialization
-_mlflow_state = _MLflowState()
+_app_state = _AppState()
 
 
 @on_chat_start
 async def start() -> None:
     """Initialize chat session - routes to author or player flow."""
-    _mlflow_state.init()
+    await _app_state.init()  # Ensure DB indices and MLFlow are set up
     logger.info("New chat session started")
     query_string = ""
     environ = cl.context.session.environ if hasattr(cl.context, "session") else {}
@@ -54,6 +74,7 @@ async def start() -> None:
     params = parse_qs(query_string)
     scenario_id = params.get("scenario_id", [""])[0]
 
+    scenario_store = await get_scenario_store()
     if scenario_id and scenario_store.get(("scenarios",), scenario_id) is not None:
         logger.info("Player joined session, scenario_id=%s", scenario_id)
         cl.user_session.set("mode", "player")

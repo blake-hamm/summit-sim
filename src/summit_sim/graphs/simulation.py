@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 import mlflow
 from langchain_core.runnables import RunnableConfig
-from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.checkpoint.redis.aio import AsyncRedisSaver
 from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import interrupt
@@ -17,7 +17,7 @@ from mlflow.entities import SpanType
 from summit_sim.agents.action_responder import process_action
 from summit_sim.agents.debrief import generate_debrief
 from summit_sim.schemas import DynamicTurnResult, ScenarioDraft, TranscriptEntry
-from summit_sim.settings import get_settings
+from summit_sim.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -134,7 +134,6 @@ async def process_player_action(state: SimulationState, config: RunnableConfig) 
         msg = "Cannot process action without scenario"
         raise ValueError(msg)
 
-    settings = get_settings()
     max_turns = settings.max_turns
 
     # Get the student action from the last transcript entry
@@ -199,7 +198,6 @@ def update_simulation_state(state: SimulationState) -> dict:
 
     # Check if scenario is naturally complete or if we've hit max turns
     # is_complete is derived from completion_score (>= 0.7 = 70% threshold)
-    settings = get_settings()
     next_turn_count = state.turn_count + 1
     is_max_turns_reached = next_turn_count >= settings.max_turns
     is_evacuation_complete = result.completion_score >= COMPLETION_THRESHOLD
@@ -302,6 +300,10 @@ def create_simulation_graph(
     workflow.add_edge("generate_debrief", END)
 
     if checkpointer is None:
-        checkpointer = InMemorySaver()
+        # TTL: 24 hours (1440 minutes) for checkpoints
+        checkpointer = AsyncRedisSaver(
+            settings.redis_url,
+            ttl={"default_ttl": 1440, "refresh_on_read": True},
+        )
 
     return workflow.compile(checkpointer=checkpointer)

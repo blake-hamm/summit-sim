@@ -12,7 +12,7 @@ from summit_sim.graphs.author import (
     AuthorState,
     create_author_graph,
 )
-from summit_sim.graphs.utils import scenario_store
+from summit_sim.graphs.utils import get_scenario_store
 from summit_sim.schemas import ScenarioConfig, ScenarioDraft
 from summit_sim.settings import settings
 from summit_sim.ui import simulation
@@ -214,7 +214,8 @@ async def handle_student_start(_state: AuthorState) -> None:
             cl.user_session.set("authoring_trace_id", final_state.current_trace_id)
 
         # Load scenario from store (it was just saved during approval)
-        store_result = scenario_store.get(("scenarios",), scenario_id)
+        store = await get_scenario_store()
+        store_result = await store.aget(("scenarios",), scenario_id)
         if store_result is None:
             await cl.Message(
                 content="❌ Error: Scenario not found in store.",

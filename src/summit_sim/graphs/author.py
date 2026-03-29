@@ -7,7 +7,7 @@ from dataclasses import dataclass, fields
 from typing import TYPE_CHECKING, Any
 
 import mlflow
-from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.checkpoint.redis.aio import AsyncRedisSaver
 from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.store.base import BaseStore
@@ -15,12 +15,12 @@ from langgraph.types import interrupt
 from mlflow.entities import AssessmentSource, AssessmentSourceType, SpanType
 
 from summit_sim.agents.generator import generate_scenario
-from summit_sim.graphs.utils import scenario_store
 from summit_sim.schemas import (
     ScenarioConfig,
     ScenarioDraft,
     generate_scenario_id,
 )
+from summit_sim.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -198,10 +198,13 @@ def should_retry(state: AuthorState) -> str:
     return "save"
 
 
-def save_scenario(state: AuthorState) -> dict:
+async def save_scenario(state: AuthorState) -> dict:
     """Save approved scenario to LangGraph store."""
     if state.scenario_draft and state.scenario_id:
-        scenario_store.put(
+        from summit_sim.graphs.utils import get_scenario_store  # noqa: PLC0415
+
+        store = await get_scenario_store()
+        await store.aput(
             ("scenarios",),
             state.scenario_id,
             {"scenario_draft": state.scenario_draft},
@@ -230,8 +233,10 @@ def create_author_graph(
     workflow.add_edge("save", END)
 
     if checkpointer is None:
-        checkpointer = InMemorySaver()
+        # TTL: 24 hours (1440 minutes) for checkpoints
+        checkpointer = AsyncRedisSaver(
+            settings.redis_url,
+            ttl={"default_ttl": 1440, "refresh_on_read": True},
+        )
 
-    used_store = store if store is not None else scenario_store
-
-    return workflow.compile(checkpointer=checkpointer, store=used_store)
+    return workflow.compile(checkpointer=checkpointer, store=store)

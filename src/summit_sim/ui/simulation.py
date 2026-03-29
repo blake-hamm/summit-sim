@@ -11,7 +11,7 @@ from summit_sim.graphs.simulation import (
     SimulationState,
     create_simulation_graph,
 )
-from summit_sim.graphs.utils import scenario_store
+from summit_sim.graphs.utils import get_scenario_store
 from summit_sim.schemas import DebriefReport, DynamicTurnResult, ScenarioDraft
 from summit_sim.settings import settings
 from summit_sim.ui.utils import format_scenario_intro
@@ -40,7 +40,8 @@ async def start_simulation_session() -> None:
         ).send()
         return
 
-    result = scenario_store.get(("scenarios",), scenario_id)
+    store = await get_scenario_store()
+    result = await store.aget(("scenarios",), scenario_id)
 
     if result is None:
         await cl.Message(
