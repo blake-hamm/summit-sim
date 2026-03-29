@@ -17,7 +17,8 @@ RUN uv sync --all-extras --frozen
 COPY src/ ./src/
 COPY .chainlit/ ./.chainlit/
 COPY public/ ./public/
-COPY chainlit.md chainlit_en-US.md ./
+COPY chainlit.md ./
+RUN ln -s chainlit.md chainlit_en-US.md
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1

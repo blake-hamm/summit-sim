@@ -55,7 +55,6 @@ htmlcov/
 # Documentation
 *.md
 !chainlit.md
-!chainlit_en-US.md
 
 # Plans and notebooks (not needed for runtime)
 plans/
