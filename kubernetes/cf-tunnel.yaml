@@ -1,0 +1,15 @@
+apiVersion: networking.cfargotunnel.com/v1alpha1
+kind: TunnelBinding
+metadata:
+  name: summit-sim
+  namespace: summit-sim
+  annotations:
+    argocd.argoproj.io/sync-wave: "25"
+subjects:
+  - name: summit-sim
+    spec:
+      target: http://summit-sim.summit-sim.svc.cluster.local:8000
+      fqdn: summit-sim.bhamm-lab.com
+tunnelRef:
+  kind: ClusterTunnel
+  name: external-tunnel
