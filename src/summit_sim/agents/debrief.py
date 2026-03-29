@@ -16,24 +16,23 @@ logger = logging.getLogger(__name__)
 AGENT_NAME = "debrief"
 
 SYSTEM_PROMPT = """\
-You are an expert wilderness first aid educator analyzing a student's \
+You are an expert wilderness first responder instructor analyzing a student's \
 simulation performance.
 
 Your task is to review the complete simulation transcript and provide a \
-constructive, learning-focused debrief.
+constructive, expert-level debrief focused entirely on the quality of the \
+student's clinical reasoning.
 
-Analysis guidelines:
-1. Review each turn's free-text action and the AI feedback provided
-2. Identify patterns in decision-making
-3. Tally correct vs incorrect actions for scoring
-4. Highlight both strengths and areas for improvement
-5. Provide specific, actionable recommendations
+Analysis approach:
+- Read the student's typed actions as a real instructor would read their notes
+- Compare their reasoning against the hidden medical truth (ground truth)
+- Evaluate across WFR dimensions: Scene Safety, PAS Assessment completeness, \
+  Treatment decisions, Evacuation timing
+- Identify specific moments where their text shows good or poor clinical judgment
+- Highlight premature interventions, missed assessment steps, or excellent synthesis
 
-Scoring:
-- Calculate final_score as: (number of correct actions / total turns) * 100
-- Determine completion_status: "pass" if final_score >= 70, "fail" otherwise
-
-Tone: Encouraging but honest. Focus on learning, not grading."""
+Tone: Expert but encouraging. Make the student feel like a seasoned WFR \
+instructor personally reviewed their specific inputs."""
 
 
 USER_PROMPT_TEMPLATE = """\
@@ -44,19 +43,15 @@ SCENARIO INFORMATION:
 
 SCENARIO ID: {{scenario_id}}
 
+HIDDEN MEDICAL TRUTH (ground truth):
+{{hidden_state}}
+
 SIMULATION TRANSCRIPT ({{total_turns}} turns):
 {{transcript_summary}}
 
-STATISTICS:
-- Total turns: {{total_turns}}
-- Correct choices: {{correct_count}}
-- Incorrect choices: {{incorrect_count}}
-- Calculated score: {{score}}%
-- Pass threshold: 70%
-
-Provide a comprehensive debrief report following the schema requirements.
-The completion_status should be "pass" if score >= 70, otherwise "fail".
-The final_score should match the calculated score above."""
+Provide a comprehensive qualitative debrief analyzing the student's reasoning \
+against the hidden medical truth. Focus on their clinical decision-making \
+process, not binary right/wrong tallies."""
 
 
 @mlflow.trace(span_type=SpanType.AGENT)
@@ -91,23 +86,19 @@ def _build_debrief_prompt(
     user_prompt: PromptVersion,
 ) -> str:
     """Build prompt for debrief agent."""
-    score = calculate_score(transcript)
     total_turns = len(transcript)
-    correct_count = sum(1 for e in transcript if e.was_correct)
-    incorrect_count = total_turns - correct_count
 
     scenario_context = _format_scenario_context(scenario_draft)
     transcript_summary = _format_transcript_summary(transcript)
 
-    return user_prompt.format(
+    prompt_result = user_prompt.format(
         scenario_context=scenario_context,
         scenario_id=scenario_id,
         total_turns=total_turns,
         transcript_summary=transcript_summary,
-        correct_count=correct_count,
-        incorrect_count=incorrect_count,
-        score=f"{score:.1f}",
+        hidden_state=scenario_draft.hidden_state,
     )
+    return str(prompt_result)
 
 
 def _format_scenario_context(scenario_draft: ScenarioDraft) -> str:
@@ -131,24 +122,3 @@ def _format_transcript_summary(transcript: list[TranscriptEntry]) -> str:
             f"  Feedback: {entry.feedback}"
         )
     return "\n".join(lines)
-
-
-def calculate_score(transcript: list[TranscriptEntry]) -> float:
-    """Calculate percentage score from transcript.
-
-    Score = (correct_choices / total_turns) * 100
-
-    Args:
-        transcript: List of transcript entries with was_correct field
-
-    Returns:
-        Percentage score (0-100)
-
-    """
-    if not transcript:
-        return 0.0
-
-    total_turns = len(transcript)
-    correct_choices = sum(1 for entry in transcript if entry.was_correct)
-
-    return (correct_choices / total_turns) * 100

@@ -7,6 +7,7 @@ from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import Command
 
 from summit_sim.graphs.simulation import (
+    COMPLETION_THRESHOLD,
     SimulationState,
     create_simulation_graph,
 )
@@ -17,7 +18,7 @@ from summit_sim.ui.utils import format_scenario_intro
 
 logger = logging.getLogger(__name__)
 
-PASS_SCORE_THRESHOLD = 70
+
 MAX_ACTION_LENGTH = 500
 
 if TYPE_CHECKING:
@@ -190,14 +191,17 @@ async def show_debrief(state: SimulationState) -> None:
 
     debrief = DebriefReport.model_validate(state.debrief_report)
 
-    score = debrief.final_score
-    score_emoji = "✅" if score >= PASS_SCORE_THRESHOLD else "❌"
+    # Pull progressive completion_score from LangGraph state
+    action_result = state.action_result or {}
+    completion_score = action_result.get("completion_score", 0)
+    score_percent = completion_score * 100
+    score_emoji = "✅" if completion_score >= COMPLETION_THRESHOLD else "❌"
 
     content_parts = [
         f"## 🏁 Simulation Complete\n\n"
-        f"**Score:** {score_emoji} **{score}%**\n"
-        f"**Status:** {debrief.completion_status.upper()}\n\n"
+        f"**Score:** {score_emoji} **{score_percent:.0f}%**\n\n"
         f"**Summary:**\n{debrief.summary}",
+        f"**Clinical Reasoning Analysis:**\n{debrief.clinical_reasoning}",
     ]
 
     if debrief.key_mistakes:

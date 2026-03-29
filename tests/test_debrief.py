@@ -12,7 +12,6 @@ from summit_sim.agents.debrief import (
     _build_debrief_prompt,
     _format_scenario_context,
     _format_transcript_summary,
-    calculate_score,
     generate_debrief,
 )
 from summit_sim.schemas import DebriefReport, ScenarioDraft, TranscriptEntry
@@ -27,9 +26,8 @@ class TestAgentConstants:
 
     def test_system_prompt_contains_key_elements(self):
         """Test that system prompt contains required elements."""
-        assert "wilderness first aid" in SYSTEM_PROMPT.lower()
-        assert "debrief" in SYSTEM_PROMPT.lower()
-        assert "scoring" in SYSTEM_PROMPT.lower()
+        assert "wilderness first responder" in SYSTEM_PROMPT.lower()
+        assert "clinical reasoning" in SYSTEM_PROMPT.lower()
 
     def test_user_prompt_template_contains_placeholders(self):
         """Test that user prompt template has all required placeholders."""
@@ -37,125 +35,7 @@ class TestAgentConstants:
         assert "{{scenario_id}}" in USER_PROMPT_TEMPLATE
         assert "{{total_turns}}" in USER_PROMPT_TEMPLATE
         assert "{{transcript_summary}}" in USER_PROMPT_TEMPLATE
-        assert "{{correct_count}}" in USER_PROMPT_TEMPLATE
-        assert "{{incorrect_count}}" in USER_PROMPT_TEMPLATE
-        assert "{{score}}" in USER_PROMPT_TEMPLATE
-
-
-class TestCalculateScore:
-    """Tests for calculate_score function."""
-
-    def test_empty_transcript(self):
-        """Test score calculation with empty transcript."""
-        score = calculate_score([])
-        assert score == 0.0
-
-    def test_all_correct(self):
-        """Test score with all correct actions."""
-        transcript = [
-            TranscriptEntry(
-                turn_id=1,
-                turn_narrative="Turn 1",
-                student_action="Action 1",
-                was_correct=True,
-                feedback="Good",
-                learning_moments=[],
-            ),
-            TranscriptEntry(
-                turn_id=2,
-                turn_narrative="Turn 2",
-                student_action="Action 2",
-                was_correct=True,
-                feedback="Good",
-                learning_moments=[],
-            ),
-        ]
-        score = calculate_score(transcript)
-        assert score == 100.0
-
-    def test_all_incorrect(self):
-        """Test score with all incorrect actions."""
-        transcript = [
-            TranscriptEntry(
-                turn_id=1,
-                turn_narrative="Turn 1",
-                student_action="Action 1",
-                was_correct=False,
-                feedback="Bad",
-                learning_moments=[],
-            ),
-            TranscriptEntry(
-                turn_id=2,
-                turn_narrative="Turn 2",
-                student_action="Action 2",
-                was_correct=False,
-                feedback="Bad",
-                learning_moments=[],
-            ),
-        ]
-        score = calculate_score(transcript)
-        assert score == 0.0
-
-    def test_mixed_results(self):
-        """Test score with mixed correct/incorrect actions."""
-        transcript = [
-            TranscriptEntry(
-                turn_id=1,
-                turn_narrative="Turn 1",
-                student_action="Action 1",
-                was_correct=True,
-                feedback="Good",
-                learning_moments=[],
-            ),
-            TranscriptEntry(
-                turn_id=2,
-                turn_narrative="Turn 2",
-                student_action="Action 2",
-                was_correct=False,
-                feedback="Bad",
-                learning_moments=[],
-            ),
-            TranscriptEntry(
-                turn_id=3,
-                turn_narrative="Turn 3",
-                student_action="Action 3",
-                was_correct=True,
-                feedback="Good",
-                learning_moments=[],
-            ),
-        ]
-        score = calculate_score(transcript)
-        assert score == pytest.approx(66.67, rel=0.01)
-
-    def test_single_correct(self):
-        """Test score with single correct action."""
-        transcript = [
-            TranscriptEntry(
-                turn_id=1,
-                turn_narrative="Turn 1",
-                student_action="Action 1",
-                was_correct=True,
-                feedback="Good",
-                learning_moments=[],
-            ),
-        ]
-        score = calculate_score(transcript)
-        assert score == 100.0
-
-    def test_single_incorrect(self):
-        """Test score with single incorrect action."""
-        transcript = [
-            TranscriptEntry(
-                turn_id=1,
-                turn_narrative="Turn 1",
-                student_action="Action 1",
-                was_correct=False,
-                feedback="Bad",
-                learning_moments=[],
-            ),
-        ]
-        score = calculate_score(transcript)
-        assert score == 0.0
+        assert "{{hidden_state}}" in USER_PROMPT_TEMPLATE
 
 
 class TestFormatScenarioContext:
@@ -285,9 +165,7 @@ class TestBuildDebriefPrompt:
         call_kwargs = mock_user_prompt.format.call_args.kwargs
         assert call_kwargs["scenario_id"] == "scn-123"
         assert call_kwargs["total_turns"] == 2
-        assert call_kwargs["correct_count"] == 1
-        assert call_kwargs["incorrect_count"] == 1
-        assert "50.0" in call_kwargs["score"]
+        assert "hidden_state" in call_kwargs
 
 
 class TestGenerateDebrief:
@@ -334,12 +212,11 @@ class TestGenerateDebrief:
         """Test successful debrief generation."""
         expected_report = DebriefReport(
             summary="Good performance overall",
+            clinical_reasoning="Student showed good judgment in initial assessment.",
             key_mistakes=["One mistake"],
             strong_actions=["Good initial assessment"],
             best_next_actions=["Practice more scenarios"],
             teaching_points=["Key concept"],
-            completion_status="pass",
-            final_score=50.0,
         )
 
         mock_response = MagicMock()
@@ -363,12 +240,14 @@ class TestGenerateDebrief:
             )
 
             assert result == expected_report
-            assert result.completion_status == "pass"
-            assert result.final_score == 50.0
+            assert (
+                result.clinical_reasoning
+                == "Student showed good judgment in initial assessment."
+            )
 
     @pytest.mark.asyncio
     async def test_generate_debrief_fail_status(self, sample_scenario):
-        """Test debrief with fail status."""
+        """Test debrief with poor reasoning."""
         transcript = [
             TranscriptEntry(
                 turn_id=1,
@@ -382,12 +261,13 @@ class TestGenerateDebrief:
 
         expected_report = DebriefReport(
             summary="Needs improvement",
+            clinical_reasoning=(
+                "Student missed critical cues in their initial assessment."
+            ),
             key_mistakes=["Critical mistake"],
             strong_actions=[],
             best_next_actions=["Review protocols", "Practice more"],
             teaching_points=["Review basics"],
-            completion_status="fail",
-            final_score=0.0,
         )
 
         mock_response = MagicMock()
@@ -410,12 +290,14 @@ class TestGenerateDebrief:
                 scenario_id="scn-fail-456",
             )
 
-            assert result.completion_status == "fail"
-            assert result.final_score < 70
+            assert (
+                result.clinical_reasoning
+                == "Student missed critical cues in their initial assessment."
+            )
 
     @pytest.mark.asyncio
-    async def test_generate_debrief_perfect_score(self, sample_scenario):
-        """Test debrief with perfect score."""
+    async def test_generate_debrief_excellent_reasoning(self, sample_scenario):
+        """Test debrief with excellent clinical reasoning."""
         transcript = [
             TranscriptEntry(
                 turn_id=i,
@@ -430,12 +312,13 @@ class TestGenerateDebrief:
 
         expected_report = DebriefReport(
             summary="Excellent performance!",
+            clinical_reasoning=(
+                "Student demonstrated outstanding clinical reasoning throughout."
+            ),
             key_mistakes=[],
             strong_actions=["All actions were correct"],
             best_next_actions=["Consider advanced training"],
             teaching_points=["Great job!"],
-            completion_status="pass",
-            final_score=100.0,
         )
 
         mock_response = MagicMock()
@@ -458,5 +341,7 @@ class TestGenerateDebrief:
                 scenario_id="scn-perfect-789",
             )
 
-            assert result.completion_status == "pass"
-            assert result.final_score == 100.0
+            assert (
+                result.clinical_reasoning
+                == "Student demonstrated outstanding clinical reasoning throughout."
+            )
