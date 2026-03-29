@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: summit-sim
+  namespace: summit-sim
+  labels:
+    app: summit-sim
+  annotations:
+    argocd.argoproj.io/sync-wave: "22"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: summit-sim
+  template:
+    metadata:
+      labels:
+        app: summit-sim
+    spec:
+      containers:
+        - name: summit-sim
+          image: harbor.bhamm-lab.com/library/summit-sim:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+          env:
+            - name: REDIS_URL
+              value: "redis://summit-sim-dragonfly:6379"
+            - name: MLFLOW_TRACKING_URI
+              value: "http://llm-models-mlflow.models.svc.cluster.local:80"
+            - name: DEFAULT_MODEL
+              value: "google/gemini-3.1-flash-lite-preview"
+            - name: MLFLOW_ENV
+              value: "prod"
+            - name: BASE_URL
+              value: "https://summit-sim.bhamm-lab.com"
+            - name: OPENROUTER_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: summit-sim
+                  key: OPENROUTER_API_KEY
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "500m"
+            limits:
+              memory: "1Gi"
+              cpu: "1000m"
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
