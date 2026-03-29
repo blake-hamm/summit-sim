@@ -172,6 +172,7 @@ async def process_player_action(state: SimulationState, config: RunnableConfig) 
                 "session_id": thread_id,
                 "scenario_id": state.scenario_id,
                 "graph_type": "simulation",
+                "agent_name": ACTION_RESPONDER_AGENT_NAME,
                 "mlflow_env": settings.mlflow_env,
             },
         )
@@ -274,6 +275,7 @@ async def generate_debrief_report(
                 "session_id": thread_id,
                 "scenario_id": state.scenario_id,
                 "graph_type": "simulation",
+                "agent_name": DEBRIEF_AGENT_NAME,
                 "mlflow_env": settings.mlflow_env,
             },
         )

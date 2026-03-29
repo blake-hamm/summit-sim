@@ -260,6 +260,30 @@ class ScenarioDraft(BaseModel):
     )
 
 
+class RollupResult(BaseModel):
+    """Final weighted score for optimization across judge criteria.
+
+    Aggregates results from trace-level and session-level judges
+    to produce an overall quality score for prompt optimization.
+    """
+
+    session_id: str = Field(..., description="Unique session identifier")
+    overall_score: float = Field(
+        ..., ge=0.0, le=1.0, description="Weighted score from all criteria (0.0-1.0)"
+    )
+    trace_contribution: float = Field(
+        ..., ge=0.0, le=0.85, description="Score from trace-level criteria only"
+    )
+    session_contribution: float = Field(
+        ..., ge=0.0, le=0.20, description="Score from session-level criteria only"
+    )
+    breakdown: dict[str, bool] = Field(
+        ..., description="Criterion name -> passed status mapping"
+    )
+    total_criteria: int = Field(..., description="Total number of criteria evaluated")
+    passed_criteria: int = Field(..., description="Number of criteria that passed")
+
+
 class DebriefReport(BaseModel):
     """Structured debrief report analyzing student simulation performance.
 
