@@ -212,7 +212,7 @@ def update_simulation_state(state: SimulationState) -> dict:
             settings.max_turns,
         )
 
-    logger.info(
+    logger.debug(
         "Turn processed: turn=%d, correct=%s, complete=%s, score=%.2f",
         next_turn_count,
         result.was_correct,

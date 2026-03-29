@@ -75,7 +75,7 @@ def initialize_author(state: AuthorState) -> AuthorState:
 @mlflow.trace(span_type=SpanType.AGENT)
 async def generate_scenario_node(state: AuthorState, config: RunnableConfig) -> dict:
     """Generate scenario from author configuration."""
-    logger.info("Generating scenario: retry_count=%d", state.retry_count)
+    logger.debug("Generating scenario: retry_count=%d", state.retry_count)
     scenario_config = ScenarioConfig.model_validate(state.scenario_config)
 
     is_revision = state.revision_feedback is not None
@@ -134,7 +134,7 @@ def present_for_author(state: AuthorState) -> dict:
         raise ValueError(msg)
 
     scenario_obj = ScenarioDraft.model_validate(scenario)
-    logger.info(
+    logger.debug(
         "Scenario ready for review: scenario_id=%s, retry_count=%d",
         state.scenario_id,
         state.retry_count,

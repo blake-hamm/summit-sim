@@ -31,7 +31,7 @@ class _MLflowState:
             mlflow.set_experiment(settings.mlflow_experiment_name)
             mlflow.pydantic_ai.autolog()  # type: ignore[attr-defined]
             self.initialized = True
-            logger.debug("MLflow initialized")
+            logger.info("MLflow initialized")
 
 
 # Module-level state container for lazy initialization
@@ -71,7 +71,6 @@ async def start() -> None:
         ).send()
         return
 
-    logger.info("Showing role selection")
     await ask_role_selection()
 
 
@@ -108,6 +107,7 @@ async def ask_role_selection() -> None:
         else:
             await show_student_welcome()
 
+        logger.info("User selected role: %s", role)
         await author.ask_scenario_config()
 
 

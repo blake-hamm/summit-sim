@@ -70,8 +70,6 @@ async def ask_scenario_config() -> None:
 
 async def generate_scenario() -> None:
     """Generate scenario with collected config."""
-    logger.info("Starting scenario generation")
-
     primary_focus = cl.user_session.get("primary_focus")
     environment = cl.user_session.get("environment")
     available_personnel = cl.user_session.get("available_personnel")
