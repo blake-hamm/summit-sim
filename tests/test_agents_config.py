@@ -117,16 +117,16 @@ def test_setup_agent_and_prompts_creates_new():
 
 def test_setup_agent_and_prompts_returns_cached():
     """Test that setup_agent_and_prompts returns cached agent when available."""
-    # Pre-populate the cache
+    # Pre-populate the cache with tuple of (agent, user_prompt)
     mock_agent = MagicMock()
-    _agent_container["test-agent"] = mock_agent
+    mock_user_obj_cached = MagicMock()
+    _agent_container["test-agent"] = (mock_agent, mock_user_obj_cached)
 
     try:
         with patch(
             "summit_sim.agents.utils._get_or_register_prompt"
         ) as mock_get_prompt:
-            mock_user_obj = MagicMock()
-            mock_get_prompt.return_value = mock_user_obj
+            mock_get_prompt.return_value = MagicMock()
 
             agent, user_prompt = setup_agent_and_prompts(
                 agent_name="test-agent",
@@ -137,13 +137,10 @@ def test_setup_agent_and_prompts_returns_cached():
             )
 
             # Should return the cached agent and user prompt object
-            # Only called once for user prompt
-            # (system prompt not needed for cached agent)
+            # No prompt fetching needed when cached
             assert agent == mock_agent
-            assert user_prompt == mock_user_obj
-            mock_get_prompt.assert_called_once_with(
-                "test-agent-user", "Test user prompt {{var}}"
-            )
+            assert user_prompt == mock_user_obj_cached
+            mock_get_prompt.assert_not_called()
     finally:
         # Clean up
         if "test-agent" in _agent_container:

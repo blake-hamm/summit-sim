@@ -1,8 +1,9 @@
 """Tests for simulation graph workflow."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
+from langgraph.checkpoint.base import BaseCheckpointSaver
 
 from summit_sim.graphs.simulation import (
     SimulationState,
@@ -280,12 +281,10 @@ class TestProcessPlayerAction:
 
         with (
             patch("summit_sim.graphs.simulation.process_action") as mock_process,
-            patch("summit_sim.graphs.simulation.get_settings") as mock_get_settings,
+            patch("summit_sim.settings.settings") as mock_settings,
         ):
             mock_process.return_value = expected_result
-            mock_settings = MagicMock()
             mock_settings.max_turns = 5
-            mock_get_settings.return_value = mock_settings
 
             config = {"configurable": {"thread_id": "test-thread-id"}}
             result = await process_player_action(state, config)
@@ -321,12 +320,10 @@ class TestProcessPlayerAction:
 
         with (
             patch("summit_sim.graphs.simulation.process_action") as mock_process,
-            patch("summit_sim.graphs.simulation.get_settings") as mock_get_settings,
+            patch("summit_sim.settings.settings") as mock_settings,
         ):
             mock_process.return_value = expected_result
-            mock_settings = MagicMock()
             mock_settings.max_turns = 5
-            mock_get_settings.return_value = mock_settings
 
             config = {"configurable": {"thread_id": "test-thread-id"}}
             result = await process_player_action(state, config)
@@ -374,10 +371,8 @@ class TestUpdateSimulationState:
             hidden_state="Previous hidden",
         )
 
-        with patch("summit_sim.graphs.simulation.get_settings") as mock_get_settings:
-            mock_settings = MagicMock()
+        with patch("summit_sim.settings.settings") as mock_settings:
             mock_settings.max_turns = 5
-            mock_get_settings.return_value = mock_settings
 
             result = update_simulation_state(state)
 
@@ -426,10 +421,8 @@ class TestUpdateSimulationState:
             hidden_state="Previous",
         )
 
-        with patch("summit_sim.graphs.simulation.get_settings") as mock_get_settings:
-            mock_settings = MagicMock()
+        with patch("summit_sim.settings.settings") as mock_settings:
             mock_settings.max_turns = 5
-            mock_get_settings.return_value = mock_settings
 
             result = update_simulation_state(state)
 
@@ -474,10 +467,8 @@ class TestUpdateSimulationState:
             hidden_state="Previous",
         )
 
-        with patch("summit_sim.graphs.simulation.get_settings") as mock_get_settings:
-            mock_settings = MagicMock()
+        with patch("summit_sim.settings.settings") as mock_settings:
             mock_settings.max_turns = 5
-            mock_get_settings.return_value = mock_settings
 
             result = update_simulation_state(state)
 
@@ -535,13 +526,17 @@ class TestCreateSimulationGraph:
 
     def test_create_graph(self):
         """Test that graph can be created."""
-        graph = create_simulation_graph()
+        mock_checkpointer = AsyncMock(spec=BaseCheckpointSaver)
+
+        graph = create_simulation_graph(checkpointer=mock_checkpointer)
 
         assert graph is not None
 
     def test_graph_structure(self):
         """Test that graph has expected nodes and edges."""
-        graph = create_simulation_graph()
+        mock_checkpointer = AsyncMock(spec=BaseCheckpointSaver)
+
+        graph = create_simulation_graph(checkpointer=mock_checkpointer)
 
         # Graph should have the expected nodes
         # Note: We can't easily inspect the internal structure without

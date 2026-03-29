@@ -139,9 +139,13 @@ class TestSetupAgentAndPrompts:
         mock_prompt = MagicMock()
         mock_prompt.template = "test template"
         cached_agent = MagicMock()
+        cached_user_prompt = MagicMock()
 
-        # Pre-populate cache
-        agent_utils._agent_container["cached-agent"] = cached_agent
+        # Pre-populate cache with tuple of (agent, user_prompt)
+        agent_utils._agent_container["cached-agent"] = (
+            cached_agent,
+            cached_user_prompt,
+        )
 
         with patch(
             "summit_sim.agents.utils._get_or_register_prompt"
@@ -156,7 +160,9 @@ class TestSetupAgentAndPrompts:
             )
 
             assert agent == cached_agent
-            assert user_prompt == mock_prompt
+            assert user_prompt == cached_user_prompt
+            # No prompt fetching needed when cached
+            mock_get_prompt.assert_not_called()
 
     def test_agent_configuration(self):
         """Test that agent is configured with correct parameters."""

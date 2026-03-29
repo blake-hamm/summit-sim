@@ -7,20 +7,21 @@ from dataclasses import dataclass, fields
 from typing import TYPE_CHECKING, Any
 
 import mlflow
-from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.store.base import BaseStore
 from langgraph.types import interrupt
 from mlflow.entities import AssessmentSource, AssessmentSourceType, SpanType
 
+from summit_sim.agents.generator import AGENT_NAME as GENERATOR_AGENT_NAME
 from summit_sim.agents.generator import generate_scenario
-from summit_sim.graphs.utils import scenario_store
+from summit_sim.graphs.utils import AppState
 from summit_sim.schemas import (
     ScenarioConfig,
     ScenarioDraft,
     generate_scenario_id,
 )
+from summit_sim.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +76,7 @@ def initialize_author(state: AuthorState) -> AuthorState:
 @mlflow.trace(span_type=SpanType.AGENT)
 async def generate_scenario_node(state: AuthorState, config: RunnableConfig) -> dict:
     """Generate scenario from author configuration."""
-    logger.info("Generating scenario: retry_count=%d", state.retry_count)
+    logger.debug("Generating scenario: retry_count=%d", state.retry_count)
     scenario_config = ScenarioConfig.model_validate(state.scenario_config)
 
     is_revision = state.revision_feedback is not None
@@ -101,7 +102,22 @@ async def generate_scenario_node(state: AuthorState, config: RunnableConfig) -> 
     if thread_id and current_trace_id:
         mlflow.update_current_trace(
             metadata={"mlflow.trace.session": thread_id},
-            tags={"session_id": thread_id},
+            tags={
+                "session_id": thread_id,
+                "scenario_id": state.scenario_id,
+                "graph_type": "author",
+                "mlflow_env": settings.mlflow_env,
+            },
+        )
+
+    # Set span attributes for granular tracking
+    if active_span:
+        active_span.set_attributes(
+            {
+                "author.retry_count": retry_count,
+                "author.is_revision": is_revision,
+                "agent.name": GENERATOR_AGENT_NAME,
+            }
         )
 
     # Log revision status to MLflow as trace feedback
@@ -134,7 +150,7 @@ def present_for_author(state: AuthorState) -> dict:
         raise ValueError(msg)
 
     scenario_obj = ScenarioDraft.model_validate(scenario)
-    logger.info(
+    logger.debug(
         "Scenario ready for review: scenario_id=%s, retry_count=%d",
         state.scenario_id,
         state.retry_count,
@@ -198,20 +214,22 @@ def should_retry(state: AuthorState) -> str:
     return "save"
 
 
-def save_scenario(state: AuthorState) -> dict:
+async def save_scenario(state: AuthorState, config: RunnableConfig) -> dict:  # noqa: ARG001
     """Save approved scenario to LangGraph store."""
     if state.scenario_draft and state.scenario_id:
-        scenario_store.put(
-            ("scenarios",),
-            state.scenario_id,
-            {"scenario_draft": state.scenario_draft},
-        )
+        store = AppState.store
+        if store is not None:
+            await store.aput(
+                ("scenarios",),
+                state.scenario_id,
+                {"scenario_draft": state.scenario_draft},
+            )
     return {}
 
 
 def create_author_graph(
-    checkpointer: BaseCheckpointSaver | None = None,
-    store: BaseStore | None = None,
+    checkpointer: BaseCheckpointSaver,
+    store: BaseStore,
 ) -> CompiledStateGraph:
     """Create and configure the author LangGraph."""
     workflow = StateGraph(AuthorState)
@@ -229,9 +247,4 @@ def create_author_graph(
     )
     workflow.add_edge("save", END)
 
-    if checkpointer is None:
-        checkpointer = InMemorySaver()
-
-    used_store = store if store is not None else scenario_store
-
-    return workflow.compile(checkpointer=checkpointer, store=used_store)
+    return workflow.compile(checkpointer=checkpointer, store=store)

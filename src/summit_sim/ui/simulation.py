@@ -9,9 +9,8 @@ from langgraph.types import Command
 from summit_sim.graphs.simulation import (
     COMPLETION_THRESHOLD,
     SimulationState,
-    create_simulation_graph,
 )
-from summit_sim.graphs.utils import scenario_store
+from summit_sim.graphs.utils import AppState
 from summit_sim.schemas import DebriefReport, DynamicTurnResult, ScenarioDraft
 from summit_sim.settings import settings
 from summit_sim.ui.utils import format_scenario_intro
@@ -40,7 +39,8 @@ async def start_simulation_session() -> None:
         ).send()
         return
 
-    result = scenario_store.get(("scenarios",), scenario_id)
+    store = AppState.store
+    result = await store.aget(("scenarios",), scenario_id)
 
     if result is None:
         await cl.Message(
@@ -77,7 +77,7 @@ async def run_simulation() -> None:
 
     assert isinstance(scenario, ScenarioDraft)
 
-    graph = create_simulation_graph()
+    graph = AppState.simulation_graph
     cl.user_session.set("simulation_graph", graph)
 
     thread_id = cl.user_session.get("id")

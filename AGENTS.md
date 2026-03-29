@@ -13,7 +13,7 @@ Summit-Sim is an AI wilderness rescue simulator using multi-agent validation to 
 These rules are absolute. Do not violate them under any circumstances.
 
 - **No git commands.** Do not run `git add`, `git commit`, `git push`, or any other version control commands. The human developer handles all git operations. Your job is only to write, test, and verify code.
-- **No bypassing the agent factory.** All agents must be created via `get_agent()` from `agents/config.py`. Never instantiate `Agent(...)` directly in application code.
+- **No bypassing the agent factory.** All agents must be created via `setup_agent_and_prompts()` from `agents/utils.py`. Never instantiate `Agent(...)` directly in application code.
 - **Use Nix-provided ruff only.** The `.venv` installs a dynamically-linked `ruff` binary that does NOT work on NixOS. Always use the `ruff` binary from the Nix dev shell. Do not rely on `.venv/bin/ruff` or run pre-commit hooks for linting -- run ruff and coverage checks manually instead.
 - **No external API calls in tests.** All LLM calls must be mocked via `unittest.mock.AsyncMock`. Patch at `summit_sim.agents.config.Agent`, not at import sites.
 - **Never modify pyproject.toml.** Lint issues must be fixed in the source code. Do not change ruff configuration, add ignores, or modify tool settings without explicit permission. If unable to fix an issue, ask before adding `noqa` comments.

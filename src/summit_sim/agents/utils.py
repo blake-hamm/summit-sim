@@ -108,7 +108,8 @@ def get_provider() -> OpenRouterProvider:
 
 
 # Module-level agent container for lazy initialization
-_agent_container: dict[str, Any] = {}
+# Stores tuple of (agent, user_prompt) to avoid repeated MLflow calls
+_agent_container: dict[str, tuple[Agent[Any, Any], PromptVersion]] = {}
 
 
 def _get_or_register_prompt(prompt_name: str, template: str) -> PromptVersion:
@@ -145,7 +146,10 @@ def setup_agent_and_prompts(
         system_prompt_obj = _get_or_register_prompt(
             f"{agent_name}-system", system_prompt
         )
-        _agent_container[agent_name] = Agent(
+        user_prompt_obj = _get_or_register_prompt(
+            f"{agent_name}-user", user_prompt_template
+        )
+        agent = Agent(
             OpenRouterModel(
                 settings.default_model,
                 provider=get_provider(),
@@ -157,7 +161,8 @@ def setup_agent_and_prompts(
                 openrouter_usage={"include": True},
             ),
         )
+        # Cache both the agent and the prompt to eliminate network overhead
+        _agent_container[agent_name] = (agent, user_prompt_obj)
 
-    agent = _agent_container[agent_name]
-    user_prompt = _get_or_register_prompt(f"{agent_name}-user", user_prompt_template)
+    agent, user_prompt = _agent_container[agent_name]
     return agent, user_prompt

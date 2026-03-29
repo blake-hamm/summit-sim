@@ -8,16 +8,17 @@ from typing import TYPE_CHECKING, Any
 
 import mlflow
 from langchain_core.runnables import RunnableConfig
-from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import interrupt
 from mlflow.entities import SpanType
 
+from summit_sim.agents.action_responder import AGENT_NAME as ACTION_RESPONDER_AGENT_NAME
 from summit_sim.agents.action_responder import process_action
+from summit_sim.agents.debrief import AGENT_NAME as DEBRIEF_AGENT_NAME
 from summit_sim.agents.debrief import generate_debrief
 from summit_sim.schemas import DynamicTurnResult, ScenarioDraft, TranscriptEntry
-from summit_sim.settings import get_settings
+from summit_sim.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -134,7 +135,6 @@ async def process_player_action(state: SimulationState, config: RunnableConfig) 
         msg = "Cannot process action without scenario"
         raise ValueError(msg)
 
-    settings = get_settings()
     max_turns = settings.max_turns
 
     # Get the student action from the last transcript entry
@@ -168,7 +168,25 @@ async def process_player_action(state: SimulationState, config: RunnableConfig) 
     if thread_id and current_trace_id:
         mlflow.update_current_trace(
             metadata={"mlflow.trace.session": thread_id},
-            tags={"session_id": thread_id, "scenario_id": state.scenario_id},
+            tags={
+                "session_id": thread_id,
+                "scenario_id": state.scenario_id,
+                "graph_type": "simulation",
+                "mlflow_env": settings.mlflow_env,
+            },
+        )
+
+    # Set span attributes for granular tracking
+    if active_span:
+        active_span.set_attributes(
+            {
+                "simulation.turn_count": state.turn_count + 1,
+                "agent.name": ACTION_RESPONDER_AGENT_NAME,
+                "student.action_length": len(student_action),
+                "turn.was_correct": result.was_correct,
+                "turn.completion_score": result.completion_score,
+                "turn.is_complete": result.completion_score >= COMPLETION_THRESHOLD,
+            }
         )
 
     return {
@@ -199,7 +217,6 @@ def update_simulation_state(state: SimulationState) -> dict:
 
     # Check if scenario is naturally complete or if we've hit max turns
     # is_complete is derived from completion_score (>= 0.7 = 70% threshold)
-    settings = get_settings()
     next_turn_count = state.turn_count + 1
     is_max_turns_reached = next_turn_count >= settings.max_turns
     is_evacuation_complete = result.completion_score >= COMPLETION_THRESHOLD
@@ -212,7 +229,7 @@ def update_simulation_state(state: SimulationState) -> dict:
             settings.max_turns,
         )
 
-    logger.info(
+    logger.debug(
         "Turn processed: turn=%d, correct=%s, complete=%s, score=%.2f",
         next_turn_count,
         result.was_correct,
@@ -253,7 +270,20 @@ async def generate_debrief_report(
     if thread_id and current_trace_id:
         mlflow.update_current_trace(
             metadata={"mlflow.trace.session": thread_id},
-            tags={"session_id": thread_id, "scenario_id": state.scenario_id},
+            tags={
+                "session_id": thread_id,
+                "scenario_id": state.scenario_id,
+                "graph_type": "simulation",
+                "mlflow_env": settings.mlflow_env,
+            },
+        )
+
+    # Set span attributes for granular tracking
+    if active_span:
+        active_span.set_attributes(
+            {
+                "agent.name": DEBRIEF_AGENT_NAME,
+            }
         )
 
     return {
@@ -274,7 +304,7 @@ def check_simulation_ending(state: SimulationState) -> str:
 
 
 def create_simulation_graph(
-    checkpointer: BaseCheckpointSaver | None = None,
+    checkpointer: BaseCheckpointSaver,
 ) -> CompiledStateGraph:
     """Create and configure the dynamic simulation LangGraph."""
     workflow = StateGraph(SimulationState)
@@ -300,8 +330,5 @@ def create_simulation_graph(
     )
 
     workflow.add_edge("generate_debrief", END)
-
-    if checkpointer is None:
-        checkpointer = InMemorySaver()
 
     return workflow.compile(checkpointer=checkpointer)

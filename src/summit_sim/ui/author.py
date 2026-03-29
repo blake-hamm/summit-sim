@@ -10,9 +10,8 @@ from mlflow.entities import AssessmentSource, AssessmentSourceType
 from summit_sim.graphs.author import (
     MAX_RETRY_ATTEMPTS,
     AuthorState,
-    create_author_graph,
 )
-from summit_sim.graphs.utils import scenario_store
+from summit_sim.graphs.utils import AppState
 from summit_sim.schemas import ScenarioConfig, ScenarioDraft
 from summit_sim.settings import settings
 from summit_sim.ui import simulation
@@ -70,8 +69,6 @@ async def ask_scenario_config() -> None:
 
 async def generate_scenario() -> None:
     """Generate scenario with collected config."""
-    logger.info("Starting scenario generation")
-
     primary_focus = cl.user_session.get("primary_focus")
     environment = cl.user_session.get("environment")
     available_personnel = cl.user_session.get("available_personnel")
@@ -100,7 +97,7 @@ async def generate_scenario() -> None:
 
     loading_msg = await cl.Message(content="⏳ *Generating your scenario...*").send()
 
-    graph = create_author_graph()
+    graph = AppState.author_graph
     cl.user_session.set("graph", graph)
 
     thread_id = cl.user_session.get("id")
@@ -216,7 +213,8 @@ async def handle_student_start(_state: AuthorState) -> None:
             cl.user_session.set("authoring_trace_id", final_state.current_trace_id)
 
         # Load scenario from store (it was just saved during approval)
-        store_result = scenario_store.get(("scenarios",), scenario_id)
+        store = AppState.store
+        store_result = await store.aget(("scenarios",), scenario_id)
         if store_result is None:
             await cl.Message(
                 content="❌ Error: Scenario not found in store.",

@@ -1,5 +1,20 @@
-"""Shared utilities for LangGraph state definitions."""
+"""Shared dependencies and application state container."""
 
-from langgraph.store.memory import InMemoryStore
+from typing import Optional
 
-scenario_store = InMemoryStore()
+from langgraph.checkpoint.redis.aio import AsyncRedisSaver
+from langgraph.graph.state import CompiledStateGraph
+from langgraph.store.redis.aio import AsyncRedisStore
+
+
+class AppState:
+    """Thread-safe namespace for global application singletons.
+
+    All attributes are initialized lazily in ApplicationLifecycle.setup_once()
+    to ensure proper async event loop binding.
+    """
+
+    store: Optional[AsyncRedisStore] = None
+    checkpointer: Optional[AsyncRedisSaver] = None
+    author_graph: Optional[CompiledStateGraph] = None
+    simulation_graph: Optional[CompiledStateGraph] = None

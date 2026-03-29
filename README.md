@@ -2,7 +2,7 @@
 
 **An AI-powered wilderness rescue simulator.** 
 
-Summit-Sim uses strict, multi-agent validation to generate medically safe, interactive backcountry emergencies for dynamic Wilderness First Responder (WFR) training.
+Summit-Sim uses human-in-the-loop review to generate curriculum-informed, interactive backcountry emergencies for dynamic Wilderness First Responder (WFR) training.
 
 <img src="public/favicon.png" alt="summit-sim" width="200"/>
 
@@ -15,7 +15,7 @@ Summit-Sim provides infinite, medically accurate WFR scenarios through a dynamic
 ### Key Features
 *   **Infinite Scenario Authoring:** Generate highly specific emergencies based on environment, group size, and difficulty level.
 *   **Dynamic State Machine:** The patient's condition evolves realistically based on the responder's timeline and medical interventions (or lack thereof).
-*   **Human-In-The-Loop (HITL) Feedback:** Instructors (Reviewers) can review and adjust the scenario, sending feedback to mlflow for prompt optimization and judge refinement.
+*   **Human-In-The-Loop (HITL) Validation:** Instructors review and approve scenarios before publication, with all feedback logged to MLflow for continuous improvement.
 *   **Objective Debriefing:** Post-simulation evaluation scores the responder's actions against established WFR protocols.
 
 ---
@@ -33,8 +33,16 @@ Summit-Sim is built with a sophisticated, production-ready AI stack focused on l
 ### System Flow
 The application is cleanly divided into two interconnected graphs joined by a shared Scenario ID:
 
-1.  **The Authoring Graph:** Takes environmental parameters and dynamically generates the baseline blueprint (Setting, Patient vitals, Hidden Medical Truth, and Turn 0).
+1.  **The Authoring Graph:** Takes environmental parameters and dynamically generates the baseline blueprint (Setting, Patient vitals, Hidden Medical Truth, and Turn 0). Instructors review via HITL interrupt before scenarios go live.
 2.  **The Simulation Graph:** A continuous game loop where the AI evaluates open-ended student actions against the hidden truth, dynamically updating the active scene state and generating the next narrative frame.
+
+### Agent Architecture
+Three specialized PydanticAI agents power the system:
+- **Generator:** Creates wilderness rescue scenarios from minimal configuration
+- **Action Responder:** Evaluates student free-text actions and provides cumulative scoring (0-100%)
+- **Debrief:** Generates post-simulation performance analysis against WFR protocols
+
+*Planned: MLflow automatic validation judges (Safety, Realism, Pedagogy) for medical accuracy assessment.*
 
 ---
 

@@ -1,8 +1,9 @@
 """Tests for author graph workflow."""
 
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
+from langgraph.checkpoint.base import BaseCheckpointSaver
 
 from summit_sim.graphs.author import (
     ACCEPTABLE_RATING_THRESHOLD,
@@ -16,6 +17,7 @@ from summit_sim.graphs.author import (
     save_scenario,
     should_retry,
 )
+from summit_sim.graphs.utils import AppState
 from summit_sim.schemas import ScenarioConfig, ScenarioDraft
 
 
@@ -217,15 +219,16 @@ class TestShouldRetry:
 class TestSaveScenario:
     """Tests for save_scenario function."""
 
-    def test_save_scenario_success(self):
-        """Test successful scenario save."""
+    @pytest.mark.asyncio
+    async def test_save_scenario_success(self):
+        """Test successful scenario saving."""
         scenario_draft = ScenarioDraft(
-            title="Test Emergency",
-            setting="Mountain trail",
-            patient_summary="30yo male",
-            hidden_truth="Fracture",
-            learning_objectives=["Learn", "Practice skill"],
-            initial_narrative="Start",
+            title="Test Scenario",
+            setting="Mountain",
+            patient_summary="Test patient",
+            hidden_truth="Hidden info",
+            learning_objectives=["Learn", "Practice"],
+            initial_narrative="Start here",
             hidden_state="Hidden",
             scene_state="Scene",
         )
@@ -236,19 +239,29 @@ class TestSaveScenario:
             scenario_id="scn-save-123",
         )
 
-        with patch("summit_sim.graphs.author.scenario_store") as mock_store:
-            mock_store.put.return_value = None
+        mock_store = AsyncMock()
+        mock_store.aput.return_value = None
 
-            result = save_scenario(state)
+        # Set mock store on AppState singleton
+        original_store = AppState.store
+        AppState.store = mock_store
 
-            mock_store.put.assert_called_once_with(
+        try:
+            mock_config = {}
+            result = await save_scenario(state, mock_config)
+
+            mock_store.aput.assert_called_once_with(
                 ("scenarios",),
                 "scn-save-123",
                 {"scenario_draft": scenario_draft.model_dump()},
             )
             assert result == {}
+        finally:
+            # Restore original store
+            AppState.store = original_store
 
-    def test_save_scenario_no_draft(self):
+    @pytest.mark.asyncio
+    async def test_save_scenario_no_draft(self):
         """Test save when no draft available."""
         state = AuthorState(
             scenario_config={},
@@ -256,14 +269,17 @@ class TestSaveScenario:
             scenario_draft=None,
         )
 
-        with patch("summit_sim.graphs.author.scenario_store") as mock_store:
-            result = save_scenario(state)
+        mock_store = AsyncMock()
+        mock_config = {"store": mock_store}
 
-            # Should not call put when no draft
-            mock_store.put.assert_not_called()
-            assert result == {}
+        result = await save_scenario(state, mock_config)
 
-    def test_save_scenario_no_id(self):
+        # Should not call aput when no draft
+        mock_store.aput.assert_not_called()
+        assert result == {}
+
+    @pytest.mark.asyncio
+    async def test_save_scenario_no_id(self):
         """Test save when no scenario ID."""
         scenario_draft = ScenarioDraft(
             title="Test",
@@ -282,12 +298,14 @@ class TestSaveScenario:
             scenario_id="",
         )
 
-        with patch("summit_sim.graphs.author.scenario_store") as mock_store:
-            result = save_scenario(state)
+        mock_store = AsyncMock()
+        mock_config = {"store": mock_store}
 
-            # Should not call put when no ID
-            mock_store.put.assert_not_called()
-            assert result == {}
+        result = await save_scenario(state, mock_config)
+
+        # Should not call aput when no ID
+        mock_store.aput.assert_not_called()
+        assert result == {}
 
 
 class TestPresentForAuthor:
@@ -405,14 +423,28 @@ class TestCreateAuthorGraph:
 
     def test_create_graph(self):
         """Test that author graph can be created."""
-        graph = create_author_graph()
+        # Create mock checkpointer and store that pass LangGraph's type validation
+        mock_checkpointer = AsyncMock(spec=BaseCheckpointSaver)
+        mock_store = AsyncMock()
+
+        graph = create_author_graph(
+            checkpointer=mock_checkpointer,
+            store=mock_store,
+        )
 
         assert graph is not None
 
     def test_create_graph_basic(self):
         """Test that graph can be created successfully."""
         # Just verify graph creation works - LangGraph validates checkpointer types
-        graph = create_author_graph()
+        mock_checkpointer = AsyncMock(spec=BaseCheckpointSaver)
+        mock_store = AsyncMock()
+
+        graph = create_author_graph(
+            checkpointer=mock_checkpointer,
+            store=mock_store,
+        )
+
         assert graph is not None
 
 

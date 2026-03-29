@@ -19,6 +19,14 @@ class Settings(BaseSettings):
     ui_timeout: int = Field(
         default=300, description="Timeout in seconds for UI interactions (5 minutes)"
     )
+    redis_url: str = Field(
+        default="redis://localhost:6379",
+        description="Redis connection URL for LangGraph persistence",
+    )
+    mlflow_env: str = Field(
+        default="local",
+        description="Deployment environment for MLflow traces: local or prod",
+    )
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -28,16 +36,6 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
-
-
-def get_settings() -> Settings:
-    """Get application settings.
-
-    Returns:
-        Settings instance
-
-    """
-    return settings
 
 
 logging.basicConfig(
