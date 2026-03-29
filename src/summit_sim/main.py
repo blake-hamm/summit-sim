@@ -11,29 +11,36 @@ import chainlit as cl  # noqa: E402
 import mlflow
 from chainlit import on_chat_start, on_message  # noqa: E402
 from langgraph.checkpoint.redis.aio import AsyncRedisSaver
+from langgraph.store.redis.aio import AsyncRedisStore
+from redis.asyncio import Redis
 
-from summit_sim.graphs.utils import get_scenario_store
+from summit_sim.graphs.author import create_author_graph
+from summit_sim.graphs.simulation import create_simulation_graph
+from summit_sim.graphs.utils import AppState
 from summit_sim.settings import settings
 from summit_sim.ui import author, simulation
 
 logger = logging.getLogger(__name__)
 
 
-class _AppState:
-    """Track global app init state to avoid creating resources at import time."""
+class ApplicationLifecycle:
+    """Manages server-lifespan initialization safely without global variables."""
 
-    def __init__(self) -> None:
-        """Initialize state container."""
-        self.initialized = False
-        self._lock = asyncio.Lock()
+    _initialized: bool = False
+    _lock: asyncio.Lock | None = None
 
-    async def init(self) -> None:
-        """Initialize global services - only runs once per server lifespan."""
-        if self.initialized:
+    @classmethod
+    async def setup_once(cls) -> None:
+        """Initialize global services exactly once per server lifespan."""
+        if cls._initialized:
             return
 
-        async with self._lock:
-            if self.initialized:
+        # Initialize lock lazily to ensure it binds to the running event loop
+        if cls._lock is None:
+            cls._lock = asyncio.Lock()
+
+        async with cls._lock:
+            if cls._initialized:
                 return
 
             # 1. Initialize MLflow
@@ -42,26 +49,40 @@ class _AppState:
             mlflow.pydantic_ai.autolog()  # type: ignore[attr-defined]
             logger.debug("MLflow initialized")
 
-            # 2. Initialize Redis store
-            await get_scenario_store()
-            # 3. Initialize checkpointer indices (must be done once)
-            async with AsyncRedisSaver.from_conn_string(
-                settings.redis_url
-            ) as checkpointer:
-                await checkpointer.setup()
-            logger.debug("Redis LangGraph persistence initialized")
+            # 2. Safe async init inside the active event loop
+            redis_client = Redis.from_url(settings.redis_url)
 
-            self.initialized = True
+            # 3. Attach Database singletons to AppState
+            AppState.store = AsyncRedisStore(
+                redis_client=redis_client,
+                ttl={"default_ttl": 10080, "refresh_on_read": True},  # 7 Days
+            )
+            AppState.checkpointer = AsyncRedisSaver(
+                redis_client=redis_client,
+                ttl={"default_ttl": 1440, "refresh_on_read": True},  # 24 Hours
+            )
 
+            # 4. Setup database indices
+            await AppState.store.setup()
+            await AppState.checkpointer.setup()
+            logger.debug("Redis persistence initialized")
 
-# Module-level state container for lazy initialization
-_app_state = _AppState()
+            # 5. Compile our globally shared, thread-safe graphs once
+            assert AppState.checkpointer is not None
+            assert AppState.store is not None
+            AppState.author_graph = create_author_graph(
+                AppState.checkpointer, AppState.store
+            )
+            AppState.simulation_graph = create_simulation_graph(AppState.checkpointer)
+            logger.debug("Graphs compiled")
+
+            cls._initialized = True
 
 
 @on_chat_start
 async def start() -> None:
     """Initialize chat session - routes to author or player flow."""
-    await _app_state.init()  # Ensure DB indices and MLFlow are set up
+    await ApplicationLifecycle.setup_once()
     logger.info("New chat session started")
     query_string = ""
     environ = cl.context.session.environ if hasattr(cl.context, "session") else {}
@@ -74,13 +95,15 @@ async def start() -> None:
     params = parse_qs(query_string)
     scenario_id = params.get("scenario_id", [""])[0]
 
-    scenario_store = await get_scenario_store()
-    if scenario_id and scenario_store.get(("scenarios",), scenario_id) is not None:
-        logger.info("Player joined session, scenario_id=%s", scenario_id)
-        cl.user_session.set("mode", "player")
-        cl.user_session.set("scenario_id", scenario_id)
-        await simulation.start_simulation_session()
-        return
+    # Check if scenario exists using async store
+    if scenario_id and AppState.store is not None:
+        scenario = await AppState.store.aget(("scenarios",), scenario_id)
+        if scenario is not None:
+            logger.info("Player joined session, scenario_id=%s", scenario_id)
+            cl.user_session.set("mode", "player")
+            cl.user_session.set("scenario_id", scenario_id)
+            await simulation.start_simulation_session()
+            return
 
     if scenario_id:
         logger.warning("Scenario not found, scenario_id=%s", scenario_id)

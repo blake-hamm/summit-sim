@@ -7,7 +7,6 @@ from dataclasses import dataclass, fields
 from typing import TYPE_CHECKING, Any
 
 import mlflow
-from langgraph.checkpoint.redis.aio import AsyncRedisSaver
 from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.store.base import BaseStore
@@ -15,12 +14,12 @@ from langgraph.types import interrupt
 from mlflow.entities import AssessmentSource, AssessmentSourceType, SpanType
 
 from summit_sim.agents.generator import generate_scenario
+from summit_sim.graphs.utils import AppState
 from summit_sim.schemas import (
     ScenarioConfig,
     ScenarioDraft,
     generate_scenario_id,
 )
-from summit_sim.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -198,25 +197,33 @@ def should_retry(state: AuthorState) -> str:
     return "save"
 
 
-async def save_scenario(state: AuthorState) -> dict:
+async def save_scenario(state: AuthorState, config: RunnableConfig) -> dict:  # noqa: ARG001
     """Save approved scenario to LangGraph store."""
     if state.scenario_draft and state.scenario_id:
-        from summit_sim.graphs.utils import get_scenario_store  # noqa: PLC0415
-
-        store = await get_scenario_store()
-        await store.aput(
-            ("scenarios",),
-            state.scenario_id,
-            {"scenario_draft": state.scenario_draft},
-        )
+        store = AppState.store
+        if store is not None:
+            await store.aput(
+                ("scenarios",),
+                state.scenario_id,
+                {"scenario_draft": state.scenario_draft},
+            )
     return {}
 
 
 def create_author_graph(
-    checkpointer: BaseCheckpointSaver | None = None,
-    store: BaseStore | None = None,
+    checkpointer: BaseCheckpointSaver,
+    store: BaseStore,
 ) -> CompiledStateGraph:
-    """Create and configure the author LangGraph."""
+    """Create and configure the author LangGraph.
+
+    Args:
+        checkpointer: Checkpoint saver for persistence (required).
+        store: Store for scenario data (required).
+
+    Returns:
+        Compiled state graph ready for execution.
+
+    """
     workflow = StateGraph(AuthorState)
 
     workflow.add_node("initialize", initialize_author)
@@ -231,12 +238,5 @@ def create_author_graph(
         "review", should_retry, {"generate": "generate", "save": "save"}
     )
     workflow.add_edge("save", END)
-
-    if checkpointer is None:
-        # TTL: 24 hours (1440 minutes) for checkpoints
-        checkpointer = AsyncRedisSaver(
-            settings.redis_url,
-            ttl={"default_ttl": 1440, "refresh_on_read": True},
-        )
 
     return workflow.compile(checkpointer=checkpointer, store=store)

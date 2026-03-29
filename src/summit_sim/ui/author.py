@@ -10,9 +10,8 @@ from mlflow.entities import AssessmentSource, AssessmentSourceType
 from summit_sim.graphs.author import (
     MAX_RETRY_ATTEMPTS,
     AuthorState,
-    create_author_graph,
 )
-from summit_sim.graphs.utils import get_scenario_store
+from summit_sim.graphs.utils import AppState
 from summit_sim.schemas import ScenarioConfig, ScenarioDraft
 from summit_sim.settings import settings
 from summit_sim.ui import simulation
@@ -98,7 +97,7 @@ async def generate_scenario() -> None:
 
     loading_msg = await cl.Message(content="⏳ *Generating your scenario...*").send()
 
-    graph = create_author_graph()
+    graph = AppState.author_graph
     cl.user_session.set("graph", graph)
 
     thread_id = cl.user_session.get("id")
@@ -214,7 +213,7 @@ async def handle_student_start(_state: AuthorState) -> None:
             cl.user_session.set("authoring_trace_id", final_state.current_trace_id)
 
         # Load scenario from store (it was just saved during approval)
-        store = await get_scenario_store()
+        store = AppState.store
         store_result = await store.aget(("scenarios",), scenario_id)
         if store_result is None:
             await cl.Message(

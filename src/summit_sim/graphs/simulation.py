@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING, Any
 
 import mlflow
 from langchain_core.runnables import RunnableConfig
-from langgraph.checkpoint.redis.aio import AsyncRedisSaver
 from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import interrupt
@@ -272,9 +271,17 @@ def check_simulation_ending(state: SimulationState) -> str:
 
 
 def create_simulation_graph(
-    checkpointer: BaseCheckpointSaver | None = None,
+    checkpointer: BaseCheckpointSaver,
 ) -> CompiledStateGraph:
-    """Create and configure the dynamic simulation LangGraph."""
+    """Create and configure the dynamic simulation LangGraph.
+
+    Args:
+        checkpointer: Checkpoint saver for persistence (required).
+
+    Returns:
+        Compiled state graph ready for execution.
+
+    """
     workflow = StateGraph(SimulationState)
 
     workflow.add_node("initialize", initialize_simulation)
@@ -298,12 +305,5 @@ def create_simulation_graph(
     )
 
     workflow.add_edge("generate_debrief", END)
-
-    if checkpointer is None:
-        # TTL: 24 hours (1440 minutes) for checkpoints
-        checkpointer = AsyncRedisSaver(
-            settings.redis_url,
-            ttl={"default_ttl": 1440, "refresh_on_read": True},
-        )
 
     return workflow.compile(checkpointer=checkpointer)

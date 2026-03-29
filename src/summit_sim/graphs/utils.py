@@ -1,41 +1,20 @@
-"""Shared utilities for LangGraph state definitions."""
+"""Shared dependencies and application state container."""
 
+from typing import Optional
+
+from langgraph.checkpoint.redis.aio import AsyncRedisSaver
+from langgraph.graph.state import CompiledStateGraph
 from langgraph.store.redis.aio import AsyncRedisStore
 
-from summit_sim.settings import settings
 
+class AppState:
+    """Thread-safe namespace for global application singletons.
 
-class _ScenarioStore:
-    """Lazy singleton for scenario store."""
-
-    _instance: AsyncRedisStore | None = None
-
-    @classmethod
-    async def get(cls) -> AsyncRedisStore:
-        """Get or create the scenario store singleton.
-
-        TTL: 7 days (10080 minutes) for scenarios.
-
-        Returns:
-            Initialized AsyncRedisStore instance.
-
-        """
-        if cls._instance is None:
-            cls._instance = AsyncRedisStore(
-                settings.redis_url,
-                ttl={"default_ttl": 10080, "refresh_on_read": True},
-            )
-            await cls._instance.setup()
-        return cls._instance
-
-
-async def get_scenario_store() -> AsyncRedisStore:
-    """Get the global scenario store instance.
-
-    Initializes on first call after event loop is running.
-
-    Returns:
-        Initialized AsyncRedisStore instance.
-
+    All attributes are initialized lazily in ApplicationLifecycle.setup_once()
+    to ensure proper async event loop binding.
     """
-    return await _ScenarioStore.get()
+
+    store: Optional[AsyncRedisStore] = None
+    checkpointer: Optional[AsyncRedisSaver] = None
+    author_graph: Optional[CompiledStateGraph] = None
+    simulation_graph: Optional[CompiledStateGraph] = None
