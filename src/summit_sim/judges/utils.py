@@ -2,8 +2,6 @@
 
 from mlflow.genai.judges import Judge
 
-from summit_sim.settings import settings
-
 # Judge weights (must sum to 1.0 across all criteria)
 JUDGE_WEIGHTS: dict[str, float] = {
     # Trace-level (Structure Judge)
@@ -28,8 +26,8 @@ if abs(sum(JUDGE_WEIGHTS.values()) - 1.0) >= WEIGHT_CHECK:
     msg = f"Weights must sum to 1.0, got {sum(JUDGE_WEIGHTS.values())}"
     raise ValueError(msg)
 
-# Single gateway endpoint for all judges
-JUDGE_MODEL_ENDPOINT = f"gateway:/{settings.judge_model}"
+# OpenRouter direct endpoint for all judges (via LiteLLM)
+JUDGE_MODEL_ENDPOINT = "gateway:/openrouter-judge"
 
 # Sampling configuration
 TRACE_JUDGE_SAMPLE_RATE: float = 1.0  # 100% in dev

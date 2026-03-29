@@ -36,14 +36,14 @@ the student's action?
 
 Trace data: {{ trace }}
 
-Output format (JSON):
+Output format (JSON with boolean values only):
 {
-    "score_milestone_justified": {"passed": bool, "reason": "1-2 sentences"},
-    "score_not_over_awarded": {"passed": bool, "reason": "1-2 sentences"},
-    "feedback_acknowledges_actions": {"passed": bool, "reason": "1-2 sentences"}
+    "score_milestone_justified": true,
+    "score_not_over_awarded": true,
+    "feedback_acknowledges_actions": false
 }
 
-Be concise. Cite specific actions and score values.
+Return only boolean values for each criterion. No reasons or explanations needed.
 """
 
 
@@ -63,7 +63,7 @@ def get_scoring_judge() -> Judge:
             name="scoring-judge",
             instructions=SCORING_JUDGE_INSTRUCTIONS,
             model=JUDGE_MODEL_ENDPOINT,
-            feedback_value_type=dict,
+            feedback_value_type=dict[str, bool],
         )
         set_judge_in_cache("scoring", judge)
     return judge

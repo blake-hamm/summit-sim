@@ -12,7 +12,6 @@ class Settings(BaseSettings):
     mlflow_tracking_uri: str = "http://localhost:5000"
     openrouter_api_key: str = ""
     default_model: str = "openai/gpt-4.1-nano"
-    judge_model: str = "anthropic/claude-3-haiku"
     mlflow_experiment_name: str = "summit-sim"
     base_url: str = "http://localhost:8000"
     log_level: str = "INFO"

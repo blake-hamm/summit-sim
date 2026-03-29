@@ -30,15 +30,15 @@ without harsh corrections?
 
 Trace data: {{ trace }}
 
-Output format (JSON):
+Output format (JSON with boolean values only):
 {
-    "score_in_range": {"passed": bool, "reason": "1-2 sentences"},
-    "question_in_narrative_only": {"passed": bool, "reason": "1-2 sentences"},
-    "feedback_no_harsh_language": {"passed": bool, "reason": "1-2 sentences"},
-    "narrative_length": {"passed": bool, "reason": "1-2 sentences"}
+    "score_in_range": true,
+    "question_in_narrative_only": true,
+    "feedback_no_harsh_language": true,
+    "narrative_length": false
 }
 
-Be concise. Cite exact mismatches when criteria fail.
+Return only boolean values for each criterion. No reasons or explanations needed.
 """
 
 
@@ -58,7 +58,7 @@ def get_structure_judge() -> Judge:
             name="structure-judge",
             instructions=STRUCTURE_JUDGE_INSTRUCTIONS,
             model=JUDGE_MODEL_ENDPOINT,
-            feedback_value_type=dict,
+            feedback_value_type=dict[str, bool],
         )
         set_judge_in_cache("structure", judge)
     return judge

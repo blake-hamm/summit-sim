@@ -159,25 +159,25 @@ def compute_judge_score_for_turn(
     total_score = 0.0
     breakdown: dict[str, bool] = {}
 
-    # Structure criteria (0.25 total)
+    # Structure criteria (0.25 total) - flat dict format
     for criterion in [
         "score_in_range",
         "question_in_narrative_only",
         "feedback_no_harsh_language",
         "narrative_length",
     ]:
-        passed = structure_result.get(criterion, {}).get("passed", False)
+        passed = structure_result.get(criterion, False)
         breakdown[criterion] = passed
         if passed:
             total_score += JUDGE_WEIGHTS[criterion]
 
-    # Scoring criteria (0.45 total)
+    # Scoring criteria (0.45 total) - flat dict format
     for criterion in [
         "score_milestone_justified",
         "score_not_over_awarded",
         "feedback_acknowledges_actions",
     ]:
-        passed = scoring_result.get(criterion, {}).get("passed", False)
+        passed = scoring_result.get(criterion, False)
         breakdown[criterion] = passed
         if passed:
             total_score += JUDGE_WEIGHTS[criterion]

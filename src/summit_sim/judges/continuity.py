@@ -29,13 +29,13 @@ never repeated? (Status updates like "HR is still 110" are OK if framed as ongoi
 
 Trace data: {{ trace }}
 
-Output format (JSON):
+Output format (JSON with boolean values only):
 {
-    "score_monotonic": {"passed": bool, "reason": "1-2 sentences"},
-    "narrative_reveals_progressively": {"passed": bool, "reason": "1-2 sentences"}
+    "score_monotonic": true,
+    "narrative_reveals_progressively": true
 }
 
-Be concise. Cite specific turns where issues occur.
+Return only boolean values for each criterion. No reasons or explanations needed.
 """
 
 
@@ -56,7 +56,7 @@ def get_continuity_judge() -> Judge:
             name="continuity-judge",
             instructions=CONTINUITY_JUDGE_INSTRUCTIONS,
             model=JUDGE_MODEL_ENDPOINT,
-            feedback_value_type=dict,
+            feedback_value_type=dict[str, bool],
         )
         set_judge_in_cache("continuity", judge)
     return judge

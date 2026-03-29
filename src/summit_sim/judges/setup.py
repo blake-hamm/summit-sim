@@ -24,10 +24,12 @@ def register_trace_judges() -> None:
     for name, judge in judges:
         registered = judge.register(name=f"trace-{name}")
         registered.start(
-            sampling_config=ScorerSamplingConfig(sample_rate=1.0),
-            filter_string=(
-                "tags.graph_type = 'simulation' "
-                "AND tags.agent_name = 'action-responder'"
+            sampling_config=ScorerSamplingConfig(
+                sample_rate=1.0,
+                filter_string=(
+                    "tags.graph_type = 'simulation' "
+                    "AND tags.agent_name = 'action-responder'"
+                ),
             ),
         )
         logger.info(f"Registered {name} judge for automatic evaluation")
@@ -39,8 +41,10 @@ def register_session_judges() -> None:
     continuity = get_continuity_judge()
     registered = continuity.register(name="session-continuity")
     registered.start(
-        sampling_config=ScorerSamplingConfig(sample_rate=1.0),
-        filter_string="tags.graph_type = 'simulation' ",
+        sampling_config=ScorerSamplingConfig(
+            sample_rate=1.0,
+            filter_string="tags.graph_type = 'simulation'",
+        ),
     )
     logger.info("Registered continuity judge for automatic evaluation")
 
