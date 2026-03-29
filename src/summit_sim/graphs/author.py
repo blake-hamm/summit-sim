@@ -13,6 +13,7 @@ from langgraph.store.base import BaseStore
 from langgraph.types import interrupt
 from mlflow.entities import AssessmentSource, AssessmentSourceType, SpanType
 
+from summit_sim.agents.generator import AGENT_NAME as GENERATOR_AGENT_NAME
 from summit_sim.agents.generator import generate_scenario
 from summit_sim.graphs.utils import AppState
 from summit_sim.schemas import (
@@ -20,6 +21,7 @@ from summit_sim.schemas import (
     ScenarioDraft,
     generate_scenario_id,
 )
+from summit_sim.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -100,7 +102,22 @@ async def generate_scenario_node(state: AuthorState, config: RunnableConfig) -> 
     if thread_id and current_trace_id:
         mlflow.update_current_trace(
             metadata={"mlflow.trace.session": thread_id},
-            tags={"session_id": thread_id},
+            tags={
+                "session_id": thread_id,
+                "scenario_id": state.scenario_id,
+                "graph_type": "author",
+                "mlflow_env": settings.mlflow_env,
+            },
+        )
+
+    # Set span attributes for granular tracking
+    if active_span:
+        active_span.set_attributes(
+            {
+                "author.retry_count": retry_count,
+                "author.is_revision": is_revision,
+                "agent.name": GENERATOR_AGENT_NAME,
+            }
         )
 
     # Log revision status to MLflow as trace feedback

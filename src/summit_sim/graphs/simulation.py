@@ -13,7 +13,9 @@ from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import interrupt
 from mlflow.entities import SpanType
 
+from summit_sim.agents.action_responder import AGENT_NAME as ACTION_RESPONDER_AGENT_NAME
 from summit_sim.agents.action_responder import process_action
+from summit_sim.agents.debrief import AGENT_NAME as DEBRIEF_AGENT_NAME
 from summit_sim.agents.debrief import generate_debrief
 from summit_sim.schemas import DynamicTurnResult, ScenarioDraft, TranscriptEntry
 from summit_sim.settings import settings
@@ -166,7 +168,25 @@ async def process_player_action(state: SimulationState, config: RunnableConfig) 
     if thread_id and current_trace_id:
         mlflow.update_current_trace(
             metadata={"mlflow.trace.session": thread_id},
-            tags={"session_id": thread_id, "scenario_id": state.scenario_id},
+            tags={
+                "session_id": thread_id,
+                "scenario_id": state.scenario_id,
+                "graph_type": "simulation",
+                "mlflow_env": settings.mlflow_env,
+            },
+        )
+
+    # Set span attributes for granular tracking
+    if active_span:
+        active_span.set_attributes(
+            {
+                "simulation.turn_count": state.turn_count + 1,
+                "agent.name": ACTION_RESPONDER_AGENT_NAME,
+                "student.action_length": len(student_action),
+                "turn.was_correct": result.was_correct,
+                "turn.completion_score": result.completion_score,
+                "turn.is_complete": result.completion_score >= COMPLETION_THRESHOLD,
+            }
         )
 
     return {
@@ -250,7 +270,20 @@ async def generate_debrief_report(
     if thread_id and current_trace_id:
         mlflow.update_current_trace(
             metadata={"mlflow.trace.session": thread_id},
-            tags={"session_id": thread_id, "scenario_id": state.scenario_id},
+            tags={
+                "session_id": thread_id,
+                "scenario_id": state.scenario_id,
+                "graph_type": "simulation",
+                "mlflow_env": settings.mlflow_env,
+            },
+        )
+
+    # Set span attributes for granular tracking
+    if active_span:
+        active_span.set_attributes(
+            {
+                "agent.name": DEBRIEF_AGENT_NAME,
+            }
         )
 
     return {

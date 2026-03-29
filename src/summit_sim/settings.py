@@ -23,6 +23,10 @@ class Settings(BaseSettings):
         default="redis://localhost:6379",
         description="Redis connection URL for LangGraph persistence",
     )
+    mlflow_env: str = Field(
+        default="local",
+        description="Deployment environment for MLflow traces: local or prod",
+    )
 
     model_config = SettingsConfigDict(
         env_file=".env",
