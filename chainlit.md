@@ -55,6 +55,7 @@ Deployed on a production homelab:
 - **Kubernetes:** Talos Linux on Proxmox with Cilium CNI
 - **Storage:** Ceph, SeaweedFS (S3), Dragonflydb (redis), Postgresql
 - **GitOps:** ArgoCD with common Helm chart patterns
+- **Ingress:** Cloudflare tunnel for external access and traefik for internal access
 
 
 ## 🙏 Acknowledgments

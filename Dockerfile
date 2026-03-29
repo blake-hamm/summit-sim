@@ -1,5 +1,5 @@
 # Dockerfile for Summit-Sim Chainlit Application
-FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
+FROM ghcr.io/astral-sh/uv:python3.12-trixie-slim
 
 # Set working directory
 WORKDIR /app
@@ -17,7 +17,8 @@ RUN uv sync --all-extras --frozen
 COPY src/ ./src/
 COPY .chainlit/ ./.chainlit/
 COPY public/ ./public/
-COPY chainlit.md chainlit_en-US.md ./
+COPY chainlit.md ./
+RUN ln -s chainlit.md chainlit_en-US.md
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
@@ -27,4 +28,4 @@ ENV PYTHONDONTWRITEBYTECODE=1
 EXPOSE 8000
 
 # Run Chainlit with hot reload for development
-CMD ["uv", "run", "chainlit", "run", "src/summit_sim/app.py", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uv", "run", "chainlit", "run", "src/summit_sim/main.py", "--host", "0.0.0.0", "--port", "8000"]
