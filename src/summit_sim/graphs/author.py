@@ -231,16 +231,7 @@ def create_author_graph(
     checkpointer: BaseCheckpointSaver,
     store: BaseStore,
 ) -> CompiledStateGraph:
-    """Create and configure the author LangGraph.
-
-    Args:
-        checkpointer: Checkpoint saver for persistence (required).
-        store: Store for scenario data (required).
-
-    Returns:
-        Compiled state graph ready for execution.
-
-    """
+    """Create and configure the author LangGraph."""
     workflow = StateGraph(AuthorState)
 
     workflow.add_node("initialize", initialize_author)

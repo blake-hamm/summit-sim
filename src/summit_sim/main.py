@@ -125,7 +125,7 @@ async def ask_role_selection() -> None:
         content=(
             "# 🏔️ Welcome to Summit-Sim\n\n"
             "**An AI-powered wilderness rescue simulator.**\n\n"
-            "Summit-Sim generates medically-informed, interactive "
+            "Summit-Sim generates curriculum-informed, interactive "
             "backcountry emergencies for dynamic Wilderness First "
             "Responder (WFR) training.\n\n"
             "---\n"

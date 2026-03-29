@@ -306,15 +306,7 @@ def check_simulation_ending(state: SimulationState) -> str:
 def create_simulation_graph(
     checkpointer: BaseCheckpointSaver,
 ) -> CompiledStateGraph:
-    """Create and configure the dynamic simulation LangGraph.
-
-    Args:
-        checkpointer: Checkpoint saver for persistence (required).
-
-    Returns:
-        Compiled state graph ready for execution.
-
-    """
+    """Create and configure the dynamic simulation LangGraph."""
     workflow = StateGraph(SimulationState)
 
     workflow.add_node("initialize", initialize_simulation)
