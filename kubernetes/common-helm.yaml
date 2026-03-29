@@ -33,8 +33,6 @@ spec:
             routes:
               - match: Host(`summit-sim.bhamm-lab.com`)
                 kind: Rule
-                middlewares:
-                  - name: default-headers
                 services:
                   - name: summit-sim
                     scheme: http
