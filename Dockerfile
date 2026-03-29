@@ -28,4 +28,4 @@ ENV PYTHONDONTWRITEBYTECODE=1
 EXPOSE 8000
 
 # Run Chainlit with hot reload for development
-CMD ["uv", "run", "chainlit", "run", "src/summit_sim/app.py", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uv", "run", "chainlit", "run", "src/summit_sim/main.py", "--host", "0.0.0.0", "--port", "8000"]
