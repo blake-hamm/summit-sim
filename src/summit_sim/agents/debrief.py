@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import logging
 
-import mlflow
-from mlflow.entities import SpanType
 from mlflow.entities.model_registry.prompt_version import PromptVersion
 
 from summit_sim.agents.utils import setup_agent_and_prompts
@@ -54,7 +52,6 @@ against the hidden medical truth. Focus on their clinical decision-making \
 process, not binary right/wrong tallies."""
 
 
-@mlflow.trace(span_type=SpanType.AGENT)
 async def generate_debrief(
     transcript: list[TranscriptEntry],
     scenario_draft: ScenarioDraft,

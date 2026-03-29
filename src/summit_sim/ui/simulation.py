@@ -83,6 +83,9 @@ async def run_simulation() -> None:
     thread_id = cl.user_session.get("id")
     config: RunnableConfig = {"configurable": {"thread_id": thread_id}}
 
+    # Retrieve authoring trace_id for correlation if this is student E2E flow
+    authoring_trace_id = cl.user_session.get("authoring_trace_id")
+
     initial_state = SimulationState(
         scenario=scenario,
         transcript=[],
@@ -91,6 +94,7 @@ async def run_simulation() -> None:
         action_result=None,
         scenario_id=scenario_id,
         hidden_state=scenario.hidden_state,
+        current_trace_id=authoring_trace_id,
     )
 
     try:

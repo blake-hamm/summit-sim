@@ -6,10 +6,13 @@ import logging
 from dataclasses import dataclass, field, fields
 from typing import TYPE_CHECKING, Any
 
+import mlflow
+from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import interrupt
+from mlflow.entities import SpanType
 
 from summit_sim.agents.action_responder import process_action
 from summit_sim.agents.debrief import generate_debrief
@@ -42,6 +45,7 @@ class SimulationState:
     scenario_id: str = ""
     debrief_report: dict | None = None
     hidden_state: str = ""  # Ground truth for AI to reveal from
+    current_trace_id: str | None = None  # MLflow trace ID for session correlation
 
     @classmethod
     def from_graph_result(cls, result: dict[str, Any]) -> "SimulationState":
@@ -119,7 +123,8 @@ def present_prompt(state: SimulationState) -> dict:
     }
 
 
-async def process_player_action(state: SimulationState) -> dict:
+@mlflow.trace(span_type=SpanType.AGENT)
+async def process_player_action(state: SimulationState, config: RunnableConfig) -> dict:
     """Process student's free-text action and generate response.
 
     Calls the ActionResponder agent to evaluate the action,
@@ -154,7 +159,22 @@ async def process_player_action(state: SimulationState) -> dict:
     # Programmatic failsafe: ensure score never decreases
     result.completion_score = max(previous_score, result.completion_score)
 
-    return {"action_result": result.model_dump()}
+    # Get current trace info for session correlation
+    active_span = mlflow.get_current_active_span()
+    current_trace_id = active_span.trace_id if active_span else None
+
+    # Tag trace with session ID for correlation
+    thread_id = config.get("configurable", {}).get("thread_id")
+    if thread_id and current_trace_id:
+        mlflow.update_current_trace(
+            metadata={"mlflow.trace.session": thread_id},
+            tags={"session_id": thread_id, "scenario_id": state.scenario_id},
+        )
+
+    return {
+        "action_result": result.model_dump(),
+        "current_trace_id": current_trace_id,
+    }
 
 
 def update_simulation_state(state: SimulationState) -> dict:
@@ -208,7 +228,11 @@ def update_simulation_state(state: SimulationState) -> dict:
     }
 
 
-async def generate_debrief_report(state: SimulationState) -> dict:
+@mlflow.trace(span_type=SpanType.AGENT)
+async def generate_debrief_report(
+    state: SimulationState,
+    config: RunnableConfig,
+) -> dict:
     """Generate debrief report after simulation completes.
 
     Calls the Debrief Agent to analyze the complete simulation transcript
@@ -219,7 +243,23 @@ async def generate_debrief_report(state: SimulationState) -> dict:
         scenario_draft=state.scenario,
         scenario_id=state.scenario_id,
     )
-    return {"debrief_report": debrief_report.model_dump()}
+
+    # Get current trace info for session correlation
+    active_span = mlflow.get_current_active_span()
+    current_trace_id = active_span.trace_id if active_span else None
+
+    # Tag trace with session ID for correlation
+    thread_id = config.get("configurable", {}).get("thread_id")
+    if thread_id and current_trace_id:
+        mlflow.update_current_trace(
+            metadata={"mlflow.trace.session": thread_id},
+            tags={"session_id": thread_id, "scenario_id": state.scenario_id},
+        )
+
+    return {
+        "debrief_report": debrief_report.model_dump(),
+        "current_trace_id": current_trace_id,
+    }
 
 
 def check_simulation_ending(state: SimulationState) -> str:
