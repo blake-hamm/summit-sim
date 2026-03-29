@@ -261,7 +261,9 @@ src/summit_sim/
 ├── graphs/
 │   └── simulation.py         # Trace metadata for judges (already has session_id tagging)
 └── notebooks/
-    └── judge_analysis.ipynb  # Offline rollup and analysis
+    ├── create_eval_dataset.ipynb      # Extract test scenarios from traces
+    ├── test_prompt_iteration.ipynb    # Test prompts against evaluation dataset
+    └── judge_analysis.ipynb           # Offline rollup and analysis
 ```
 
 ---
@@ -560,22 +562,33 @@ def initialize_judges():
 
 **File:** `src/summit_sim/graphs/simulation.py`
 
-The current implementation already tags traces with session_id. Ensure the following are set:
+#### Pre-requisite: Add agent_name Tag
+
+**The judge filter string in Phase 2 requires `tags.agent_name = 'action-responder'`, but this tag is currently not set.** The agent name exists only as a span attribute (`attributes.agent_name`).
+
+**Action Required:** Add the `agent_name` tag to the trace metadata:
 
 ```python
-# Already present in current code (lines 167-177):
+# UPDATE in src/summit_sim/graphs/simulation.py (lines 167-177):
 mlflow.update_current_trace(
     metadata={"mlflow.trace.session": thread_id},
     tags={
         "session_id": thread_id,
         "scenario_id": state.scenario_id,
         "graph_type": "simulation",
+        "agent_name": ACTION_RESPONDER_AGENT_NAME,  # ADD THIS LINE
         "mlflow_env": settings.mlflow_env,
     },
 )
 ```
 
-The trace metadata should already be sufficient for judges. The session_id tag enables session-level evaluation.
+**Why this matters:**
+- The trace-level judge filter (`tags.graph_type = 'simulation' AND tags.agent_name = 'action-responder'`) requires this tag
+- Tags are queryable in MLflow UI; span attributes are not
+- This ensures judges only evaluate traces from the action-responder agent, not other agents like debrief or generator
+
+**Verify the change:**
+After implementation, traces should show the `agent_name` tag in the MLflow UI trace details.
 
 ### Phase 4: Rollup Computation (Offline)
 
@@ -689,6 +702,65 @@ def compute_rollup_for_all_sessions(experiment_name: str = "summit-sim-judges") 
             logger.error(f"Failed to compute rollup for session {session_id}: {e}")
     
     return results
+
+
+def compute_judge_score_for_turn(turn_result: DynamicTurnResult) -> dict:
+    """Compute judge score for a single turn (for prompt iteration testing).
+    
+    This is used during prompt optimization to evaluate a single turn
+    without needing a full session. Runs all trace-level judges.
+    
+    Args:
+        turn_result: The DynamicTurnResult to evaluate
+        
+    Returns:
+        dict with overall score and criterion breakdown
+    """
+    from summit_sim.judges.setup import get_structure_judge, get_scoring_judge, get_medical_judge
+    
+    # Run all trace-level judges
+    structure_judge = get_structure_judge()
+    scoring_judge = get_scoring_judge()
+    medical_judge = get_medical_judge()
+    
+    # Each judge evaluates the turn
+    structure_result = structure_judge.evaluate(turn_result)
+    scoring_result = scoring_judge.evaluate(turn_result)
+    medical_result = medical_judge.evaluate(turn_result)
+    
+    # Compute weighted score
+    total_score = 0.0
+    breakdown = {}
+    
+    # Structure criteria (0.25 total)
+    for criterion in ["score_in_range", "question_in_narrative_only", 
+                      "feedback_no_harsh_language", "narrative_length"]:
+        passed = structure_result.get(criterion, {}).get("passed", False)
+        breakdown[criterion] = passed
+        if passed:
+            total_score += JUDGE_WEIGHTS[criterion]
+    
+    # Scoring criteria (0.45 total)
+    for criterion in ["score_milestone_justified", "score_not_over_awarded",
+                      "feedback_acknowledges_actions"]:
+        passed = scoring_result.get(criterion, {}).get("passed", False)
+        breakdown[criterion] = passed
+        if passed:
+            total_score += JUDGE_WEIGHTS[criterion]
+    
+    # Medical criteria (0.15 total)
+    passed = medical_result  # bool
+    breakdown["was_correct_treatment_gate"] = passed
+    if passed:
+        total_score += JUDGE_WEIGHTS["was_correct_treatment_gate"]
+    
+    return {
+        "overall_score": total_score,
+        "trace_contribution": total_score,  # Session criteria not evaluated
+        "breakdown": breakdown,
+        "total_criteria": len(breakdown),
+        "passed_criteria": sum(1 for v in breakdown.values() if v),
+    }
 ```
 
 ### Phase 5: Initialization
@@ -732,6 +804,87 @@ for r in results:
 # Find sessions with low scores for investigation
 low_score_sessions = [r for r in results if r.overall_score < 0.7]
 ```
+
+---
+
+## Prompt Optimization Workflow (Phase 6)
+
+Since you don't have golden expectations, you'll use **judge-guided iteration**:
+
+### Step 1: Create Test Dataset from Traces
+
+Manually run 20 simulations, then extract first-turn data:
+
+**File:** `notebooks/create_eval_dataset.ipynb`
+
+```python
+# Extract first-turn inputs from traces
+traces = mlflow.search_traces(
+    experiment_ids=["summit-sim"],
+    filter_string="tags.turn_number = '1'",
+)
+
+test_cases = []
+for trace in traces[:20]:  # Manually curate 20 diverse ones
+    test_cases.append({
+        "inputs": {
+            "student_action": trace.inputs["student_action"],
+            "scenario": trace.tags["scenario"],  # ScenarioDraft JSON
+            "turn_number": 1,
+            "conversation_history": [],
+        }
+        # No expectations - judges will score outputs
+    })
+
+# Register as MLflow dataset for versioning
+mlflow.genai.register_dataset(
+    name="action-responder-eval-v1",
+    data=test_cases,
+    description="First-turn evaluation scenarios extracted from production traces",
+)
+```
+
+### Step 2: Manual Prompt Iteration
+
+Test new prompt versions against your dataset:
+
+**File:** `notebooks/test_prompt_iteration.ipynb`
+
+```python
+from summit_sim.agents.action_responder import process_action
+from summit_sim.judges.rollup import compute_judge_score_for_turn
+
+# Load evaluation dataset
+dataset = mlflow.genai.load_dataset("action-responder-eval-v1")
+
+# Test current prompt
+results = []
+for case in dataset:
+    result = await process_action(
+        student_action=case["inputs"]["student_action"],
+        scenario=case["inputs"]["scenario"],
+        # Uses prompts from registry @latest
+    )
+    
+    # Run judges on output (no expectations needed)
+    score = compute_judge_score_for_turn(result)
+    results.append({
+        "scenario": case["inputs"]["scenario"]["title"],
+        "judge_score": score,
+        "breakdown": score.breakdown,
+    })
+
+# Compare to previous run
+# Visualize in MLflow which criteria improved/worsened
+```
+
+### Step 3: Iterative Improvement
+
+1. **Modify prompt** in source code
+2. **Register new version**: `mlflow.genai.register_prompt()`
+3. **Re-run evaluation notebook**
+4. **Compare judge scores** between versions
+5. **Keep or discard** based on improvement
 
 ---
 
@@ -868,6 +1021,11 @@ Test judge registration and MLflow integration with mocked LLM calls.
 ---
 
 ## Changelog
+
+### v3 (2026-03-29)
+- **Added**: Prompt Optimization Workflow (Phase 6) with trace-based dataset creation
+- **Added**: Notebooks for creating evaluation datasets and testing prompt iterations
+- **Added**: Documentation for judge-guided optimization without golden expectations
 
 ### v2 (2026-03-29)
 - **Removed**: Duplicate `was_correct_treatment_gate_session` criterion
