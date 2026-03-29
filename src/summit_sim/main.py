@@ -17,7 +17,6 @@ from redis.asyncio import Redis
 from summit_sim.graphs.author import create_author_graph
 from summit_sim.graphs.simulation import create_simulation_graph
 from summit_sim.graphs.utils import AppState
-from summit_sim.judges import initialize_judges
 from summit_sim.settings import settings
 from summit_sim.ui import author, simulation
 
@@ -51,8 +50,10 @@ class ApplicationLifecycle:
             logger.debug("MLflow initialized")
 
             # 2. Initialize judges for automatic evaluation
-            initialize_judges()
-            logger.debug("Judges initialized")
+            # DISABLED: MLflow bug #20782 - automated scoring fails
+            # TODO: Re-enable once MLflow PR #20784 is merged (v3.10.2+)
+            # initialize_judges()
+            # logger.debug("Judges initialized")
 
             # 3. Safe async init inside the active event loop
             redis_client = Redis.from_url(settings.redis_url)
