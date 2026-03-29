@@ -287,7 +287,8 @@ class TestProcessPlayerAction:
             mock_settings.max_turns = 5
             mock_get_settings.return_value = mock_settings
 
-            result = await process_player_action(state)
+            config = {"configurable": {"thread_id": "test-thread-id"}}
+            result = await process_player_action(state, config)
 
             assert result["action_result"] == expected_result.model_dump()
             mock_process.assert_called_once()
@@ -327,7 +328,8 @@ class TestProcessPlayerAction:
             mock_settings.max_turns = 5
             mock_get_settings.return_value = mock_settings
 
-            result = await process_player_action(state)
+            config = {"configurable": {"thread_id": "test-thread-id"}}
+            result = await process_player_action(state, config)
 
             assert result["action_result"] == expected_result.model_dump()
 

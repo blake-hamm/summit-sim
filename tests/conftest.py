@@ -47,8 +47,8 @@ def _clear_agent_cache():
 def mock_mlflow():
     """Mock MLflow tracing and prompt registry globally for all tests."""
     with (
-        patch("summit_sim.agents.debrief.mlflow") as mock_mlflow_debrief,
         patch("summit_sim.graphs.author.mlflow") as mock_mlflow_author,
+        patch("summit_sim.graphs.simulation.mlflow") as mock_mlflow_simulation,
         patch("summit_sim.agents.utils.mlflow") as mock_mlflow_utils,
     ):
         # Mock trace decorator to just return the function
@@ -60,8 +60,8 @@ def mock_mlflow():
                 return args[0]
             return decorator
 
-        mock_mlflow_debrief.trace = mock_trace_decorator
         mock_mlflow_author.trace = mock_trace_decorator
+        mock_mlflow_simulation.trace = mock_trace_decorator
 
         # Mock SpanType enum
         class MockSpanType:
@@ -70,8 +70,8 @@ def mock_mlflow():
             CHAIN = "CHAIN"
             TOOL = "TOOL"
 
-        mock_mlflow_debrief.SpanType = MockSpanType
         mock_mlflow_author.SpanType = MockSpanType
+        mock_mlflow_simulation.SpanType = MockSpanType
 
         # Mock AssessmentSourceType
         class MockAssessmentSourceType:
@@ -93,9 +93,11 @@ def mock_mlflow():
         mock_span = MagicMock()
         mock_span.trace_id = "test-trace-id-123"
         mock_mlflow_author.get_current_active_span.return_value = mock_span
+        mock_mlflow_simulation.get_current_active_span.return_value = mock_span
 
         # Mock update_current_trace
         mock_mlflow_author.update_current_trace = MagicMock()
+        mock_mlflow_simulation.update_current_trace = MagicMock()
 
         # Mock genai.load_prompt and genai.register_prompt
         def mock_load_prompt(uri: str):
@@ -107,8 +109,6 @@ def mock_mlflow():
 
         mock_mlflow_utils.genai.load_prompt.side_effect = mock_load_prompt
         mock_mlflow_utils.genai.register_prompt = MagicMock()
-        mock_mlflow_debrief.genai.load_prompt.side_effect = mock_load_prompt
-        mock_mlflow_debrief.genai.register_prompt = MagicMock()
 
         # Also disable MLflow trace export to prevent warnings
         with (
@@ -122,8 +122,8 @@ def mock_mlflow():
             mock_export.return_value = None
             mock_export2.return_value = None
             yield {
-                "debrief": mock_mlflow_debrief,
                 "author": mock_mlflow_author,
+                "simulation": mock_mlflow_simulation,
                 "utils": mock_mlflow_utils,
             }
 

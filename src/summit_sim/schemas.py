@@ -263,29 +263,56 @@ class ScenarioDraft(BaseModel):
 class DebriefReport(BaseModel):
     """Structured debrief report analyzing student simulation performance.
 
-    Generated after simulation completion to provide comprehensive feedback
-    on student decision-making, learning opportunities, and performance metrics.
+    Generated after simulation completion to provide comprehensive qualitative feedback
+    on student decision-making and clinical reasoning against the hidden medical truth.
     """
 
-    summary: str = Field(..., description="Executive summary of the simulation run")
+    summary: str = Field(
+        ...,
+        description=(
+            "Executive summary evaluating the student's overall clinical approach. "
+            "Analyze how well they synthesized information from their typed actions "
+            "against the hidden medical truth. 2-3 sentences."
+        ),
+    )
+    clinical_reasoning: str = Field(
+        ...,
+        description=(
+            "A 2-3 sentence paragraph analyzing how well the student synthesized "
+            "clues, followed the PAS protocol, and demonstrated clinical reasoning. "
+            "Focus on specific moments in their typed actions where they showed good "
+            "judgment or missed critical cues."
+        ),
+    )
     key_mistakes: list[str] = Field(
-        ..., description="Critical errors made during the simulation"
+        ...,
+        description=(
+            "Critical reasoning failures or missed opportunities identified in the "
+            "student's typed actions. Focus on clinical judgment errors, premature "
+            "interventions, or skipped assessment steps. Reference specific moments."
+        ),
     )
     strong_actions: list[str] = Field(
-        ..., description="Decisions the student handled well"
-    )
-    best_next_actions: list[str] = Field(
-        ..., description="Recommendations for future scenarios"
+        ...,
+        description=(
+            "Specific moments where the student's typed text demonstrated excellent "
+            "clinical judgment, proper PAS protocol adherence, or sound reasoning. "
+            "Highlight what they did right and why it mattered."
+        ),
     )
     teaching_points: list[str] = Field(
-        ..., description="Key learning concepts to reinforce"
-    )
-    completion_status: Literal["pass", "fail"] = Field(
-        ..., description="Overall pass/fail based on performance"
-    )
-    final_score: float = Field(
         ...,
-        ge=0,
-        le=100,
-        description="Percentage score (correct choices / total turns * 100)",
+        description=(
+            "Key WFR concepts to reinforce based on gaps observed in their "
+            "performance. Connect to Scene Safety, PAS Assessment, Treatment "
+            "decisions, and Evacuation planning dimensions."
+        ),
+    )
+    best_next_actions: list[str] = Field(
+        ...,
+        description=(
+            "Guidance on what competencies the student should develop next. "
+            "Suggest specific skills, scenarios to practice, or knowledge areas "
+            "to study to improve their wilderness first response capabilities."
+        ),
     )

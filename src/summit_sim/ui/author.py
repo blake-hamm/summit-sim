@@ -211,6 +211,9 @@ async def handle_student_start(_state: AuthorState) -> None:
         # Set up simulation session
         cl.user_session.set("scenario_id", scenario_id)
         cl.user_session.set("mode", "player")
+        # Store trace_id from authoring phase for correlation with simulation traces
+        if final_state.current_trace_id:
+            cl.user_session.set("authoring_trace_id", final_state.current_trace_id)
 
         # Load scenario from store (it was just saved during approval)
         store_result = scenario_store.get(("scenarios",), scenario_id)
