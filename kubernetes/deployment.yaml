@@ -39,7 +39,7 @@ spec:
             - name: OPENROUTER_API_KEY
               valueFrom:
                 secretKeyRef:
-                  name: summit-sim
+                  name: summit-sim-external-secret
                   key: OPENROUTER_API_KEY
           resources:
             requests:
