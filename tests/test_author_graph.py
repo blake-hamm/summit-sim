@@ -1,8 +1,9 @@
 """Tests for author graph workflow."""
 
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
+from langgraph.checkpoint.base import BaseCheckpointSaver
 
 from summit_sim.graphs.author import (
     ACCEPTABLE_RATING_THRESHOLD,
@@ -217,7 +218,8 @@ class TestShouldRetry:
 class TestSaveScenario:
     """Tests for save_scenario function."""
 
-    def test_save_scenario_success(self):
+    @pytest.mark.asyncio
+    async def test_save_scenario_success(self):
         """Test successful scenario save."""
         scenario_draft = ScenarioDraft(
             title="Test Emergency",
@@ -236,19 +238,24 @@ class TestSaveScenario:
             scenario_id="scn-save-123",
         )
 
-        with patch("summit_sim.graphs.author.scenario_store") as mock_store:
-            mock_store.put.return_value = None
+        mock_store = AsyncMock()
+        mock_store.aput.return_value = None
 
-            result = save_scenario(state)
+        with patch(
+            "summit_sim.graphs.utils.get_scenario_store",
+            return_value=mock_store,
+        ):
+            result = await save_scenario(state)
 
-            mock_store.put.assert_called_once_with(
+            mock_store.aput.assert_called_once_with(
                 ("scenarios",),
                 "scn-save-123",
                 {"scenario_draft": scenario_draft.model_dump()},
             )
             assert result == {}
 
-    def test_save_scenario_no_draft(self):
+    @pytest.mark.asyncio
+    async def test_save_scenario_no_draft(self):
         """Test save when no draft available."""
         state = AuthorState(
             scenario_config={},
@@ -256,14 +263,20 @@ class TestSaveScenario:
             scenario_draft=None,
         )
 
-        with patch("summit_sim.graphs.author.scenario_store") as mock_store:
-            result = save_scenario(state)
+        mock_store = AsyncMock()
 
-            # Should not call put when no draft
-            mock_store.put.assert_not_called()
+        with patch(
+            "summit_sim.graphs.utils.get_scenario_store",
+            return_value=mock_store,
+        ):
+            result = await save_scenario(state)
+
+            # Should not call aput when no draft
+            mock_store.aput.assert_not_called()
             assert result == {}
 
-    def test_save_scenario_no_id(self):
+    @pytest.mark.asyncio
+    async def test_save_scenario_no_id(self):
         """Test save when no scenario ID."""
         scenario_draft = ScenarioDraft(
             title="Test",
@@ -282,11 +295,16 @@ class TestSaveScenario:
             scenario_id="",
         )
 
-        with patch("summit_sim.graphs.author.scenario_store") as mock_store:
-            result = save_scenario(state)
+        mock_store = AsyncMock()
 
-            # Should not call put when no ID
-            mock_store.put.assert_not_called()
+        with patch(
+            "summit_sim.graphs.utils.get_scenario_store",
+            return_value=mock_store,
+        ):
+            result = await save_scenario(state)
+
+            # Should not call aput when no ID
+            mock_store.aput.assert_not_called()
             assert result == {}
 
 
@@ -405,14 +423,20 @@ class TestCreateAuthorGraph:
 
     def test_create_graph(self):
         """Test that author graph can be created."""
-        graph = create_author_graph()
+        # Create a mock checkpointer that passes LangGraph's type validation
+        mock_checkpointer = AsyncMock(spec=BaseCheckpointSaver)
+
+        graph = create_author_graph(checkpointer=mock_checkpointer)
 
         assert graph is not None
 
     def test_create_graph_basic(self):
         """Test that graph can be created successfully."""
         # Just verify graph creation works - LangGraph validates checkpointer types
-        graph = create_author_graph()
+        mock_checkpointer = AsyncMock(spec=BaseCheckpointSaver)
+
+        graph = create_author_graph(checkpointer=mock_checkpointer)
+
         assert graph is not None
 
 
