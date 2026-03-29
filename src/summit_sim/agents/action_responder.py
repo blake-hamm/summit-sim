@@ -181,6 +181,7 @@ async def process_action(
         output_type=DynamicTurnResult,
         system_prompt=SYSTEM_PROMPT,
         user_prompt_template=USER_PROMPT_TEMPLATE,
+        register=False,
     )
 
     # Format conversation history from transcript
