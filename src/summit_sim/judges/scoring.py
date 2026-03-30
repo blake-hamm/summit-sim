@@ -34,20 +34,15 @@ based on cumulative actions?
 3. FEEDBACK_ACKNOWLEDGES_ACTIONS: Does feedback specifically mention \
 the student's action?
 
-Trace data: {{ trace }}
+Input: {{ inputs }}
 
-Output format (JSON with boolean values only):
-{
-    "score_milestone_justified": true,
-    "score_not_over_awarded": true,
-    "feedback_acknowledges_actions": false
-}
+Output: {{ outputs }}
 
-Return only boolean values for each criterion. No reasons or explanations needed.
+Return boolean value for criteria
 """
 
 
-def get_scoring_judge() -> Judge:
+def get_scoring_judge(judge_model: str = JUDGE_MODEL_ENDPOINT) -> Judge:  # noqa: ARG001
     """Get or create scoring judge.
 
     Scoring judge evaluates the accuracy of completion_score against the
