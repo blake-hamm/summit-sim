@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from langgraph.checkpoint.base import BaseCheckpointSaver
 
+from summit_sim.agents.action_responder import ActionResponse
 from summit_sim.graphs.simulation import (
     SimulationState,
     check_simulation_ending,
@@ -14,7 +15,7 @@ from summit_sim.graphs.simulation import (
     process_student_action,
     update_simulation_state,
 )
-from summit_sim.schemas import ActionResponse, ScenarioDraft, TranscriptEntry
+from summit_sim.schemas import ScenarioDraft, TranscriptEntry
 
 
 class TestSimulationState:

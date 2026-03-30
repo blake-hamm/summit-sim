@@ -6,12 +6,13 @@ from typing import TYPE_CHECKING
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import Command
 
+from summit_sim.agents.action_responder import ActionResponse
 from summit_sim.graphs.simulation import (
     COMPLETION_THRESHOLD,
     SimulationState,
 )
 from summit_sim.graphs.utils import AppState
-from summit_sim.schemas import ActionResponse, DebriefReport, ScenarioDraft
+from summit_sim.schemas import DebriefReport, ScenarioDraft
 from summit_sim.settings import settings
 from summit_sim.ui.utils import format_scenario_intro
 

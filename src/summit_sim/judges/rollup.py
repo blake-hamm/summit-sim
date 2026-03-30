@@ -9,11 +9,12 @@ import logging
 
 import mlflow
 
+from summit_sim.agents.action_responder import ActionResponse
 from summit_sim.judges.medical import get_medical_judge
 from summit_sim.judges.scoring import get_scoring_judge
 from summit_sim.judges.structure import get_structure_judge
 from summit_sim.judges.utils import JUDGE_WEIGHTS
-from summit_sim.schemas import ActionResponse, RollupResult
+from summit_sim.schemas import RollupResult
 from summit_sim.settings import settings
 
 logger = logging.getLogger(__name__)

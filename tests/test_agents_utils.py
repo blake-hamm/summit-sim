@@ -5,7 +5,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from summit_sim.agents import utils as agent_utils
-from summit_sim.schemas import ActionResponse, ScenarioDraft
+from summit_sim.agents.action_responder import ActionResponse
+from summit_sim.schemas import ScenarioDraft
 
 
 class TestGetProvider:

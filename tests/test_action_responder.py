@@ -8,9 +8,10 @@ from summit_sim.agents.action_responder import (
     AGENT_NAME,
     SYSTEM_PROMPT,
     USER_PROMPT_TEMPLATE,
+    ActionRequest,
+    ActionResponse,
     action_response_agent,
 )
-from summit_sim.schemas import ActionRequest, ActionResponse
 
 
 class TestActionResponseAgent:

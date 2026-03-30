@@ -17,6 +17,8 @@ from summit_sim.agents.action_responder import (
     AGENT_NAME as ACTION_RESPONDER_AGENT_NAME,
 )
 from summit_sim.agents.action_responder import (
+    ActionRequest,
+    ActionResponse,
     action_response_agent,
 )
 from summit_sim.agents.debrief import (
@@ -26,8 +28,6 @@ from summit_sim.agents.debrief import (
     generate_debrief,
 )
 from summit_sim.schemas import (
-    ActionRequest,
-    ActionResponse,
     ScenarioDraft,
     TranscriptEntry,
 )

@@ -2,8 +2,8 @@
 
 import pytest
 
+from summit_sim.agents.action_responder import ActionResponse
 from summit_sim.schemas import (
-    ActionResponse,
     ScenarioConfig,
     ScenarioDraft,
 )
