@@ -1,6 +1,8 @@
 # 🏔️ Summit-Sim
 
-**An AI-powered wilderness rescue simulator.** 
+**An AI-powered wilderness rescue simulator.**
+
+https://summit-sim.bhamm-lab.com/
 
 Summit-Sim uses human-in-the-loop review to generate curriculum-informed, interactive backcountry emergencies for dynamic Wilderness First Responder (WFR) training.
 
