@@ -10,7 +10,7 @@ from summit_sim.agents.action_responder import (
     USER_PROMPT_TEMPLATE,
     action_response_agent,
 )
-from summit_sim.schemas import ActionResponseInput, DynamicTurnResult
+from summit_sim.schemas import ActionRequest, ActionResponse
 
 
 class TestActionResponseAgent:
@@ -18,8 +18,8 @@ class TestActionResponseAgent:
 
     @pytest.fixture
     def sample_input(self):
-        """Create a sample ActionResponseInput for testing."""
-        return ActionResponseInput(
+        """Create a sample ActionRequest for testing."""
+        return ActionRequest(
             student_action="I stabilize the patient's head",
             scenario_title="Test Emergency",
             scenario_setting="Mountain trail at 8000ft",
@@ -35,8 +35,8 @@ class TestActionResponseAgent:
 
     @pytest.fixture
     def sample_input_with_history(self):
-        """Create a sample ActionResponseInput with conversation history."""
-        return ActionResponseInput(
+        """Create a sample ActionRequest with conversation history."""
+        return ActionRequest(
             student_action="I check breathing",
             scenario_title="Test Emergency",
             scenario_setting="Mountain trail at 8000ft",
@@ -61,7 +61,7 @@ class TestActionResponseAgent:
     @pytest.mark.asyncio
     async def test_action_response_agent_success(self, sample_input):
         """Test successful action processing."""
-        expected_result = DynamicTurnResult(
+        expected_result = ActionResponse(
             was_correct=True,
             completion_score=0.3,
             feedback="Good approach to stabilize the patient",
@@ -90,7 +90,7 @@ class TestActionResponseAgent:
     @pytest.mark.asyncio
     async def test_action_response_agent_with_history(self, sample_input_with_history):
         """Test action processing with conversation history."""
-        expected_result = DynamicTurnResult(
+        expected_result = ActionResponse(
             was_correct=True,
             completion_score=0.5,
             feedback="Continuing good assessment",
@@ -118,7 +118,7 @@ class TestActionResponseAgent:
     @pytest.mark.asyncio
     async def test_action_response_agent_completes_scenario(self):
         """Test action that completes the scenario."""
-        input_data = ActionResponseInput(
+        input_data = ActionRequest(
             student_action="I load patient into helicopter",
             scenario_title="Test Emergency",
             scenario_setting="Mountain trail at 8000ft",
@@ -147,7 +147,7 @@ class TestActionResponseAgent:
             hidden_state="Patient stable, evacuation ready",
         )
 
-        expected_result = DynamicTurnResult(
+        expected_result = ActionResponse(
             was_correct=True,
             completion_score=1.0,
             feedback="Excellent work! Patient successfully evacuated.",
@@ -175,7 +175,7 @@ class TestActionResponseAgent:
     @pytest.mark.asyncio
     async def test_action_response_agent_incorrect_action(self):
         """Test processing an incorrect student action."""
-        input_data = ActionResponseInput(
+        input_data = ActionRequest(
             student_action="I move the patient quickly",
             scenario_title="Test Emergency",
             scenario_setting="Mountain trail at 8000ft",
@@ -189,7 +189,7 @@ class TestActionResponseAgent:
             hidden_state="Patient unconscious, GCS 8",
         )
 
-        expected_result = DynamicTurnResult(
+        expected_result = ActionResponse(
             was_correct=False,
             completion_score=0.1,
             feedback="Moving the patient with a potential spinal injury is dangerous",
@@ -232,12 +232,12 @@ class TestActionResponseAgent:
         assert "{{hidden_state}}" in USER_PROMPT_TEMPLATE
 
 
-class TestActionResponseInput:
-    """Tests for ActionResponseInput model."""
+class TestActionRequest:
+    """Tests for ActionRequest model."""
 
     def test_create_input(self):
-        """Test creating ActionResponseInput."""
-        input_data = ActionResponseInput(
+        """Test creating ActionRequest."""
+        input_data = ActionRequest(
             student_action="I check vitals",
             scenario_title="Mountain Emergency",
             scenario_setting="Alpine ridge at 12000ft",
@@ -258,7 +258,7 @@ class TestActionResponseInput:
     def test_score_bounds(self):
         """Test that previous_score is bounded 0.0-1.0."""
         with pytest.raises(ValueError, match="less than or equal to 1"):
-            ActionResponseInput(
+            ActionRequest(
                 student_action="Test",
                 scenario_title="Test",
                 scenario_setting="Test",
@@ -275,7 +275,7 @@ class TestActionResponseInput:
     def test_turn_count_bounds(self):
         """Test that turn_count must be >= 1."""
         with pytest.raises(ValueError, match="greater than or equal to 1"):
-            ActionResponseInput(
+            ActionRequest(
                 student_action="Test",
                 scenario_title="Test",
                 scenario_setting="Test",

@@ -13,7 +13,7 @@ from summit_sim.judges.medical import get_medical_judge
 from summit_sim.judges.scoring import get_scoring_judge
 from summit_sim.judges.structure import get_structure_judge
 from summit_sim.judges.utils import JUDGE_WEIGHTS
-from summit_sim.schemas import DynamicTurnResult, RollupResult
+from summit_sim.schemas import ActionResponse, RollupResult
 from summit_sim.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -131,7 +131,7 @@ def compute_rollup_for_all_sessions(
 
 
 def compute_judge_score_for_turn(
-    turn_result: DynamicTurnResult,
+    action_response: ActionResponse,
 ) -> dict[str, float | dict[str, bool] | int]:
     """Compute judge score for a single turn (for prompt iteration testing).
 
@@ -139,7 +139,7 @@ def compute_judge_score_for_turn(
     without needing a full session. Runs all trace-level judges.
 
     Args:
-        turn_result: The DynamicTurnResult to evaluate
+        action_response: The ActionResponse to evaluate
 
     Returns:
         dict with overall score and criterion breakdown
@@ -151,9 +151,9 @@ def compute_judge_score_for_turn(
     medical_judge = get_medical_judge()
 
     # Each judge evaluates the turn
-    structure_result = structure_judge.evaluate(turn_result)
-    scoring_result = scoring_judge.evaluate(turn_result)
-    medical_result = medical_judge.evaluate(turn_result)
+    structure_result = structure_judge.evaluate(action_response)
+    scoring_result = scoring_judge.evaluate(action_response)
+    medical_result = medical_judge.evaluate(action_response)
 
     # Compute weighted score
     total_score = 0.0

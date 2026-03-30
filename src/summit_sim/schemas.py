@@ -117,8 +117,8 @@ class ScenarioConfig(BaseModel):
     )
 
 
-class DynamicTurnResult(BaseModel):
-    """Result from ActionResponder agent after evaluating student action.
+class ActionResponse(BaseModel):
+    """Response from ActionResponder agent after evaluating student action.
 
     Single schema enforces evaluation → narrative → state evolution order.
     Generated dynamically for each student action in free-text simulation.
@@ -173,7 +173,7 @@ class DynamicTurnResult(BaseModel):
     )
 
 
-class ActionResponseInput(BaseModel):
+class ActionRequest(BaseModel):
     """Clean input contract for action_response_agent.
 
     Contains only the data needed to format the prompt and call the agent.

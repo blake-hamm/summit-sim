@@ -11,10 +11,10 @@ from summit_sim.graphs.simulation import (
     create_simulation_graph,
     initialize_simulation,
     present_prompt,
-    process_player_action,
+    process_student_action,
     update_simulation_state,
 )
-from summit_sim.schemas import DynamicTurnResult, ScenarioDraft, TranscriptEntry
+from summit_sim.schemas import ActionResponse, ScenarioDraft, TranscriptEntry
 
 
 class TestSimulationState:
@@ -64,7 +64,7 @@ class TestSimulationState:
         assert state.turn_count == 0
         assert state.transcript == []
         assert state.is_complete is False
-        assert state.action_result is None
+        assert state.action_response is None
         assert state.scenario_id == ""
         assert state.debrief_report is None
         assert state.hidden_state == ""
@@ -193,7 +193,7 @@ class TestPresentPrompt:
 
     def test_present_subsequent_prompt(self, sample_scenario):
         """Test presenting prompt after first turn."""
-        action_result = DynamicTurnResult(
+        action_response = ActionResponse(
             was_correct=True,
             completion_score=0.3,
             feedback="Good first step",
@@ -203,7 +203,7 @@ class TestPresentPrompt:
         state = SimulationState(
             scenario=sample_scenario,
             turn_count=1,
-            action_result=action_result.model_dump(),
+            action_response=action_response.model_dump(),
             hidden_state="Airway clear",
         )
 
@@ -236,8 +236,8 @@ class TestPresentPrompt:
                 present_prompt(state)
 
 
-class TestProcessPlayerAction:
-    """Tests for process_player_action function."""
+class TestProcessStudentAction:
+    """Tests for process_student_action function."""
 
     @pytest.fixture
     def sample_scenario(self):
@@ -256,7 +256,7 @@ class TestProcessPlayerAction:
     @pytest.mark.asyncio
     async def test_process_action(self, sample_scenario):
         """Test processing a player action."""
-        expected_result = DynamicTurnResult(
+        expected_result = ActionResponse(
             was_correct=True,
             completion_score=0.4,
             feedback="Good assessment",
@@ -286,9 +286,9 @@ class TestProcessPlayerAction:
             mock_settings.max_turns = 5
 
             config = {"configurable": {"thread_id": "test-thread-id"}}
-            result = await process_player_action(state, config)
+            result = await process_student_action(state, config)
 
-            assert result["action_result"] == expected_result.model_dump()
+            assert result["action_response"] == expected_result.model_dump()
             mock_agent.assert_called_once()
 
     @pytest.mark.asyncio
@@ -302,7 +302,7 @@ class TestProcessPlayerAction:
             feedback="Good start",
         )
 
-        expected_result = DynamicTurnResult(
+        expected_result = ActionResponse(
             was_correct=True,
             completion_score=0.6,
             feedback="Continuing well",
@@ -324,9 +324,9 @@ class TestProcessPlayerAction:
             mock_settings.max_turns = 5
 
             config = {"configurable": {"thread_id": "test-thread-id"}}
-            result = await process_player_action(state, config)
+            result = await process_student_action(state, config)
 
-            assert result["action_result"] == expected_result.model_dump()
+            assert result["action_response"] == expected_result.model_dump()
 
 
 class TestUpdateSimulationState:
@@ -334,7 +334,7 @@ class TestUpdateSimulationState:
 
     def test_update_state_basic(self):
         """Test basic state update."""
-        action_result = DynamicTurnResult(
+        action_response = ActionResponse(
             was_correct=True,
             completion_score=0.5,
             feedback="Good action",
@@ -364,7 +364,7 @@ class TestUpdateSimulationState:
             scenario=scenario,
             turn_count=0,
             transcript=[transcript_entry],
-            action_result=action_result.model_dump(),
+            action_response=action_response.model_dump(),
             hidden_state="Previous hidden",
         )
 
@@ -383,7 +383,7 @@ class TestUpdateSimulationState:
 
     def test_update_state_completes_scenario(self):
         """Test state update when scenario completes naturally."""
-        action_result = DynamicTurnResult(
+        action_response = ActionResponse(
             was_correct=True,
             completion_score=1.0,
             feedback="Scenario complete!",
@@ -413,7 +413,7 @@ class TestUpdateSimulationState:
             scenario=scenario,
             turn_count=3,
             transcript=[transcript_entry],
-            action_result=action_result.model_dump(),
+            action_response=action_response.model_dump(),
             hidden_state="Previous",
         )
 
@@ -427,7 +427,7 @@ class TestUpdateSimulationState:
 
     def test_update_state_max_turns_reached(self):
         """Test state update when max turns reached."""
-        action_result = DynamicTurnResult(
+        action_response = ActionResponse(
             was_correct=True,
             completion_score=0.7,
             # Not naturally complete
@@ -458,7 +458,7 @@ class TestUpdateSimulationState:
             scenario=scenario,
             turn_count=4,  # Will become 5, which equals max_turns
             transcript=[transcript_entry],
-            action_result=action_result.model_dump(),
+            action_response=action_response.model_dump(),
             hidden_state="Previous",
         )
 

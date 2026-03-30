@@ -26,8 +26,8 @@ from summit_sim.agents.debrief import (
     generate_debrief,
 )
 from summit_sim.schemas import (
-    ActionResponseInput,
-    DynamicTurnResult,
+    ActionRequest,
+    ActionResponse,
     ScenarioDraft,
     TranscriptEntry,
 )
@@ -55,7 +55,7 @@ class SimulationState:
     transcript: list[TranscriptEntry] = field(default_factory=list)
     turn_count: int = 0
     is_complete: bool = False
-    action_result: dict | None = None
+    action_response: dict | None = None
     scenario_id: str = ""
     debrief_report: dict | None = None
     hidden_state: str = ""  # Ground truth for AI to reveal from
@@ -82,7 +82,7 @@ def initialize_simulation(state: SimulationState) -> SimulationState:
         transcript=[],
         turn_count=0,
         is_complete=False,
-        action_result=None,
+        action_response=None,
         scenario_id=state.scenario_id,
         debrief_report=None,
         hidden_state=state.scenario.hidden_state,
@@ -103,7 +103,7 @@ def present_prompt(state: SimulationState) -> dict:
     if state.turn_count == 0:
         current_narrative = state.scenario.initial_narrative
     else:
-        result = DynamicTurnResult.model_validate(state.action_result)
+        result = ActionResponse.model_validate(state.action_response)
         current_narrative = result.narrative_text
 
     action_data = interrupt(
@@ -137,7 +137,9 @@ def present_prompt(state: SimulationState) -> dict:
 
 
 @mlflow.trace(span_type=SpanType.WORKFLOW)
-async def process_player_action(state: SimulationState, config: RunnableConfig) -> dict:
+async def process_student_action(
+    state: SimulationState, config: RunnableConfig
+) -> dict:
     """Process student's free-text action and generate response.
 
     Calls the ActionResponder agent to evaluate the action,
@@ -158,8 +160,8 @@ async def process_player_action(state: SimulationState, config: RunnableConfig) 
 
     # Extract previous score for progressive tracking
     previous_score = 0.0
-    if state.action_result:
-        previous_score = state.action_result.get("completion_score", 0.0)
+    if state.action_response:
+        previous_score = state.action_response.get("completion_score", 0.0)
 
     # Convert transcript entries to dicts for the agent
     transcript_dicts = [
@@ -174,7 +176,7 @@ async def process_player_action(state: SimulationState, config: RunnableConfig) 
     ]
 
     # Build the clean input model for the agent
-    input_data = ActionResponseInput(
+    input_data = ActionRequest(
         student_action=student_action,
         scenario_title=state.scenario.title,
         scenario_setting=state.scenario.setting,
@@ -225,14 +227,14 @@ async def process_player_action(state: SimulationState, config: RunnableConfig) 
         )
 
     return {
-        "action_result": result.model_dump(),
+        "action_response": result.model_dump(),
         "current_trace_id": current_trace_id,
     }
 
 
 def update_simulation_state(state: SimulationState) -> dict:
     """Update simulation state after processing action."""
-    result = DynamicTurnResult.model_validate(state.action_result)
+    result = ActionResponse.model_validate(state.action_response)
 
     # Update the last transcript entry with results
     if not state.transcript:
@@ -346,14 +348,14 @@ def create_simulation_graph(
 
     workflow.add_node("initialize", initialize_simulation)
     workflow.add_node("present_prompt", present_prompt)
-    workflow.add_node("process_player_action", process_player_action)
+    workflow.add_node("process_student_action", process_student_action)
     workflow.add_node("update_simulation_state", update_simulation_state)
     workflow.add_node("generate_debrief", generate_debrief_report)
 
     workflow.set_entry_point("initialize")
     workflow.add_edge("initialize", "present_prompt")
-    workflow.add_edge("present_prompt", "process_player_action")
-    workflow.add_edge("process_player_action", "update_simulation_state")
+    workflow.add_edge("present_prompt", "process_student_action")
+    workflow.add_edge("process_student_action", "update_simulation_state")
 
     workflow.add_conditional_edges(
         "update_simulation_state",

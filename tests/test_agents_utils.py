@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from summit_sim.agents import utils as agent_utils
-from summit_sim.schemas import DynamicTurnResult, ScenarioDraft
+from summit_sim.schemas import ActionResponse, ScenarioDraft
 
 
 class TestGetProvider:
@@ -182,7 +182,7 @@ class TestSetupAgentAndPrompts:
 
             agent_utils.setup_agent_and_prompts(
                 agent_name="config-test",
-                output_type=DynamicTurnResult,
+                output_type=ActionResponse,
                 system_prompt="System prompt",
                 user_prompt_template="User {var}",
                 reasoning_effort="high",
@@ -190,7 +190,7 @@ class TestSetupAgentAndPrompts:
 
             # Verify Agent was created with correct output_type
             call_kwargs = mock_agent_class.call_args.kwargs
-            assert call_kwargs["output_type"] == DynamicTurnResult
+            assert call_kwargs["output_type"] == ActionResponse
             assert call_kwargs["system_prompt"] == "system prompt content"
 
     def test_different_reasoning_efforts(self):

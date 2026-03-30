@@ -8,7 +8,7 @@ import mlflow
 from mlflow.entities import SpanType
 
 from summit_sim.agents.utils import setup_agent_and_prompts
-from summit_sim.schemas import ActionResponseInput, DynamicTurnResult
+from summit_sim.schemas import ActionRequest, ActionResponse
 
 logger = logging.getLogger(__name__)
 
@@ -190,7 +190,7 @@ Generate the response following the narrative_text examples in the schema.
 
 
 @mlflow.trace(span_type=SpanType.AGENT)
-async def action_response_agent(input_data: ActionResponseInput) -> DynamicTurnResult:
+async def action_response_agent(input_data: ActionRequest) -> ActionResponse:
     """Process student action with minimal, explicit inputs.
 
     This is the clean boundary between LangGraph and the agent, optimized
@@ -206,7 +206,7 @@ async def action_response_agent(input_data: ActionResponseInput) -> DynamicTurnR
 
     agent, user_prompt = setup_agent_and_prompts(
         agent_name=AGENT_NAME,
-        output_type=DynamicTurnResult,
+        output_type=ActionResponse,
         system_prompt=SYSTEM_PROMPT,
         user_prompt_template=USER_PROMPT_TEMPLATE,
     )
