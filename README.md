@@ -60,3 +60,4 @@ Three specialized PydanticAI agents power the system:
 - https://sierrarescue.com/wp-content/uploads/2013/12/WILDERNESS-FIRST-RESPONDER-General-Info.pdf
 - https://sierrarescue.com/coursepdf/WFR.pdf
 - https://www.nols.edu/wp-content/uploads/2025/08/23732-Student-Logistics.pdf
+- https://www.deepsprings.edu/next/wp-content/uploads/2024/07/Student-WFR-Training.pdf

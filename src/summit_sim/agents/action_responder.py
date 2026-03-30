@@ -250,6 +250,7 @@ async def action_response_agent(input_data: ActionRequest) -> ActionResponse:
         output_type=ActionResponse,
         system_prompt=SYSTEM_PROMPT,
         user_prompt_template=USER_PROMPT_TEMPLATE,
+        register=False,
     )
 
     prompt = str(
