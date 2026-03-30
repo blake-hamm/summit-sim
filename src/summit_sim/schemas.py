@@ -19,7 +19,6 @@ class TranscriptEntry:
     student_action: str
     was_correct: bool
     feedback: str
-    learning_moments: list[str]
 
 
 def generate_scenario_id() -> str:
@@ -171,6 +170,38 @@ class DynamicTurnResult(BaseModel):
             "Turn 3: 'Patient has no recall, allergies, or meds.'\n"
             "Each narrative adds new discoveries without repeating facts."
         ),
+    )
+
+
+class ActionResponseInput(BaseModel):
+    """Clean input contract for action_response_agent.
+
+    Contains only the data needed to format the prompt and call the agent.
+    This is the explicit contract between the LangGraph node and the agent.
+    """
+
+    student_action: str = Field(..., description="The student's free-text action input")
+    scenario_title: str = Field(..., description="Title of the scenario")
+    scenario_setting: str = Field(..., description="Setting/environment description")
+    patient_summary: str = Field(
+        ..., description="Patient demographics and chief complaint"
+    )
+    hidden_truth: str = Field(..., description="The actual medical diagnosis to reveal")
+    learning_objectives: list[str] = Field(
+        ..., description="2-3 specific WFR skills being tested"
+    )
+    transcript: list[dict] = Field(
+        ..., description="Raw transcript entries for conversation history"
+    )
+    previous_score: float = Field(
+        ..., ge=0.0, le=1.0, description="Current completion score before this action"
+    )
+    turn_count: int = Field(..., ge=1, description="Current turn number (1-indexed)")
+    max_turns: int = Field(
+        ..., ge=1, description="Maximum turns allowed for this scenario"
+    )
+    hidden_state: str = Field(
+        ..., description="Ground truth medical data to reveal based on actions"
     )
 
 

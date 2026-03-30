@@ -8,155 +8,58 @@ from summit_sim.agents.action_responder import (
     AGENT_NAME,
     SYSTEM_PROMPT,
     USER_PROMPT_TEMPLATE,
-    _format_conversation_history,
-    process_action,
+    action_response_agent,
 )
-from summit_sim.graphs.simulation import SimulationState
-from summit_sim.schemas import DynamicTurnResult, ScenarioDraft, TranscriptEntry
+from summit_sim.schemas import ActionResponseInput, DynamicTurnResult
 
 
-class TestFormatConversationHistory:
-    """Tests for _format_conversation_history function."""
-
-    def test_empty_history(self):
-        """Test formatting empty transcript."""
-        result = _format_conversation_history([])
-        assert result == "Initial turn - no previous actions."
-
-    def test_single_entry(self):
-        """Test formatting single transcript entry."""
-        transcript = [
-            TranscriptEntry(
-                turn_id=1,
-                turn_narrative="You check the patient's airway...",
-                student_action="I check the patient's airway",
-                was_correct=True,
-                feedback="Good first step in assessing patient",
-                learning_moments=["Airway assessment"],
-            )
-        ]
-
-        result = _format_conversation_history(transcript)
-
-        assert "Student: I check the patient's airway" in result
-        assert "AI: You check the patient's airway..." in result
-
-    def test_multiple_entries(self):
-        """Test formatting multiple transcript entries."""
-        transcript = [
-            TranscriptEntry(
-                turn_id=1,
-                turn_narrative="Narrative 1",
-                student_action="Action 1",
-                was_correct=True,
-                feedback="Feedback 1",
-                learning_moments=["Point 1"],
-            ),
-            TranscriptEntry(
-                turn_id=2,
-                turn_narrative="Narrative 2",
-                student_action="Action 2",
-                was_correct=False,
-                feedback="Feedback 2",
-                learning_moments=["Point 2"],
-            ),
-        ]
-
-        result = _format_conversation_history(transcript)
-
-        assert "Student: Action 1" in result
-        assert "Student: Action 2" in result
-        assert "AI: Narrative 1" in result
-        assert "AI: Narrative 2" in result
-
-    def test_history_truncation(self):
-        """Test that only last 5 entries are included."""
-        transcript = [
-            TranscriptEntry(
-                turn_id=i,
-                turn_narrative=f"Narrative {i}",
-                student_action=f"Action {i}",
-                was_correct=True,
-                feedback=f"Feedback {i}",
-                learning_moments=[f"Point {i}"],
-            )
-            for i in range(1, 11)
-        ]
-
-        result = _format_conversation_history(transcript)
-
-        # Should only show last 5 entries (turns 6-10)
-        assert "Student: Action 6" in result
-        assert "Student: Action 10" in result
-        # Check that early entries (1-5) are not present as student actions
-        assert "Student: Action 1\n" not in result
-        assert "Student: Action 5\n" not in result
-
-    def test_feedback_truncation(self):
-        """Test that long feedback is truncated."""
-        transcript = [
-            TranscriptEntry(
-                turn_id=1,
-                turn_narrative="Narrative",
-                student_action="Action",
-                was_correct=True,
-                feedback="A" * 200,  # Long feedback
-                learning_moments=["Point"],
-            )
-        ]
-
-        result = _format_conversation_history(transcript)
-
-        # Check that feedback is truncated (showing ...)
-        assert "..." in result
-
-
-class TestProcessAction:
-    """Tests for process_action function."""
+class TestActionResponseAgent:
+    """Tests for action_response_agent function."""
 
     @pytest.fixture
-    def sample_scenario(self):
-        """Create a sample scenario for testing."""
-        return ScenarioDraft(
-            title="Test Emergency",
-            setting="Mountain trail at 8000ft",
+    def sample_input(self):
+        """Create a sample ActionResponseInput for testing."""
+        return ActionResponseInput(
+            student_action="I stabilize the patient's head",
+            scenario_title="Test Emergency",
+            scenario_setting="Mountain trail at 8000ft",
             patient_summary="30yo male with head injury",
             hidden_truth="Severe concussion with potential skull fracture",
             learning_objectives=["Assess consciousness", "Stabilize head"],
-            initial_narrative="You find an unconscious hiker...",
-            hidden_state="Patient unconscious, GCS 8",
-            scene_state="Clear weather, 2 hours to sunset",
-        )
-
-    @pytest.fixture
-    def sample_simulation_state(self):
-        """Create a sample simulation state for testing."""
-        scenario = ScenarioDraft(
-            title="Test Emergency",
-            setting="Mountain trail at 8000ft",
-            patient_summary="30yo male with head injury",
-            hidden_truth="Severe concussion with potential skull fracture",
-            learning_objectives=["Assess consciousness", "Stabilize head"],
-            initial_narrative="You find an unconscious hiker...",
-            hidden_state="Patient unconscious, GCS 8",
-            scene_state="Clear weather, 2 hours to sunset",
-        )
-
-        return SimulationState(
-            scenario=scenario,
             transcript=[],
-            turn_count=0,
-            is_complete=False,
-            action_result=None,
-            scenario_id="test-scenario-123",
-            debrief_report=None,
-            hidden_state=scenario.hidden_state,
+            previous_score=0.0,
+            turn_count=1,
+            max_turns=5,
+            hidden_state="Patient unconscious, GCS 8",
+        )
+
+    @pytest.fixture
+    def sample_input_with_history(self):
+        """Create a sample ActionResponseInput with conversation history."""
+        return ActionResponseInput(
+            student_action="I check breathing",
+            scenario_title="Test Emergency",
+            scenario_setting="Mountain trail at 8000ft",
+            patient_summary="30yo male with head injury",
+            hidden_truth="Severe concussion with potential skull fracture",
+            learning_objectives=["Assess consciousness", "Stabilize head"],
+            transcript=[
+                {
+                    "turn_id": 1,
+                    "student_action": "Checked airway",
+                    "turn_narrative": "Airway is clear",
+                    "was_correct": True,
+                    "feedback": "Good first step",
+                }
+            ],
+            previous_score=0.2,
+            turn_count=2,
+            max_turns=5,
+            hidden_state="Patient unconscious, GCS 8",
         )
 
     @pytest.mark.asyncio
-    async def test_process_action_success(
-        self, sample_scenario, sample_simulation_state
-    ):
+    async def test_action_response_agent_success(self, sample_input):
         """Test successful action processing."""
         expected_result = DynamicTurnResult(
             was_correct=True,
@@ -179,39 +82,14 @@ class TestProcessAction:
 
             mock_setup.return_value = (mock_agent, mock_user_prompt)
 
-            result = await process_action(
-                student_action="I stabilize the patient's head",
-                scenario=sample_scenario,
-                simulation_state=sample_simulation_state,
-                max_turns=5,
-            )
+            result = await action_response_agent(sample_input)
 
             assert result == expected_result
             assert result.was_correct is True
 
     @pytest.mark.asyncio
-    async def test_process_action_with_transcript_history(self, sample_scenario):
-        """Test action processing with transcript history."""
-        transcript_entry = TranscriptEntry(
-            turn_id=1,
-            turn_narrative="Airway is clear",
-            student_action="Checked airway",
-            was_correct=True,
-            feedback="Good first step",
-            learning_moments=["Airway assessment"],
-        )
-
-        state_with_history = SimulationState(
-            scenario=sample_scenario,
-            transcript=[transcript_entry],
-            turn_count=1,
-            is_complete=False,
-            action_result=None,
-            scenario_id="test-scenario-123",
-            debrief_report=None,
-            hidden_state=sample_scenario.hidden_state,
-        )
-
+    async def test_action_response_agent_with_history(self, sample_input_with_history):
+        """Test action processing with conversation history."""
         expected_result = DynamicTurnResult(
             was_correct=True,
             completion_score=0.5,
@@ -233,26 +111,39 @@ class TestProcessAction:
 
             mock_setup.return_value = (mock_agent, mock_user_prompt)
 
-            result = await process_action(
-                student_action="I check breathing",
-                scenario=sample_scenario,
-                simulation_state=state_with_history,
-                max_turns=5,
-            )
+            result = await action_response_agent(sample_input_with_history)
 
             assert result == expected_result
 
     @pytest.mark.asyncio
-    async def test_process_action_completes_scenario(self, sample_scenario):
+    async def test_action_response_agent_completes_scenario(self):
         """Test action that completes the scenario."""
-        state = SimulationState(
-            scenario=sample_scenario,
-            transcript=[],
-            turn_count=3,
-            is_complete=False,
-            action_result={"completion_score": 0.6},
-            scenario_id="test-scenario-123",
-            debrief_report=None,
+        input_data = ActionResponseInput(
+            student_action="I load patient into helicopter",
+            scenario_title="Test Emergency",
+            scenario_setting="Mountain trail at 8000ft",
+            patient_summary="30yo male with head injury",
+            hidden_truth="Severe concussion with potential skull fracture",
+            learning_objectives=["Assess consciousness", "Stabilize head"],
+            transcript=[
+                {
+                    "turn_id": 1,
+                    "student_action": "Stabilized patient",
+                    "turn_narrative": "Patient is stable",
+                    "was_correct": True,
+                    "feedback": "Good work",
+                },
+                {
+                    "turn_id": 2,
+                    "student_action": "Called for evacuation",
+                    "turn_narrative": "Helicopter is on the way",
+                    "was_correct": True,
+                    "feedback": "Correct decision",
+                },
+            ],
+            previous_score=0.6,
+            turn_count=4,
+            max_turns=5,
             hidden_state="Patient stable, evacuation ready",
         )
 
@@ -277,20 +168,27 @@ class TestProcessAction:
 
             mock_setup.return_value = (mock_agent, mock_user_prompt)
 
-            result = await process_action(
-                student_action="I load patient into helicopter",
-                scenario=sample_scenario,
-                simulation_state=state,
-                max_turns=5,
-            )
+            result = await action_response_agent(input_data)
 
             assert result.completion_score == 1.0
 
     @pytest.mark.asyncio
-    async def test_process_action_incorrect_action(
-        self, sample_scenario, sample_simulation_state
-    ):
+    async def test_action_response_agent_incorrect_action(self):
         """Test processing an incorrect student action."""
+        input_data = ActionResponseInput(
+            student_action="I move the patient quickly",
+            scenario_title="Test Emergency",
+            scenario_setting="Mountain trail at 8000ft",
+            patient_summary="30yo male with head injury",
+            hidden_truth="Severe concussion with potential skull fracture",
+            learning_objectives=["Assess consciousness", "Stabilize head"],
+            transcript=[],
+            previous_score=0.0,
+            turn_count=1,
+            max_turns=5,
+            hidden_state="Patient unconscious, GCS 8",
+        )
+
         expected_result = DynamicTurnResult(
             was_correct=False,
             completion_score=0.1,
@@ -312,12 +210,7 @@ class TestProcessAction:
 
             mock_setup.return_value = (mock_agent, mock_user_prompt)
 
-            result = await process_action(
-                student_action="I move the patient quickly",
-                scenario=sample_scenario,
-                simulation_state=sample_simulation_state,
-                max_turns=5,
-            )
+            result = await action_response_agent(input_data)
 
             assert result.was_correct is False
 
@@ -337,3 +230,61 @@ class TestProcessAction:
         assert "{{title}}" in USER_PROMPT_TEMPLATE
         assert "{{student_action}}" in USER_PROMPT_TEMPLATE
         assert "{{hidden_state}}" in USER_PROMPT_TEMPLATE
+
+
+class TestActionResponseInput:
+    """Tests for ActionResponseInput model."""
+
+    def test_create_input(self):
+        """Test creating ActionResponseInput."""
+        input_data = ActionResponseInput(
+            student_action="I check vitals",
+            scenario_title="Mountain Emergency",
+            scenario_setting="Alpine ridge at 12000ft",
+            patient_summary="45yo female with chest pain",
+            hidden_truth="High altitude pulmonary edema",
+            learning_objectives=["Assess breathing", "Recognize HAPE"],
+            transcript=[],
+            previous_score=0.0,
+            turn_count=1,
+            max_turns=10,
+            hidden_state="RR 28, O2 sat 82% at altitude",
+        )
+
+        assert input_data.student_action == "I check vitals"
+        assert input_data.turn_count == 1
+        assert input_data.previous_score == 0.0
+
+    def test_score_bounds(self):
+        """Test that previous_score is bounded 0.0-1.0."""
+        with pytest.raises(ValueError, match="less than or equal to 1"):
+            ActionResponseInput(
+                student_action="Test",
+                scenario_title="Test",
+                scenario_setting="Test",
+                patient_summary="Test",
+                hidden_truth="Test",
+                learning_objectives=["Test"],
+                transcript=[],
+                previous_score=1.5,  # Invalid: > 1.0
+                turn_count=1,
+                max_turns=5,
+                hidden_state="Test",
+            )
+
+    def test_turn_count_bounds(self):
+        """Test that turn_count must be >= 1."""
+        with pytest.raises(ValueError, match="greater than or equal to 1"):
+            ActionResponseInput(
+                student_action="Test",
+                scenario_title="Test",
+                scenario_setting="Test",
+                patient_summary="Test",
+                hidden_truth="Test",
+                learning_objectives=["Test"],
+                transcript=[],
+                previous_score=0.0,
+                turn_count=0,  # Invalid: < 1
+                max_turns=5,
+                hidden_state="Test",
+            )

@@ -269,7 +269,6 @@ class TestProcessPlayerAction:
             student_action="I check vital signs",
             was_correct=False,
             feedback="",
-            learning_moments=[],
         )
 
         state = SimulationState(
@@ -280,17 +279,17 @@ class TestProcessPlayerAction:
         )
 
         with (
-            patch("summit_sim.graphs.simulation.process_action") as mock_process,
+            patch("summit_sim.graphs.simulation.action_response_agent") as mock_agent,
             patch("summit_sim.settings.settings") as mock_settings,
         ):
-            mock_process.return_value = expected_result
+            mock_agent.return_value = expected_result
             mock_settings.max_turns = 5
 
             config = {"configurable": {"thread_id": "test-thread-id"}}
             result = await process_player_action(state, config)
 
             assert result["action_result"] == expected_result.model_dump()
-            mock_process.assert_called_once()
+            mock_agent.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_process_action_with_transcript(self, sample_scenario):
@@ -301,7 +300,6 @@ class TestProcessPlayerAction:
             student_action="First action",
             was_correct=True,
             feedback="Good start",
-            learning_moments=["Lesson 1"],
         )
 
         expected_result = DynamicTurnResult(
@@ -319,10 +317,10 @@ class TestProcessPlayerAction:
         )
 
         with (
-            patch("summit_sim.graphs.simulation.process_action") as mock_process,
+            patch("summit_sim.graphs.simulation.action_response_agent") as mock_agent,
             patch("summit_sim.settings.settings") as mock_settings,
         ):
-            mock_process.return_value = expected_result
+            mock_agent.return_value = expected_result
             mock_settings.max_turns = 5
 
             config = {"configurable": {"thread_id": "test-thread-id"}}
@@ -349,7 +347,6 @@ class TestUpdateSimulationState:
             student_action="I treat the patient",
             was_correct=False,
             feedback="",
-            learning_moments=[],
         )
 
         scenario = ScenarioDraft(
@@ -399,7 +396,6 @@ class TestUpdateSimulationState:
             student_action="Evacuate patient",
             was_correct=False,
             feedback="",
-            learning_moments=[],
         )
 
         scenario = ScenarioDraft(
@@ -445,7 +441,6 @@ class TestUpdateSimulationState:
             student_action="Action",
             was_correct=False,
             feedback="",
-            learning_moments=[],
         )
 
         scenario = ScenarioDraft(

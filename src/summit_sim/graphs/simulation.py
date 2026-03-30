@@ -13,11 +13,24 @@ from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import interrupt
 from mlflow.entities import SpanType
 
-from summit_sim.agents.action_responder import AGENT_NAME as ACTION_RESPONDER_AGENT_NAME
-from summit_sim.agents.action_responder import process_action
-from summit_sim.agents.debrief import AGENT_NAME as DEBRIEF_AGENT_NAME
-from summit_sim.agents.debrief import generate_debrief
-from summit_sim.schemas import DynamicTurnResult, ScenarioDraft, TranscriptEntry
+from summit_sim.agents.action_responder import (
+    AGENT_NAME as ACTION_RESPONDER_AGENT_NAME,
+)
+from summit_sim.agents.action_responder import (
+    action_response_agent,
+)
+from summit_sim.agents.debrief import (
+    AGENT_NAME as DEBRIEF_AGENT_NAME,
+)
+from summit_sim.agents.debrief import (
+    generate_debrief,
+)
+from summit_sim.schemas import (
+    ActionResponseInput,
+    DynamicTurnResult,
+    ScenarioDraft,
+    TranscriptEntry,
+)
 from summit_sim.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -118,13 +131,12 @@ def present_prompt(state: SimulationState) -> dict:
                 student_action=student_action,
                 was_correct=False,  # Will be updated by action result
                 feedback="",
-                learning_moments=[],
             )
         ]
     }
 
 
-@mlflow.trace(span_type=SpanType.AGENT)
+@mlflow.trace(span_type=SpanType.WORKFLOW)
 async def process_player_action(state: SimulationState, config: RunnableConfig) -> dict:
     """Process student's free-text action and generate response.
 
@@ -149,12 +161,34 @@ async def process_player_action(state: SimulationState, config: RunnableConfig) 
     if state.action_result:
         previous_score = state.action_result.get("completion_score", 0.0)
 
-    result = await process_action(
+    # Convert transcript entries to dicts for the agent
+    transcript_dicts = [
+        {
+            "turn_id": entry.turn_id,
+            "student_action": entry.student_action,
+            "turn_narrative": entry.turn_narrative,
+            "was_correct": entry.was_correct,
+            "feedback": entry.feedback,
+        }
+        for entry in state.transcript
+    ]
+
+    # Build the clean input model for the agent
+    input_data = ActionResponseInput(
         student_action=student_action,
-        scenario=state.scenario,
-        simulation_state=state,
+        scenario_title=state.scenario.title,
+        scenario_setting=state.scenario.setting,
+        patient_summary=state.scenario.patient_summary,
+        hidden_truth=state.scenario.hidden_truth,
+        learning_objectives=state.scenario.learning_objectives,
+        transcript=transcript_dicts,
+        previous_score=previous_score,
+        turn_count=state.turn_count + 1,
         max_turns=max_turns,
+        hidden_state=state.hidden_state,
     )
+
+    result = await action_response_agent(input_data)
 
     # Programmatic failsafe: ensure score never decreases
     result.completion_score = max(previous_score, result.completion_score)
@@ -211,7 +245,6 @@ def update_simulation_state(state: SimulationState) -> dict:
         student_action=state.transcript[-1].student_action,
         was_correct=result.was_correct,
         feedback=result.feedback,
-        learning_moments=[result.feedback] if result.feedback else [],
     )
 
     updated_transcript = state.transcript[:-1] + [updated_entry]
