@@ -36,7 +36,7 @@ from summit_sim.settings import settings
 logger = logging.getLogger(__name__)
 
 # Completion threshold - scenario ends when score reaches this value
-COMPLETION_THRESHOLD = 0.7
+COMPLETION_THRESHOLD = 0.8
 
 if TYPE_CHECKING:
     from langgraph.checkpoint.base import BaseCheckpointSaver
@@ -222,7 +222,7 @@ async def process_student_action(
                 "student.action_length": len(student_action),
                 "turn.was_correct": result.was_correct,
                 "turn.completion_score": result.completion_score,
-                "turn.is_complete": result.completion_score >= COMPLETION_THRESHOLD,
+                "turn.is_complete": result.completion_score > COMPLETION_THRESHOLD,
             }
         )
 
