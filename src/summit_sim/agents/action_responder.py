@@ -6,7 +6,6 @@ import logging
 from typing import TYPE_CHECKING
 
 import mlflow
-from mlflow.entities import SpanType
 from pydantic import BaseModel, Field
 
 from summit_sim.agents.utils import setup_agent_and_prompts
@@ -282,7 +281,7 @@ Generate the response following the narrative_text examples in the schema.
 """
 
 
-@mlflow.trace(span_type=SpanType.AGENT)
+@mlflow.trace(span_type="AGENT")
 async def action_response_agent(input_data: ActionRequest) -> ActionResponse:
     """Process student action with minimal, explicit inputs.
 

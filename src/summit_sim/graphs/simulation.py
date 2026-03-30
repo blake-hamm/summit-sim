@@ -136,7 +136,7 @@ def present_prompt(state: SimulationState) -> dict:
     }
 
 
-@mlflow.trace(span_type=SpanType.WORKFLOW)
+@mlflow.trace(span_type="WORKFLOW")
 async def process_student_action(
     state: SimulationState, config: RunnableConfig
 ) -> dict:
