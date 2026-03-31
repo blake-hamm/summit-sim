@@ -19,7 +19,6 @@ class TranscriptEntry:
     student_action: str
     was_correct: bool
     feedback: str
-    learning_moments: list[str]
 
 
 def generate_scenario_id() -> str:
@@ -118,62 +117,6 @@ class ScenarioConfig(BaseModel):
     )
 
 
-class DynamicTurnResult(BaseModel):
-    """Result from ActionResponder agent after evaluating student action.
-
-    Single schema enforces evaluation → narrative → state evolution order.
-    Generated dynamically for each student action in free-text simulation.
-    """
-
-    was_correct: bool = Field(
-        ..., description="Whether the student's action was medically correct"
-    )
-    completion_score: float = Field(
-        ...,
-        ge=0.0,
-        le=1.0,
-        description="Progress toward scenario completion (0.0-1.0 scale)",
-    )
-
-    feedback: str = Field(
-        ..., description="AI-generated personalized feedback on the action"
-    )
-    narrative_text: str = Field(
-        ...,
-        description=(
-            "Immersive narrative describing what the student discovers "
-            "based on their action. Progressively reveal hidden information "
-            "from hidden_truth/hidden_state as student performs assessments. "
-            "3-5 sentences, end with open question inviting next action.\n\n"
-            "EXAMPLE 1 - Vitals check reveals findings:\n"
-            "Student: 'I check pulse and breathing.'\n"
-            "AI: 'You check wrist pulse - rapid at 110 bpm. Breathing is "
-            "quick and shallow at 24/min. Skin feels cool and clammy. "
-            "What do you check next?'\n\n"
-            "EXAMPLE 2 - Physical exam reveals injuries:\n"
-            "Student: 'I do a head-to-toe exam.'\n"
-            "AI: 'Head shows no trauma. Chest rises evenly. Abdomen soft. "
-            "Right ankle has deformity, swelling, and bruising. "
-            "Foot is cold. How do you proceed?'\n\n"
-            "EXAMPLE 3 - SAMPLE history reveals info:\n"
-            "Student: 'I ask about allergies and history.'\n"
-            "AI: 'Patient reports penicillin allergy and carries EpiPen "
-            "for bee stings. Takes asthma meds. Last ate 4 hours ago. "
-            "Does this change your priorities?'\n\n"
-            "EXAMPLE 4 - Scene assessment reveals changes:\n"
-            "Student: 'I scan for dangers.'\n"
-            "AI: 'Dark clouds approach from west - storm in 30 min. "
-            "Temperature dropping. 2 hours of daylight left. Limited "
-            "shelter on this ridge. How does this affect your plan?'\n\n"
-            "EXAMPLE 5 - Progressive revelation over time:\n"
-            "Turn 1: 'You check vitals - HR 110, RR 24. Skin pale.'\n"
-            "Turn 2: 'You find burns on right calf. Neck tender at C4.'\n"
-            "Turn 3: 'Patient has no recall, allergies, or meds.'\n"
-            "Each narrative adds new discoveries without repeating facts."
-        ),
-    )
-
-
 class ScenarioDraft(BaseModel):
     """Complete AI-generated wilderness rescue scenario.
 
@@ -258,6 +201,30 @@ class ScenarioDraft(BaseModel):
             "trailhead. Immediate danger of secondary lightning strikes.'"
         ),
     )
+
+
+class RollupResult(BaseModel):
+    """Final weighted score for optimization across judge criteria.
+
+    Aggregates results from trace-level and session-level judges
+    to produce an overall quality score for prompt optimization.
+    """
+
+    session_id: str = Field(..., description="Unique session identifier")
+    overall_score: float = Field(
+        ..., ge=0.0, le=1.0, description="Weighted score from all criteria (0.0-1.0)"
+    )
+    trace_contribution: float = Field(
+        ..., ge=0.0, le=0.85, description="Score from trace-level criteria only"
+    )
+    session_contribution: float = Field(
+        ..., ge=0.0, le=0.20, description="Score from session-level criteria only"
+    )
+    breakdown: dict[str, bool] = Field(
+        ..., description="Criterion name -> passed status mapping"
+    )
+    total_criteria: int = Field(..., description="Total number of criteria evaluated")
+    passed_criteria: int = Field(..., description="Number of criteria that passed")
 
 
 class DebriefReport(BaseModel):

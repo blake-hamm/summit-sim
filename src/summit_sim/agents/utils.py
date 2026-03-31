@@ -112,9 +112,14 @@ def get_provider() -> OpenRouterProvider:
 _agent_container: dict[str, tuple[Agent[Any, Any], PromptVersion]] = {}
 
 
-def _get_or_register_prompt(prompt_name: str, template: str) -> PromptVersion:
-    """Get prompt from registry, registering new version if changed."""
+def _get_or_register_prompt(
+    prompt_name: str, template: str, register: bool = True
+) -> PromptVersion:
+    """Get prompt from registry, optionally registering new version if changed."""
     prompt_uri = f"prompts:/{prompt_name}@latest"
+
+    if not register:
+        return mlflow.genai.load_prompt(prompt_uri)  # type: ignore[attr-defined]
 
     try:
         loaded = mlflow.genai.load_prompt(prompt_uri)  # type: ignore[attr-defined]
@@ -134,20 +139,21 @@ def _get_or_register_prompt(prompt_name: str, template: str) -> PromptVersion:
     return mlflow.genai.load_prompt(prompt_uri)  # type: ignore[attr-defined]
 
 
-def setup_agent_and_prompts(
+def setup_agent_and_prompts(  # noqa: PLR0913
     agent_name: str,
     output_type: type,
     system_prompt: str,
     user_prompt_template: str,
     reasoning_effort: Literal["low", "medium", "high"] = "medium",
+    register: bool = True,
 ) -> tuple[Agent[Any, Any], PromptVersion]:
     """Create/configure agent with versioned prompts."""
     if agent_name not in _agent_container:
         system_prompt_obj = _get_or_register_prompt(
-            f"{agent_name}-system", system_prompt
+            f"{agent_name}-system", system_prompt, register=register
         )
         user_prompt_obj = _get_or_register_prompt(
-            f"{agent_name}-user", user_prompt_template
+            f"{agent_name}-user", user_prompt_template, register=register
         )
         agent = Agent(
             OpenRouterModel(

@@ -106,6 +106,7 @@ async def generate_scenario_node(state: AuthorState, config: RunnableConfig) -> 
                 "session_id": thread_id,
                 "scenario_id": state.scenario_id,
                 "graph_type": "author",
+                "agent_name": GENERATOR_AGENT_NAME,
                 "mlflow_env": settings.mlflow_env,
             },
         )

@@ -79,7 +79,6 @@ class TestFormatTranscriptSummary:
                 student_action="I check vitals",
                 was_correct=True,
                 feedback="Good first step",
-                learning_moments=["Lesson 1"],
             ),
         ]
 
@@ -98,7 +97,6 @@ class TestFormatTranscriptSummary:
                 student_action="Action 1",
                 was_correct=True,
                 feedback="Good",
-                learning_moments=[],
             ),
             TranscriptEntry(
                 turn_id=2,
@@ -106,7 +104,6 @@ class TestFormatTranscriptSummary:
                 student_action="Action 2",
                 was_correct=False,
                 feedback="Should have acted differently",
-                learning_moments=["Lesson"],
             ),
         ]
 
@@ -141,7 +138,6 @@ class TestBuildDebriefPrompt:
                 student_action="Action 1",
                 was_correct=True,
                 feedback="Good",
-                learning_moments=["Lesson"],
             ),
             TranscriptEntry(
                 turn_id=2,
@@ -149,7 +145,6 @@ class TestBuildDebriefPrompt:
                 student_action="Action 2",
                 was_correct=False,
                 feedback="Bad",
-                learning_moments=["Lesson 2"],
             ),
         ]
 
@@ -195,7 +190,6 @@ class TestGenerateDebrief:
                 student_action="Good action",
                 was_correct=True,
                 feedback="Well done",
-                learning_moments=["Lesson 1"],
             ),
             TranscriptEntry(
                 turn_id=2,
@@ -203,7 +197,6 @@ class TestGenerateDebrief:
                 student_action="Bad action",
                 was_correct=False,
                 feedback="Should improve",
-                learning_moments=["Lesson 2"],
             ),
         ]
 
@@ -255,7 +248,6 @@ class TestGenerateDebrief:
                 student_action="Bad action",
                 was_correct=False,
                 feedback="Critical error",
-                learning_moments=["Important lesson"],
             ),
         ]
 
@@ -305,7 +297,6 @@ class TestGenerateDebrief:
                 student_action=f"Perfect action {i}",
                 was_correct=True,
                 feedback="Excellent!",
-                learning_moments=[f"Lesson {i}"],
             )
             for i in range(1, 4)
         ]

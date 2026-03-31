@@ -101,8 +101,12 @@ def test_setup_agent_and_prompts_creates_new():
 
         # Should have created a new agent and returned tuple with user prompt object
         assert mock_get_prompt.call_count == 2
-        mock_get_prompt.assert_any_call("test-agent-system", "Test system prompt")
-        mock_get_prompt.assert_any_call("test-agent-user", "Test user prompt {{var}}")
+        mock_get_prompt.assert_any_call(
+            "test-agent-system", "Test system prompt", register=True
+        )
+        mock_get_prompt.assert_any_call(
+            "test-agent-user", "Test user prompt {{var}}", register=True
+        )
         mock_agent_class.assert_called_once()
 
         # Verify agent was created with system prompt template

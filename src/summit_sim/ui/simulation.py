@@ -6,12 +6,13 @@ from typing import TYPE_CHECKING
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import Command
 
+from summit_sim.agents.action_responder import ActionResponse
 from summit_sim.graphs.simulation import (
     COMPLETION_THRESHOLD,
     SimulationState,
 )
 from summit_sim.graphs.utils import AppState
-from summit_sim.schemas import DebriefReport, DynamicTurnResult, ScenarioDraft
+from summit_sim.schemas import DebriefReport, ScenarioDraft
 from summit_sim.settings import settings
 from summit_sim.ui.utils import format_scenario_intro
 
@@ -91,7 +92,7 @@ async def run_simulation() -> None:
         transcript=[],
         turn_count=0,
         is_complete=False,
-        action_result=None,
+        action_response=None,
         scenario_id=scenario_id,
         hidden_state=scenario.hidden_state,
         current_trace_id=authoring_trace_id,
@@ -115,8 +116,8 @@ async def handle_simulation_loop(  # noqa: PLR0912
 
     while True:
         # Display feedback from previous action if available
-        if state.action_result:
-            result = DynamicTurnResult.model_validate(state.action_result)
+        if state.action_response:
+            result = ActionResponse.model_validate(state.action_response)
 
             await cl.Message(
                 content=(
@@ -142,7 +143,7 @@ async def handle_simulation_loop(  # noqa: PLR0912
             current_narrative = scenario.initial_narrative
         else:
             # Subsequent turns - show narrative from last action result
-            result = DynamicTurnResult.model_validate(state.action_result)
+            result = ActionResponse.model_validate(state.action_response)
             current_narrative = result.narrative_text
 
         # Scene conditions are shown in the intro; narrative is the prompt
@@ -196,8 +197,8 @@ async def show_debrief(state: SimulationState) -> None:
     debrief = DebriefReport.model_validate(state.debrief_report)
 
     # Pull progressive completion_score from LangGraph state
-    action_result = state.action_result or {}
-    completion_score = action_result.get("completion_score", 0)
+    action_response = state.action_response or {}
+    completion_score = action_response.get("completion_score", 0)
     score_percent = completion_score * 100
     score_emoji = "✅" if completion_score >= COMPLETION_THRESHOLD else "❌"
 

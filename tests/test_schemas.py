@@ -2,8 +2,8 @@
 
 import pytest
 
+from summit_sim.agents.action_responder import ActionResponse
 from summit_sim.schemas import (
-    DynamicTurnResult,
     ScenarioConfig,
     ScenarioDraft,
 )
@@ -95,12 +95,12 @@ class TestScenarioDraft:
         assert scenario.scene_state == "Initial scene state"
 
 
-class TestDynamicTurnResult:
-    """Tests for DynamicTurnResult schema."""
+class TestActionResponse:
+    """Tests for ActionResponse schema."""
 
-    def test_dynamic_turn_result_creation(self):
-        """Test creating a dynamic turn result."""
-        result = DynamicTurnResult(
+    def test_action_response_creation(self):
+        """Test creating an action response."""
+        result = ActionResponse(
             was_correct=True,
             completion_score=0.75,
             feedback="Good job assessing the patient.",
@@ -114,9 +114,9 @@ class TestDynamicTurnResult:
             result.narrative_text == "You check the patient's pulse and find it weak."
         )
 
-    def test_dynamic_turn_result_complete(self):
+    def test_action_response_complete(self):
         """Test creating a completed scenario result."""
-        result = DynamicTurnResult(
+        result = ActionResponse(
             was_correct=True,
             completion_score=1.0,
             feedback="Scenario complete. Patient evacuated successfully.",
@@ -125,10 +125,10 @@ class TestDynamicTurnResult:
 
         assert result.completion_score == 1.0
 
-    def test_dynamic_turn_result_score_bounds(self):
+    def test_action_response_score_bounds(self):
         """Test that completion_score must be between 0.0 and 1.0."""
         with pytest.raises(ValueError, match="Input should be less than or equal to 1"):
-            DynamicTurnResult(
+            ActionResponse(
                 was_correct=True,
                 completion_score=1.5,
                 feedback="Test",
@@ -138,7 +138,7 @@ class TestDynamicTurnResult:
         with pytest.raises(
             ValueError, match="Input should be greater than or equal to 0"
         ):
-            DynamicTurnResult(
+            ActionResponse(
                 was_correct=True,
                 completion_score=-0.1,
                 feedback="Test",

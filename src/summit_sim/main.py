@@ -49,10 +49,16 @@ class ApplicationLifecycle:
             mlflow.pydantic_ai.autolog()  # type: ignore[attr-defined]
             logger.debug("MLflow initialized")
 
-            # 2. Safe async init inside the active event loop
+            # 2. Initialize judges for automatic evaluation
+            # DISABLED: MLflow bug #20782 - automated scoring fails
+            # TODO: Re-enable once MLflow PR #20784 is merged (v3.10.2+)
+            # initialize_judges()
+            # logger.debug("Judges initialized")
+
+            # 3. Safe async init inside the active event loop
             redis_client = Redis.from_url(settings.redis_url)
 
-            # 3. Attach Database singletons to AppState
+            # 4. Attach Database singletons to AppState
             AppState.store = AsyncRedisStore(
                 redis_client=redis_client,
                 ttl={"default_ttl": 10080, "refresh_on_read": True},  # 7 Days
@@ -62,12 +68,12 @@ class ApplicationLifecycle:
                 ttl={"default_ttl": 1440, "refresh_on_read": True},  # 24 Hours
             )
 
-            # 4. Setup database indices
+            # 5. Setup database indices
             await AppState.store.setup()
             await AppState.checkpointer.setup()
             logger.debug("Redis persistence initialized")
 
-            # 5. Compile our globally shared, thread-safe graphs once
+            # 6. Compile our globally shared, thread-safe graphs once
             assert AppState.checkpointer is not None
             assert AppState.store is not None
             AppState.author_graph = create_author_graph(

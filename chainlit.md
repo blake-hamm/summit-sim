@@ -68,6 +68,7 @@ Thanks to **Keenan Grady** at the [Ogden Avalanche Center](https://ogdenavalanch
 - 💼 **[bhamm-lab.com](https://site.bhamm-lab.com/about/)** – About me
 - 📖 **[docs.bhamm-lab.com](https://docs.bhamm-lab.com)** – Infrastructure Documentation
 - 🏔️ **[ogdenavalanche.org](https://ogdenavalanche.org)** – Backcountry Safety Education
+- 💾 **[github](https://github.com/blake-hamm/summit-sim) - Github project link
 
 ---
 
