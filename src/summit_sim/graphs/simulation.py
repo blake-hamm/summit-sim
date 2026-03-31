@@ -255,7 +255,7 @@ def update_simulation_state(state: SimulationState) -> dict:
     # is_complete is derived from completion_score (>= 0.7 = 70% threshold)
     next_turn_count = state.turn_count + 1
     is_max_turns_reached = next_turn_count >= settings.max_turns
-    is_evacuation_complete = result.completion_score >= COMPLETION_THRESHOLD
+    is_evacuation_complete = result.completion_score > COMPLETION_THRESHOLD
     is_complete = is_evacuation_complete or is_max_turns_reached
 
     if is_max_turns_reached and not is_evacuation_complete:
