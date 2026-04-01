@@ -4,10 +4,10 @@
 
 Generate atmospheric, mobile-friendly wilderness scene images for Summit-Sim scenarios using OpenRouter's image-capable models. Images enhance immersion on first load, especially on mobile where no image currently appears.
 
-**Model**: `bytedance/seedream-4.5` (configurable via settings)  
-**Dimensions**: 1024x768 (landscape, mobile-optimized)  
-**Storage**: LangGraph store (base64 in ScenarioDraft)  
-**UI**: Bytes passed to `cl.Image(content=...)`  
+**Model**: `bytedance-seed/seedream-4.5` (configurable via settings)
+**Dimensions**: 1344×768 via `16:9` aspect ratio (landscape, mobile-optimized)
+**Storage**: LangGraph store (base64 string in ScenarioDraft, decoded to bytes for Chainlit)
+**UI**: Base64 decoded to bytes, passed to `cl.Image(content=...)`  
 
 ---
 
@@ -38,97 +38,25 @@ from summit_sim.settings import settings
 logger = logging.getLogger(__name__)
 
 IMAGE_PROMPT_TEMPLATE = """\
-Create a realistic cinematic wilderness scene for a wilderness first responder training scenario. 
-Show {setting}, with {terrain}, {weather}, and {time_of_day}. 
-Mood: {overall_mood}. 
+Create a realistic cinematic wilderness scene for a wilderness first responder training scenario titled "{title}".
+
+Setting: {setting}
 
 The image should feel immersive, grounded, and educational, with natural lighting, clear environment cues, and a strong sense of place. Avoid text, labels, logos, gore, exaggerated fantasy elements, or obvious AI-art artifacts. Do not depict hidden medical details or anything that reveals the correct diagnosis.
 
 Optimize for mobile viewing: strong focal point, simple composition, clear readability on small screens."""
 
 
-def _extract_scene_details(scene_state: str) -> dict[str, str]:
-    """Parse scene_state for terrain, weather, time cues."""
-    scene_lower = scene_state.lower()
-    
-    # Terrain detection
-    terrain = "natural wilderness terrain"
-    if any(word in scene_lower for word in ["mountain", "peak", "ridge", "alpine"]):
-        terrain = "mountainous alpine terrain with rocky outcrops"
-    elif any(word in scene_lower for word in ["forest", "wood", "tree"]):
-        terrain = "dense forest with natural clearings"
-    elif any(word in scene_lower for word in ["desert", "sand", "arid"]):
-        terrain = "arid desert landscape with sparse vegetation"
-    elif any(word in scene_lower for word in ["snow", "winter", "ice"]):
-        terrain = "snow-covered winter wilderness"
-    elif any(word in scene_lower for word in ["river", "water", "lake"]):
-        terrain = "riverside or lakeside wilderness setting"
-    
-    # Weather detection
-    weather = "clear conditions"
-    if any(word in scene_lower for word in ["storm", "rain", "thunder"]):
-        weather = "stormy weather with dark clouds"
-    elif any(word in scene_lower for word in ["snow", "blizzard", "whiteout"]):
-        weather = "snowy conditions with reduced visibility"
-    elif any(word in scene_lower for word in ["wind", "gust"]):
-        weather = "windy conditions"
-    elif any(word in scene_lower for word in ["fog", "mist", "cloud"]):
-        weather = "foggy or overcast conditions"
-    elif any(word in scene_lower for word in ["hot", "heat", "sun"]):
-        weather = "sunny and warm conditions"
-    
-    # Time of day detection
-    time_of_day = "daylight hours"
-    if any(word in scene_lower for word in ["dusk", "sunset", "evening"]):
-        time_of_day = "dusk or sunset"
-    elif any(word in scene_lower for word in ["dawn", "sunrise", "morning"]):
-        time_of_day = "dawn or sunrise"
-    elif any(word in scene_lower for word in ["night", "dark", "midnight"]):
-        time_of_day = "nighttime with limited visibility"
-    
-    return {
-        "terrain": terrain,
-        "weather": weather,
-        "time_of_day": time_of_day,
-    }
-
-
-def _infer_mood(scenario: ScenarioDraft) -> str:
-    """Infer overall mood from scenario title and content."""
-    title_lower = scenario.title.lower()
-    setting_lower = scenario.setting.lower()
-    
-    # Critical/urgent scenarios
-    if any(word in title_lower for word in ["critical", "emergency", "rescue", "stranded"]):
-        return "tense and urgent"
-    
-    # Environmental hazards
-    if any(word in title_lower for word in ["storm", "lightning", "avalanche", "flood"]):
-        return "dramatic and challenging"
-    
-    # Medical emergencies
-    if any(word in title_lower for word in ["anaphylaxis", "attack", "bleeding", "injury"]):
-        return "serious and focused"
-    
-    # Altitude/environmental
-    if any(word in title_lower for word in ["altitude", "hypothermia", "heat", "cold"]):
-        return "harsh and demanding"
-    
-    # Default
-    return "authentic wilderness atmosphere"
-
-
 def build_image_prompt(scenario: ScenarioDraft) -> str:
-    """Build image generation prompt from scenario fields."""
-    scene_details = _extract_scene_details(scenario.scene_state)
-    overall_mood = _infer_mood(scenario)
+    """Build image generation prompt from scenario fields.
     
+    Uses the scenario title and setting directly without fragile parsing.
+    The setting field already contains rich environmental description including
+    terrain, weather, and time of day cues.
+    """
     return IMAGE_PROMPT_TEMPLATE.format(
+        title=scenario.title,
         setting=scenario.setting,
-        terrain=scene_details["terrain"],
-        weather=scene_details["weather"],
-        time_of_day=scene_details["time_of_day"],
-        overall_mood=overall_mood,
     )
 
 
@@ -136,18 +64,19 @@ def build_image_prompt(scenario: ScenarioDraft) -> str:
 async def generate_scenario_image(
     scenario: ScenarioDraft,
     model: str | None = None,
-) -> bytes | None:
+) -> str | None:
     """Generate atmospheric wilderness scene image for scenario.
-    
-    Returns raw image bytes or None on failure. Non-blocking - exceptions 
-    are caught and logged. Image is 1024x768 landscape optimized for mobile.
+
+    Returns base64-encoded image string or None on failure. Non-blocking - exceptions
+    are caught and logged. Image is 1344×768 (16:9 aspect ratio) landscape
+    optimized for mobile.
     
     Args:
         scenario: The scenario to generate an image for
         model: OpenRouter model name (defaults to settings.image_generation_model)
         
     Returns:
-        Raw image bytes or None if generation fails
+        Base64-encoded image string or None if generation fails
     """
     model = model or settings.image_generation_model
     prompt = build_image_prompt(scenario)
@@ -157,6 +86,10 @@ async def generate_scenario_image(
         scenario.title,
         model,
     )
+    
+    # Log metadata for debugging and cost tracking
+    mlflow.log_param("image_model", model)
+    mlflow.log_param("prompt_length", len(prompt))
     
     try:
         async with httpx.AsyncClient(timeout=settings.image_generation_timeout) as client:
@@ -174,7 +107,10 @@ async def generate_scenario_image(
                             "content": prompt,
                         }
                     ],
-                    "modalities": ["image", "text"],
+                    "modalities": ["image"],
+                    "image_config": {
+                        "aspect_ratio": "16:9"  # 1344×768 landscape, mobile-optimized
+                    },
                 },
             )
             response.raise_for_status()
@@ -198,11 +134,10 @@ async def generate_scenario_image(
             
             # Handle base64 data URL
             if image_url.startswith("data:image"):
-                # Strip prefix and decode
+                # Strip prefix and return base64 string
                 base64_data = image_url.split(",")[1]
-                image_bytes = base64.b64decode(base64_data)
-                logger.info("Successfully generated image: %d bytes", len(image_bytes))
-                return image_bytes
+                logger.info("Successfully generated image: %d bytes", len(base64_data))
+                return base64_data
             else:
                 logger.warning("Unexpected image URL format")
                 return None
@@ -221,7 +156,7 @@ Add image generation configuration:
 
 ```python
 image_generation_model: str = Field(
-    default="bytedance/seedream-4.5",
+    default="bytedance-seed/seedream-4.5",
     description="OpenRouter model for scenario image generation",
 )
 image_generation_timeout: int = Field(
@@ -267,11 +202,14 @@ prompt = build_image_prompt(scenario)
 print(f"\nImage Prompt:\n{prompt}")
 
 # Cell 4: Generate image
-image_bytes = await generate_scenario_image(scenario)
-if image_bytes:
-    print(f"✓ Generated image: {len(image_bytes)} bytes")
-    # Display using IPython
+import base64
+
+image_data = await generate_scenario_image(scenario)
+if image_data:
+    print(f"✓ Generated image: {len(image_data)} base64 chars")
+    # Decode and display using IPython
     from IPython.display import Image, display
+    image_bytes = base64.b64decode(image_data)
     display(Image(data=image_bytes))
 else:
     print("✗ Image generation failed (non-blocking)")
@@ -285,8 +223,10 @@ else:
 - [ ] `image_generator.py` module created with async generation logic
 - [ ] Settings updated with image model config
 - [ ] Notebook can generate scenarios and display images
+- [ ] Image generation returns base64 string (JSON-serializable)
 - [ ] Image generation is truly non-blocking (returns None on failure)
 - [ ] Prompts are well-formed and scenario-appropriate
+- [ ] MLflow logs model name and prompt length as parameters
 - [ ] All code passes ruff linting and formatting
 
 ---
@@ -302,9 +242,9 @@ else:
 Add `image_data` field to ScenarioDraft:
 
 ```python
-image_data: bytes | None = Field(
+image_data: str | None = Field(
     default=None,
-    description="Raw image bytes for scenario visualization",
+    description="Base64-encoded image data for scenario visualization",
 )
 ```
 
@@ -325,11 +265,11 @@ async def generate_image_node(state: AuthorState, config: RunnableConfig) -> dic
     scenario = ScenarioDraft.model_validate(state.scenario_draft)
     
     # Generate image
-    image_bytes = await generate_scenario_image(scenario)
+    image_data = await generate_scenario_image(scenario)
     
-    if image_bytes:
+    if image_data:
         # Update scenario with image
-        scenario.image_data = image_bytes
+        scenario.image_data = image_data
         
         # Update stored scenario
         store = AppState.store
@@ -343,7 +283,7 @@ async def generate_image_node(state: AuthorState, config: RunnableConfig) -> dic
         logger.info(
             "Image generated and saved: scenario_id=%s, size=%d bytes",
             state.scenario_id,
-            len(image_bytes),
+            len(image_data),
         )
     else:
         logger.warning(
@@ -367,6 +307,8 @@ workflow.add_edge("generate_image", END)
 Update `show_scenario_intro()` to display images:
 
 ```python
+import base64
+
 async def show_scenario_intro(scenario: ScenarioDraft) -> None:
     """Display scenario intro with image or placeholder."""
     content = format_scenario_intro(scenario)
@@ -374,9 +316,10 @@ async def show_scenario_intro(scenario: ScenarioDraft) -> None:
     elements = []
     
     if scenario.image_data:
-        # Display actual image
+        # Decode base64 to bytes for Chainlit
+        image_bytes = base64.b64decode(scenario.image_data)
         elements.append(cl.Image(
-            content=scenario.image_data,  # Raw bytes
+            content=image_bytes,
             name="scenario_image",
             display="inline",
             size="large",
@@ -404,12 +347,12 @@ The scenario is already loaded from store in these functions, so image_data will
 1. **End-to-End Test**: Create scenario → approve → verify image appears in student view
 2. **Revision Test**: Revise scenario → verify new image is generated
 3. **Failure Test**: Temporarily break image generation → verify scenario still loads
-4. **Mobile Test**: Verify image displays correctly on mobile (1024x768 ratio)
+4. **Mobile Test**: Verify image displays correctly on mobile (1344×768, 16:9 ratio)
 
 ### Acceptance Criteria for Phase 2
 
-- [ ] Scenario image stored in LangGraph store with scenario
-- [ ] Image displays inline in Chainlit UI
+- [ ] Scenario image stored in LangGraph store with scenario (as base64 string)
+- [ ] Image displays inline in Chainlit UI (decoded from base64)
 - [ ] Placeholder shown while image generating
 - [ ] Image regenerates on scenario revision
 - [ ] Scenario loads successfully even if image generation fails
@@ -424,13 +367,20 @@ The scenario is already loaded from store in these functions, so image_data will
 
 1. **Async httpx**: Using `httpx.AsyncClient` instead of PydanticAI because image generation via chat completions with modalities is a different API pattern than structured outputs.
 
-2. **Bytes vs Base64**: Store raw bytes in ScenarioDraft (Chainlit accepts bytes via `content` parameter). Base64 decoding happens only once in `generate_scenario_image()`.
+2. **Base64 Storage**: Store base64-encoded strings in ScenarioDraft (JSON-serializable for LangGraph state). Decode to bytes only when passing to Chainlit's `cl.Image(content=...)`. This ensures compatibility with LangGraph's checkpointing which requires JSON serialization of state.
 
 3. **Non-blocking Strategy**: Image generation runs after `save_scenario` so the scenario is already persisted. If image fails, the scenario is still usable. The UI shows a placeholder initially, then the image appears on reload if generation completes.
 
 4. **Regeneration on Revision**: The graph flow `save → generate_image` means every time we save (including after revisions), we regenerate the image. This ensures the image matches the revised scenario.
 
-5. **Cost Tracking**: Image generation costs are already tracked via MLflow tracing (enabled via `@mlflow.trace` decorator).
+5. **Cost Tracking**: Image generation costs are tracked via MLflow:
+   - `@mlflow.trace(span_type=SpanType.LLM)` decorator for tracing
+   - `mlflow.log_param("image_model", model)` logs the model used
+   - `mlflow.log_param("prompt_length", len(prompt))` logs prompt size for cost estimation
+
+6. **Image-Only Modalities**: The `bytedance-seed/seedream-4.5` model is image-only, so we use `modalities: ["image"]` (not `["image", "text"]`). This differsfrom multimodal models that can return both text and images.
+
+7. **Aspect Ratio Configuration**: We use `image_config.aspect_ratio: "16:9"` in the API request to ensure consistent 1344×768 landscape dimensions across all image generation models. This is more reliable than relying on model defaults and provides optimal mobile viewing experience.
 
 ### Mobile Optimization
 
@@ -438,9 +388,15 @@ The prompt template includes specific instructions:
 - Strong focal point
 - Simple composition
 - Clear readability on small screens
-- 1024x768 landscape aspect ratio
 
-This ensures images look good on mobile devices where they're most needed.
+**Aspect Ratio Configuration:**
+We use `image_config.aspect_ratio: "16:9"` which produces **1344×768** images. This is:
+- Wider than the initially planned 1024×768
+- Better for mobile landscape viewing
+- Consistent across all OpenRouter image models
+- More immersive for wilderness scene composition
+
+The 16:9 ratio provides a cinematic feel that works well for depicting expansive wilderness environments while remaining readable on mobile screens.
 
 ### Error Handling Philosophy
 
