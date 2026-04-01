@@ -1,5 +1,6 @@
 """Author flow handlers for the Chainlit app."""
 
+import base64
 import logging
 from typing import TYPE_CHECKING
 
@@ -16,7 +17,6 @@ from summit_sim.schemas import ScenarioConfig, ScenarioDraft
 from summit_sim.settings import settings
 from summit_sim.ui import simulation
 from summit_sim.ui.utils import (
-    format_scenario_intro,
     get_author_form_fields,
     get_review_actions,
     get_review_content,
@@ -95,7 +95,14 @@ async def generate_scenario() -> None:
 
     cl.user_session.set("scenario_config", config)
 
-    loading_msg = await cl.Message(content="⏳ *Generating your scenario...*").send()
+    params_text = (
+        f"**Focus:** {config.primary_focus}\n**Env:** {config.environment}\n"
+        f"**Team:** {config.available_personnel}\n**Evac:** "
+        f"{config.evac_distance}\n**Complexity:** {config.complexity}"
+    )
+    loading_msg = await cl.Message(
+        content=f"⏳ *Generating your scenario and image...*\n\n{params_text}"
+    ).send()
 
     graph = AppState.author_graph
     cl.user_session.set("graph", graph)
@@ -212,35 +219,18 @@ async def handle_student_start(_state: AuthorState) -> None:
         if final_state.current_trace_id:
             cl.user_session.set("authoring_trace_id", final_state.current_trace_id)
 
-        # Load scenario from store (it was just saved during approval)
-        store = AppState.store
-        store_result = await store.aget(("scenarios",), scenario_id)
-        if store_result is None:
+        # Use scenario from final_state (has image_data, store lookup unnecessary)
+        if final_state.scenario_draft is None:
             await cl.Message(
-                content="❌ Error: Scenario not found in store.",
+                content="❌ Error: No scenario draft in final state.",
             ).send()
             return
 
-        scenario_data = store_result.value
-        scenario = ScenarioDraft.model_validate(scenario_data["scenario_draft"])
+        scenario = ScenarioDraft.model_validate(final_state.scenario_draft)
         cl.user_session.set("scenario", scenario)
 
-        # Show scenario context for student before starting
-        context_content = format_scenario_intro(scenario)
-
-        await cl.Message(
-            content=context_content,
-            elements=[
-                cl.CustomElement(
-                    name="ChatEnabler",
-                    props={},
-                    display="inline",
-                )
-            ],
-        ).send()
-
-        # Start simulation (skip intro since we just showed context)
-        await simulation.run_simulation()
+        # Show scenario intro with image and enable chat input
+        await simulation.show_scenario_intro(scenario, enable_chat=True)
 
     except Exception as e:
         await cl.Message(
@@ -369,27 +359,46 @@ async def show_review_screen(state: AuthorState) -> None:
         scenario.scene_state if scenario.scene_state else "*No special conditions*"
     )
 
-    content = f"""## 🏔️ {scenario.title}{attempt_text}
+    # Build content with image below title
+    content_parts = [f"## 🏔️ {scenario.title}{attempt_text}"]
 
-#### 🎯 Learning Objectives
-{learning_obj_text}
+    # Add image if available
+    elements = []
+    if scenario.image_data:
+        image_bytes = base64.b64decode(scenario.image_data)
+        elements.append(
+            cl.Image(
+                content=image_bytes,
+                name="scenario_preview",
+                display="inline",
+                size="medium",
+            )
+        )
 
-#### 🏔️ Environment
-**Setting:** {scenario.setting}
+    content_parts.extend(
+        [
+            "",
+            "#### 🎯 Learning Objectives",
+            learning_obj_text,
+            "",
+            "#### 🏔️ Environment",
+            f"**Setting:** {scenario.setting}",
+            "",
+            f"**Scene State:** {scene_display}",
+            "",
+            "#### 🏥 Patient",
+            f"**Summary:** {scenario.patient_summary}",
+            "",
+            f"**Opening Narrative:** {scenario.initial_narrative}",
+            "",
+            "#### 🔒 Instructor Only",
+            f"**Hidden Truth:** {scenario.hidden_truth}",
+            "",
+            f"**Hidden State:** {scenario.hidden_state}",
+        ]
+    )
 
-**Scene State:** {scene_display}
-
-#### 🏥 Patient
-**Summary:** {scenario.patient_summary}
-
-**Opening Narrative:** {scenario.initial_narrative}
-
-#### 🔒 Instructor Only
-**Hidden Truth:** {scenario.hidden_truth}
-
-**Hidden State:** {scenario.hidden_state}"""
-
-    await cl.Message(content=content).send()
+    await cl.Message(content="\n".join(content_parts), elements=elements).send()
 
     res = await cl.AskActionMessage(
         content=get_review_content(),

@@ -47,6 +47,34 @@ ask questions, provide care, or manage the situation. The simulation tracks
 your progress and dynamically responds to your choices."""
 
 
+def format_scenario_details(scenario: ScenarioDraft) -> str:
+    """Format scenario details section without title.
+
+    Returns the learning objectives, environment, patient info, and how to play.
+    Used when title and image are displayed separately.
+    """
+    objectives_text = "\n".join(f"• {obj}" for obj in scenario.learning_objectives)
+    scene_display = (
+        scenario.scene_state if scenario.scene_state else "*No special conditions*"
+    )
+
+    return f"""#### 🎯 Learning Objectives
+{objectives_text}
+
+#### 🏔️ Environment
+**Setting:** {scenario.setting}
+
+**Scene State:** {scene_display}
+
+#### 🏥 Patient
+**Summary:** {scenario.patient_summary}
+
+#### 🎮 How to Play
+You're the responder on scene. Type what you'd like to do—assess the patient,
+ask questions, provide care, or manage the situation. The simulation tracks
+your progress and dynamically responds to your choices."""
+
+
 SCENARIO_CONFIG_DEFAULTS: dict[str, Any] = get_config_defaults(ScenarioConfig)
 
 # Standard 1-5 star rating scale for scenario evaluation

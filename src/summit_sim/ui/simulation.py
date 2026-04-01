@@ -1,5 +1,6 @@
 """Simulation flow handlers for the Chainlit app."""
 
+import base64
 import logging
 from typing import TYPE_CHECKING
 
@@ -14,7 +15,7 @@ from summit_sim.graphs.simulation import (
 from summit_sim.graphs.utils import AppState
 from summit_sim.schemas import DebriefReport, ScenarioDraft
 from summit_sim.settings import settings
-from summit_sim.ui.utils import format_scenario_intro
+from summit_sim.ui.utils import format_scenario_details
 
 logger = logging.getLogger(__name__)
 
@@ -58,11 +59,39 @@ async def start_simulation_session() -> None:
     await show_scenario_intro(scenario)
 
 
-async def show_scenario_intro(scenario: ScenarioDraft) -> None:
-    """Display scenario intro and start simulation immediately."""
-    content = format_scenario_intro(scenario)
+async def show_scenario_intro(
+    scenario: ScenarioDraft, enable_chat: bool = False
+) -> None:
+    """Display scenario intro with image below title, then details.
 
-    await cl.Message(content=content).send()
+    Shows title + image first, then scenario details in a follow-up message.
+    Optionally enables chat input for student mode.
+    No placeholder - just shows nothing if no image.
+    Fails fast if image_data is corrupt (base64 decode will error).
+    """
+    # Message 1: Title + Image (+ optional ChatEnabler)
+    title_elements = []
+    if scenario.image_data:
+        image_bytes = base64.b64decode(scenario.image_data)
+        title_elements.append(
+            cl.Image(
+                content=image_bytes,
+                name="scenario_image",
+                display="inline",
+                size="medium",
+            )
+        )
+
+    if enable_chat:
+        title_elements.append(
+            cl.CustomElement(name="ChatEnabler", props={}, display="inline")
+        )
+
+    await cl.Message(content=f"## 🏔️ {scenario.title}", elements=title_elements).send()
+
+    # Message 2: Scenario details
+    details_content = format_scenario_details(scenario)
+    await cl.Message(content=details_content).send()
 
     await run_simulation()
 

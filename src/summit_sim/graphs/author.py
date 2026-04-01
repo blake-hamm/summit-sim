@@ -15,6 +15,7 @@ from mlflow.entities import AssessmentSource, AssessmentSourceType, SpanType
 
 from summit_sim.agents.generator import AGENT_NAME as GENERATOR_AGENT_NAME
 from summit_sim.agents.generator import generate_scenario
+from summit_sim.agents.image_generator import generate_scenario_image
 from summit_sim.graphs.utils import AppState
 from summit_sim.schemas import (
     ScenarioConfig,
@@ -216,16 +217,114 @@ def should_retry(state: AuthorState) -> str:
 
 
 async def save_scenario(state: AuthorState, config: RunnableConfig) -> dict:  # noqa: ARG001
-    """Save approved scenario to LangGraph store."""
-    if state.scenario_draft and state.scenario_id:
-        store = AppState.store
-        if store is not None:
-            await store.aput(
-                ("scenarios",),
-                state.scenario_id,
-                {"scenario_draft": state.scenario_draft},
-            )
+    """Save approved scenario with image to LangGraph store.
+
+    Fails fast if scenario_draft or scenario_id is missing.
+    Image is already in scenario_draft from generate_image_node.
+    """
+    store = AppState.store
+    await store.aput(  # type: ignore[union-attr]
+        ("scenarios",),
+        state.scenario_id,
+        {"scenario_draft": state.scenario_draft},
+    )
     return {}
+
+
+@mlflow.trace(span_type=SpanType.AGENT)
+async def generate_image_node(state: AuthorState, config: RunnableConfig) -> dict:
+    """Generate scenario image before review.
+
+    Non-blocking - if generation fails, scenario is still usable.
+    Regenerates image on revision (new scenario draft).
+    Image is stored in state.scenario_draft for review, then persisted on save.
+
+    Assumes scenario_draft exists (fails fast if None).
+    """
+    scenario = ScenarioDraft.model_validate(state.scenario_draft)
+
+    # Get config from state for image generation context
+    scenario_config = ScenarioConfig.model_validate(state.scenario_config)
+
+    # Generate image - returns None on failure (non-blocking)
+    image_data = await generate_scenario_image(scenario, scenario_config)
+
+    # Get current trace info for session correlation
+    active_span = mlflow.get_current_active_span()
+    current_trace_id = active_span.trace_id if active_span else None
+
+    # Tag trace with session ID for correlation
+    thread_id = config.get("configurable", {}).get("thread_id")
+    if thread_id and current_trace_id:
+        mlflow.update_current_trace(
+            metadata={"mlflow.trace.session": thread_id},
+            tags={
+                "session_id": thread_id,
+                "scenario_id": state.scenario_id,
+                "graph_type": "author",
+                "agent_name": "image-generator",
+                "mlflow_env": settings.mlflow_env,
+            },
+        )
+
+    if image_data:
+        # Update scenario with image (in state only, not persisted yet)
+        scenario.image_data = image_data
+        logger.info(
+            "Image generated: scenario_id=%s, size=%d bytes",
+            state.scenario_id,
+            len(image_data),
+        )
+
+        # Set span attributes for successful generation
+        if active_span:
+            active_span.set_attributes(
+                {
+                    "image.generated": True,
+                    "image.size_bytes": len(image_data),
+                }
+            )
+
+        # Log success to MLflow as trace feedback
+        if current_trace_id:
+            mlflow.log_feedback(
+                trace_id=current_trace_id,
+                name="image_generated",
+                value=True,
+                rationale="Scenario image successfully generated",
+                source=AssessmentSource(
+                    source_type=AssessmentSourceType.CODE,
+                    source_id=state.scenario_id,
+                ),
+            )
+    else:
+        logger.warning(
+            "Image generation failed (non-blocking): scenario_id=%s",
+            state.scenario_id,
+        )
+
+        # Set span attributes for failed generation
+        if active_span:
+            active_span.set_attributes(
+                {
+                    "image.generated": False,
+                }
+            )
+
+        # Log failure to MLflow as trace feedback
+        if current_trace_id:
+            mlflow.log_feedback(
+                trace_id=current_trace_id,
+                name="image_generated",
+                value=False,
+                rationale="Scenario image generation failed (non-blocking)",
+                source=AssessmentSource(
+                    source_type=AssessmentSourceType.CODE,
+                    source_id=state.scenario_id,
+                ),
+            )
+
+    return {"scenario_draft": scenario.model_dump()}
 
 
 def create_author_graph(
@@ -237,12 +336,14 @@ def create_author_graph(
 
     workflow.add_node("initialize", initialize_author)
     workflow.add_node("generate", generate_scenario_node)
+    workflow.add_node("generate_image", generate_image_node)
     workflow.add_node("review", present_for_author)
     workflow.add_node("save", save_scenario)
 
     workflow.set_entry_point("initialize")
     workflow.add_edge("initialize", "generate")
-    workflow.add_edge("generate", "review")
+    workflow.add_edge("generate", "generate_image")
+    workflow.add_edge("generate_image", "review")
     workflow.add_conditional_edges(
         "review", should_retry, {"generate": "generate", "save": "save"}
     )

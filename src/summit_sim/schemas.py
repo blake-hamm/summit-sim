@@ -201,6 +201,10 @@ class ScenarioDraft(BaseModel):
             "trailhead. Immediate danger of secondary lightning strikes.'"
         ),
     )
+    image_data: str | None = Field(
+        default=None,
+        description="Base64-encoded image data for scenario visualization",
+    )
 
 
 class RollupResult(BaseModel):
