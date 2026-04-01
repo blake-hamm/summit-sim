@@ -112,9 +112,13 @@ async def generate_scenario_image(
         model,
     )
 
-    # Log metadata for debugging and cost tracking
-    # mlflow.log_param("image_model", model)
-    # mlflow.log_param("prompt_length", len(prompt))
+    # Get active span for MLflow attributes
+    active_span = mlflow.get_current_active_span()
+    if active_span:
+        active_span.set_attributes({
+            "image.model": model,
+            "image.prompt_length": len(prompt),
+        })
     
     try:
         async with httpx.AsyncClient(timeout=settings.image_generation_timeout) as client:
@@ -141,37 +145,32 @@ async def generate_scenario_image(
             response.raise_for_status()
             data = response.json()
             
-            # Extract image from response
+            # Extract image from response - let KeyError propagate if API contract breaks
             # Format: choices[0].message.images[].image_url.url (base64 data URL)
-            choices = data.get("choices", [])
-            if not choices:
-                logger.warning("No choices in image generation response")
-                return None
+            image_url = data["choices"][0]["message"]["images"][0]["image_url"]["url"]
             
-            message = choices[0].get("message", {})
-            images = message.get("images", [])
+            # Handle base64 data URL - let IndexError propagate if format is wrong
+            base64_data = image_url.split(",")[1]
             
-            if not images:
-                logger.warning("No images in response message")
-                return None
+            logger.info("Successfully generated image: %d bytes", len(base64_data))
             
-            image_url = images[0].get("image_url", {}).get("url", "")
+            if active_span:
+                active_span.set_attributes({
+                    "image.size_bytes": len(base64_data),
+                    "image.success": True,
+                })
             
-            # Handle base64 data URL
-            if image_url.startswith("data:image"):
-                # Strip prefix and return base64 string
-                base64_data = image_url.split(",")[1]
-                logger.info("Successfully generated image: %d bytes", len(base64_data))
-                return base64_data
-            else:
-                logger.warning("Unexpected image URL format")
-                return None
+            return base64_data
                 
     except httpx.TimeoutException:
         logger.warning("Image generation timed out after %ds", settings.image_generation_timeout)
+        if active_span:
+            active_span.set_attributes({"image.success": False, "image.error": "timeout"})
         return None
     except Exception as e:
         logger.warning("Image generation failed: %s", e)
+        if active_span:
+            active_span.set_attributes({"image.success": False, "image.error": str(e)})
         return None
 ```
 
@@ -251,7 +250,7 @@ else:
 - [x] Image generation returns base64 string (JSON-serializable)
 - [x] Image generation is truly non-blocking (returns None on failure)
 - [x] Prompts are well-formed and scenario-appropriate (includes ScenarioConfig context)
-- [x] MLflow trace decorator for tracking (logging commented out for now)
+- [x] MLflow trace decorator for tracking with span attributes
 - [x] All code passes ruff linting and formatting
 
 **Status**: ✅ **Phase 1 Complete - Ready for Phase 2 integration**
@@ -261,6 +260,15 @@ else:
 ## Phase 2: Integration (After Notebook Validation)
 
 **Goal**: Integrate image generation into the author graph and UI. Only proceed after Phase 1 notebook testing is successful.
+
+### Fail-Fast Philosophy
+
+**NO defensive coding. NO silent fallbacks. NO default values that mask bugs.**
+
+- Image generation is the ONLY place we catch exceptions (non-blocking requirement)
+- All other code assumes data exists and lets exceptions propagate
+- Store operations, scenario validation, and UI rendering all fail fast
+- Clear error messages when assumptions are violated
 
 ### Files to Modify
 
@@ -277,7 +285,24 @@ image_data: str | None = Field(
 
 #### 2. `src/summit_sim/graphs/author.py`
 
-Add image generation node to graph:
+**Update `save_scenario`**: Remove defensive checks
+
+```python
+async def save_scenario(state: AuthorState, config: RunnableConfig) -> dict:
+    """Save approved scenario to LangGraph store.
+    
+    Fails fast if scenario_draft or scenario_id is missing.
+    """
+    store = AppState.store
+    await store.aput(
+        ("scenarios",),
+        state.scenario_id,
+        {"scenario_draft": state.scenario_draft},
+    )
+    return {}
+```
+
+**Add image generation node** to graph:
 
 ```python
 async def generate_image_node(state: AuthorState, config: RunnableConfig) -> dict:
@@ -285,27 +310,28 @@ async def generate_image_node(state: AuthorState, config: RunnableConfig) -> dic
     
     Non-blocking - if generation fails, scenario is still usable.
     Regenerates image on revision (new scenario draft).
-    """
-    if not state.scenario_draft:
-        return {}
     
+    Assumes scenario_draft exists (fails fast if None).
+    """
     scenario = ScenarioDraft.model_validate(state.scenario_draft)
     
-    # Generate image
-    image_data = await generate_scenario_image(scenario)
+    # Get config from state for image generation context
+    scenario_config = ScenarioConfig.model_validate(state.scenario_config)
+    
+    # Generate image - returns None on failure (non-blocking)
+    image_data = await generate_scenario_image(scenario, scenario_config)
     
     if image_data:
         # Update scenario with image
         scenario.image_data = image_data
         
-        # Update stored scenario
+        # Update stored scenario - let exceptions propagate
         store = AppState.store
-        if store:
-            await store.aput(
-                ("scenarios",),
-                state.scenario_id,
-                {"scenario_draft": scenario.model_dump(mode="json")},
-            )
+        await store.aput(
+            ("scenarios",),
+            state.scenario_id,
+            {"scenario_draft": scenario.model_dump(mode="json")},
+        )
         
         logger.info(
             "Image generated and saved: scenario_id=%s, size=%d bytes",
@@ -337,25 +363,23 @@ Update `show_scenario_intro()` to display images:
 import base64
 
 async def show_scenario_intro(scenario: ScenarioDraft) -> None:
-    """Display scenario intro with image or placeholder."""
+    """Display scenario intro with image if available.
+    
+    No placeholder - just shows nothing if no image.
+    Fails fast if image_data is corrupt (base64 decode will error).
+    """
     content = format_scenario_intro(scenario)
     
     elements = []
     
     if scenario.image_data:
-        # Decode base64 to bytes for Chainlit
+        # Decode base64 to bytes for Chainlit - let exceptions propagate
         image_bytes = base64.b64decode(scenario.image_data)
         elements.append(cl.Image(
             content=image_bytes,
             name="scenario_image",
             display="inline",
             size="large",
-        ))
-    else:
-        # Show placeholder
-        elements.append(cl.Text(
-            content="🖼️ Generating scenario image...",
-            display="inline",
         ))
     
     await cl.Message(content=content, elements=elements).send()
@@ -365,24 +389,64 @@ async def show_scenario_intro(scenario: ScenarioDraft) -> None:
 
 #### 4. `src/summit_sim/ui/author.py`
 
-Update `handle_student_start()` and `handle_approval()` to pass scenario with image to simulation:
+**Update `handle_student_start()`**: Remove defensive checks
 
-The scenario is already loaded from store in these functions, so image_data will automatically be available if it was generated.
+```python
+async def handle_student_start(_state: AuthorState) -> None:
+    """Handle student mode - auto-approve and start simulation immediately."""
+    graph = cl.user_session.get("graph")
+    if graph is None:
+        await cl.Message(content="❌ Error: Session expired. Please start over.").send()
+        return
+
+    thread_id = cl.user_session.get("id")
+    config_dict: RunnableConfig = {"configurable": {"thread_id": thread_id}}
+
+    # Auto-approve the scenario
+    result = await graph.ainvoke(
+        Command(resume={"action": "approve"}),
+        config=config_dict,
+    )
+
+    final_state = AuthorState.from_graph_result(result)
+    scenario_id = final_state.scenario_id
+
+    # Set up simulation session
+    cl.user_session.set("scenario_id", scenario_id)
+    cl.user_session.set("mode", "player")
+    # Store trace_id from authoring phase for correlation with simulation traces
+    if final_state.current_trace_id:
+        cl.user_session.set("authoring_trace_id", final_state.current_trace_id)
+
+    # Load scenario from store (it was just saved during approval) - fails fast
+    store = AppState.store
+    store_result = await store.aget(("scenarios",), scenario_id)
+    scenario_data = store_result.value  # AttributeError if None
+    scenario = ScenarioDraft.model_validate(scenario_data["scenario_draft"])
+    cl.user_session.set("scenario", scenario)
+
+    # Show scenario intro with image
+    await show_scenario_intro(scenario)
+```
+
+The scenario already has `image_data` from the graph if generation succeeded.
 
 ### Testing Strategy for Phase 2
 
 1. **End-to-End Test**: Create scenario → approve → verify image appears in student view
 2. **Revision Test**: Revise scenario → verify new image is generated
-3. **Failure Test**: Temporarily break image generation → verify scenario still loads
-4. **Mobile Test**: Verify image displays correctly on mobile (1344×768, 16:9 ratio)
+3. **Failure Test**: Temporarily break image generation → verify scenario still loads (no crash)
+4. **Fail-Fast Test**: Remove scenario_id assignment → verify clear error on save (not silent failure)
+5. **Mobile Test**: Verify image displays correctly on mobile (1344×768, 16:9 ratio)
 
 ### Acceptance Criteria for Phase 2
 
 - [ ] Scenario image stored in LangGraph store with scenario (as base64 string)
 - [ ] Image displays inline in Chainlit UI (decoded from base64)
-- [ ] Placeholder shown while image generating
+- [ ] No placeholder shown - just empty if no image
 - [ ] Image regenerates on scenario revision
 - [ ] Scenario loads successfully even if image generation fails
+- [ ] Fail-fast: Clear errors when assumptions violated (no silent failures)
 - [ ] All tests pass (coverage >= 80%)
 - [ ] Code passes quality gates
 
@@ -396,16 +460,17 @@ The scenario is already loaded from store in these functions, so image_data will
 
 2. **Base64 Storage**: Store base64-encoded strings in ScenarioDraft (JSON-serializable for LangGraph state). Decode to bytes only when passing to Chainlit's `cl.Image(content=...)`. This ensures compatibility with LangGraph's checkpointing which requires JSON serialization of state.
 
-3. **Non-blocking Strategy**: Image generation runs after `save_scenario` so the scenario is already persisted. If image fails, the scenario is still usable. The UI shows a placeholder initially, then the image appears on reload if generation completes.
+3. **Non-blocking Strategy**: Image generation runs after `save_scenario` so the scenario is already persisted. If image fails, the scenario is still usable. The UI shows nothing if no image (no placeholder text).
 
 4. **Regeneration on Revision**: The graph flow `save → generate_image` means every time we save (including after revisions), we regenerate the image. This ensures the image matches the revised scenario.
 
-5. **Cost Tracking**: Image generation costs are tracked via MLflow:
+5. **MLflow Tracing**: Image generation costs are tracked via MLflow span attributes (following project conventions):
    - `@mlflow.trace(span_type=SpanType.LLM)` decorator for tracing
-   - `mlflow.log_param("image_model", model)` logs the model used
-   - `mlflow.log_param("prompt_length", len(prompt))` logs prompt size for cost estimation
+   - `active_span.set_attributes({"image.model": model, "image.prompt_length": len(prompt)})` for cost tracking
+   - `active_span.set_attributes({"image.success": True/False})` for success tracking
+   - **NO `mlflow.log_param()`** - project uses span attributes and tags, not params
 
-6. **Image-Only Modalities**: The `bytedance-seed/seedream-4.5` model is image-only, so we use `modalities: ["image"]` (not `["image", "text"]`). This differsfrom multimodal models that can return both text and images.
+6. **Image-Only Modalities**: The `bytedance-seed/seedream-4.5` model is image-only, so we use `modalities: ["image"]` (not `["image", "text"]`). This differs from multimodal models that can return both text and images.
 
 7. **Aspect Ratio Configuration**: We use `image_config.aspect_ratio: "16:9"` in the API request to ensure consistent 1344×768 landscape dimensions across all image generation models. This is more reliable than relying on model defaults and provides optimal mobile viewing experience.
 
@@ -427,11 +492,20 @@ The 16:9 ratio provides a cinematic feel that works well for depicting expansive
 
 ### Error Handling Philosophy
 
+**FAIL FAST. NO DEFENSIVE CODING.**
+
+- **Never add** extra `if` statements or try/except blocks to "handle" edge cases
+- **Never add** silent fallbacks or default values that mask bugs
+- **Never add** defensive null checks (`if x is not None`, `if store:`)
+- **Only exception**: Image generation catches exceptions to remain non-blocking
+- **Everything else** fails immediately with a clear error
+- **Clear is better than safe**: A crash with a good stack trace is better than silent data corruption
+
 Following Summit-Sim conventions:
-- Fail fast, don't hide errors
-- Log warnings for recoverable failures (image generation)
-- Never block core functionality (scenario loading) on optional features
 - Let exceptions propagate for truly unexpected errors
+- Log warnings only for recoverable failures (image generation timeouts)
+- Never block core functionality (scenario loading) on optional features
+- Store operations, validation, and UI rendering all fail fast
 
 ---
 

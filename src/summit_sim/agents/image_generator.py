@@ -4,7 +4,6 @@ import logging
 
 import httpx
 import mlflow
-from mlflow.entities import SpanType
 
 from summit_sim.schemas import ScenarioConfig, ScenarioDraft
 from summit_sim.settings import settings
@@ -56,7 +55,7 @@ def build_image_prompt(
     )
 
 
-@mlflow.trace(span_type=SpanType.LLM)
+@mlflow.trace(span_type="AGENT")
 async def generate_scenario_image(
     scenario: ScenarioDraft,
     config: ScenarioConfig,
