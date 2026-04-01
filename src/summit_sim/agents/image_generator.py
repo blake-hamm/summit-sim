@@ -36,7 +36,7 @@ readability on small screens."""
 
 def build_image_prompt(
     scenario: ScenarioDraft,
-    config: ScenarioConfig | None = None,
+    config: ScenarioConfig,
 ) -> str:
     """Build image generation prompt from scenario fields and optional config.
 
@@ -45,32 +45,21 @@ def build_image_prompt(
     terrain, weather, and time of day cues. If config is provided, includes
     scenario context like environment type, group size, and complexity.
     """
-    if config:
-        return IMAGE_PROMPT_TEMPLATE.format(
-            title=scenario.title,
-            setting=scenario.setting,
-            environment=config.environment,
-            available_personnel=config.available_personnel,
-            evac_distance=config.evac_distance,
-            complexity=config.complexity,
-            primary_focus=config.primary_focus,
-        )
-    # Fallback to basic prompt without config context
     return IMAGE_PROMPT_TEMPLATE.format(
         title=scenario.title,
         setting=scenario.setting,
-        environment="Unknown",
-        available_personnel="Unknown",
-        evac_distance="Unknown",
-        complexity="Unknown",
-        primary_focus="Unknown",
+        environment=config.environment,
+        available_personnel=config.available_personnel,
+        evac_distance=config.evac_distance,
+        complexity=config.complexity,
+        primary_focus=config.primary_focus,
     )
 
 
 @mlflow.trace(span_type=SpanType.LLM)
 async def generate_scenario_image(
     scenario: ScenarioDraft,
-    config: ScenarioConfig | None = None,
+    config: ScenarioConfig,
     model: str | None = None,
 ) -> str | None:
     """Generate atmospheric wilderness scene image for scenario.
