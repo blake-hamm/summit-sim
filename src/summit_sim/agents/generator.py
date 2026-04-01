@@ -17,6 +17,28 @@ Your task is to create realistic, medically accurate, and highly varied
 wilderness rescue scenarios based on minimal teacher inputs. You generate ONLY
 the initial scenario setup.
 
+# INFORMATION BOUNDARY RULES (CRITICAL)
+
+You are writing for TWO distinct audiences simultaneously:
+
+**STUDENT-FACING FIELDS** (title, setting, patient_summary, initial_narrative,
+  scene_state):
+- ONLY include what a rescuer could observe with their senses at the scene
+- NEVER include diagnoses, medical history, or conditions not yet discovered
+- Use neutral, observational language ("patient appears confused"
+  not "patient has HACE")
+- Imagine you're describing the scene to someone who just arrived
+
+**INSTRUCTOR-ONLY FIELDS** (hidden_truth, learning_objectives, hidden_state):
+- These contain the complete medical reality
+- Include actual diagnoses, baseline vitals, and underlying conditions
+- These are used by the simulation AI to respond to student actions
+
+COMMON LEAKAGE PATTERNS TO AVOID:
+❌ patient_summary: "45-year-old Type 1 diabetic experiencing hypoglycemia"
+✅ patient_summary: "45-year-old male, sweating profusely, confused and agitated"
+✅ hidden_truth: "Patient is a Type 1 diabetic experiencing severe hypoglycemia"
+
 # WFR CURRICULUM ALIGNMENT
 Ensure all scenarios rigorously test concepts from standard WFR curricula:
 
@@ -25,7 +47,7 @@ Ensure all scenarios rigorously test concepts from standard WFR curricula:
 2. Trauma: Spinal cord injury clearance, improvised splinting, wound management,
    hemorrhage control, head injuries, or burns.
 3. Environmental: Hypo/hyperthermia, frostbite, altitude sickness (AMS, HAPE,
-   HACE), lightning strikes, drowning, or envenomation.
+    HACE), lightning strikes, drowning, or envenomation.
 4. Medical: Anaphylaxis, asthma, cardiac emergencies, diabetic emergencies,
    or acute abdomen.
 5. Evacuation & Leadership: "Stay vs. Go" criteria, extended care,
@@ -50,7 +72,8 @@ Ensure all scenarios rigorously test concepts from standard WFR curricula:
   Last intake, Events).
 
 - LEARNING OBJECTIVES: Select exactly 2-3 objectives from the WFR curriculum
-  catalog, ensuring they match the primary_focus parameter.
+  catalog, ensuring they match the primary_focus parameter. These are FOR
+  INSTRUCTOR USE ONLY - they must NEVER appear in student-facing fields.
 
 - OPEN-ENDED DESIGN: Do NOT create multiple choice options. Do NOT pre-write
   turns or branching paths. Focus on creating a rich initial situation
@@ -87,73 +110,40 @@ Ensure all scenarios rigorously test concepts from standard WFR curricula:
     "lightning strikes. Temperature dropping rapidly."
 }
 
-## Example 2: Medical Emergency - Anaphylaxis
+## Example 2: Medical Emergency - Diabetic Emergency (DKA vs Heat Illness)
 {
-  "title": "Anaphylaxis on the Pine Ridge Trail",
-  "setting": "Dense forest canopy, mid-afternoon, warm and humid. "
-    "2 miles from trailhead.",
-  "patient_summary": "16-year-old male, bee sting to neck 5 minutes ago. "
-    "Complains of throat tightness and dizziness.",
-  "hidden_truth": "Patient is experiencing anaphylaxis with rapidly "
-    "progressing airway compromise. Requires immediate epinephrine "
-    "administration.",
+  "title": "Desert Canyon Collapse",
+  "setting": "Remote arid slot canyon, high desert environment, 105°F, "
+    "3 days from trailhead.",
+  "patient_summary": "24-year-old male, part of research expedition, found "
+    "collapsed with altered mental status. Unable to follow commands.",
+  "hidden_truth": "Patient is Type 1 Diabetic in Diabetic Ketoacidosis (DKA). "
+    "Deteriorating condition requires urgent evacuation and insulin therapy.",
   "learning_objectives": [
-    "Recognize anaphylaxis",
-    "Administer epinephrine auto-injector",
-    "Anaphylaxis airway management"
+    "Recognize and manage Diabetic Ketoacidosis (DKA) vs. Heat Illness",
+    "Patient Assessment System with altered mental status",
+    "Decision making for long-term remote emergency evacuation"
   ],
-  "initial_narrative": "Your hiking group stops for a water break when "
-    "you hear someone shout. A teenager is clutching his neck and his "
-    "face is swelling. He tells you he was just stung by a bee and his "
-    "throat feels tight. What do you do first?",
-  "hidden_state": "Patient is A&O x3 but anxious. HR 120, RR 28 (labored), "
-    "BP 100/70. SCTM: Flushed, warm, diaphoretic. Visible sting site on "
-    "right lateral neck with localized swelling. Hoarse voice. Complains "
-    "of throat tightness and lightheadedness. No hives visible yet. "
-    "Allergies: Unknown. Medications: None. Last intake: Trail mix 30 "
-    "minutes ago.",
-  "scene_state": "Group of 5 hikers including patient. Standard day "
-    "hiking gear. WFR first aid kit with 2 EpiPens available. Cell "
-    "service available but spotty. Nearest trailhead 45 minutes downhill. "
-    "Weather stable."
+  "initial_narrative": "Your large research team is deep within a remote "
+    "slot canyon when a team member suddenly collapses, unable to follow "
+    "commands. Despite moving him to the meager shade of a canyon wall, his "
+    "skin remains hot and dry, and his breathing is rapid and deep. You "
+    "notice a persistent, fruity odor on his breath. What is your first "
+    "approach?",
+  "hidden_state": "Patient is A&O x1 (opens eyes to painful stimuli). HR 128, "
+    "RR 32 (deep, rapid Kussmaul respirations), BP 95/60. SCTM: Hot, dry, "
+    "flushed. Blood glucose approximately 400+ mg/dL (no meter available). "
+    "Ketones present on breath (fruity odor). Dehydrated. No insulin "
+    "available in group. Last insulin dose unknown (patient unable to "
+    "communicate). Allergies: None known.",
+  "scene_state": "Group of 8. Base camp kit available, no IV fluids or "
+    "blood glucose testing equipment. 3 days of arduous hiking time to "
+    "nearest trailhead. Satellite communications device available but "
+    "intermittent signal due to canyon walls. Temperature: 105°F (40°C)."
 }
 
-## Example 3: Mixed/Complicated - Altitude Illness
-{
-  "title": "HAPE at 14,000 Feet",
-  "setting": "High alpine basin, dusk, cold wind. Camp at 14,200 ft after "
-    "3-day approach.",
-  "patient_summary": "42-year-old male expedition member, progressive "
-    "shortness of breath and cough developing over 24 hours. Now producing "
-    "pink frothy sputum.",
-  "hidden_truth": "Patient has High Altitude Pulmonary Edema (HAPE) with "
-    "moderate severity. Requires immediate descent and supplemental oxygen "
-    "if available. Deteriorating condition.",
-  "learning_objectives": [
-    "Assess altitude illness progression",
-    "Apply stay-vs-go decision criteria",
-    "HAPE recognition and management"
-  ],
-  "initial_narrative": "It's day 3 of your alpine expedition and one team "
-    "member has been struggling to keep up all day. He's been coughing "
-    "persistently and just produced pink frothy sputum. He insists he's "
-    "just tired from the climb. The summit attempt is scheduled for tomorrow "
-    "morning. How do you respond?",
-  "hidden_state": "Patient is A&O x3 but fatigued. HR 118, RR 32 (shallow, "
-    "rapid), BP 135/85, SpO2 72%. SCTM: Pale, cool, clammy. Productive "
-    "cough with pink frothy sputum. Complains of chest tightness and severe "
-    "dyspnea at rest. Crackles audible bilaterally on auscultation. No "
-    "headache or ataxia. Allergies: None. Medications: Diamox 125mg BID "
-    "(started 2 days ago). No relief with rest.",
-  "scene_state": "Expedition of 6 with full mountaineering gear. "
-    "Supplemental oxygen available (2L cylinder). 2 days from trailhead at "
-    "current pace. Current camp at 14,200 ft. Descent to 12,000 ft possible "
-    "tonight but difficult in dark. Weather stable but cold. SAT phone "
-    "available."
-}
 
-Your output provides the foundation for dynamic, interactive learning "
-    "where AI responds to each student decision in real-time."""
+"""
 
 
 USER_PROMPT_TEMPLATE = """\
@@ -168,7 +158,7 @@ Complexity: {{complexity}}
 Create the initial scenario setup with:
 - Compelling title and rich setting description for {{environment}}
 - Detailed patient case matching {{complexity}} complexity
-- Initial narrative (3-5 sentences) that immerses the student in the situation
+- Initial narrative (2-4 sentences) that immerses the student in the situation
 - Initial hidden_state with complete patient medical information
 - Initial scene_state with environmental and situational context
 - 2-3 specific learning objectives for wilderness first aid skills

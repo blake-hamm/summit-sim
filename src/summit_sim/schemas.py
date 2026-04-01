@@ -144,9 +144,12 @@ class ScenarioDraft(BaseModel):
     patient_summary: str = Field(
         ...,
         description=(
-            "Age, sex, chief complaint, and visible mechanism of injury (MOI). "
-            "Example: '28-year-old female, thrown 10 feet by indirect lightning "
-            "strike. Conscious but confused.'"
+            "Age, sex, and VISIBLE presentation only. "
+            "CRITICAL: DO NOT include diagnoses, medical history, or hidden "
+            "conditions. Describe only what the rescuer can observe with their "
+            "senses. Example: '28-year-old female, thrown 10 feet by indirect "
+            "lightning strike. Conscious but confused, groaning, moving all "
+            "extremities.' NOT: '28-year-old diabetic with cervical spine injury.'"
         ),
     )
     hidden_truth: str = Field(
@@ -165,7 +168,9 @@ class ScenarioDraft(BaseModel):
         description=(
             "2-3 specific WFR skills tested from the curriculum (e.g., 'Spinal "
             "clearance protocol', 'Lightning strike safety/evacuation', "
-            "'Hypothermia prevention'). Select from WFR learning objectives catalog."
+            "'Hypothermia prevention'). Select from WFR learning objectives catalog. "
+            "FOR INSTRUCTOR USE ONLY - these should NEVER appear in student-facing "
+            "fields like patient_summary or initial_narrative."
         ),
     )
     initial_narrative: str = Field(

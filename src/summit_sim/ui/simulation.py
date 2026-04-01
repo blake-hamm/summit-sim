@@ -15,7 +15,7 @@ from summit_sim.graphs.simulation import (
 from summit_sim.graphs.utils import AppState
 from summit_sim.schemas import DebriefReport, ScenarioDraft
 from summit_sim.settings import settings
-from summit_sim.ui.utils import format_scenario_details
+from summit_sim.ui.utils import format_student_scenario_details
 
 logger = logging.getLogger(__name__)
 
@@ -89,8 +89,8 @@ async def show_scenario_intro(
 
     await cl.Message(content=f"## 🏔️ {scenario.title}", elements=title_elements).send()
 
-    # Message 2: Scenario details
-    details_content = format_scenario_details(scenario)
+    # Message 2: Scenario details (use student view to hide learning objectives)
+    details_content = format_student_scenario_details(scenario)
     await cl.Message(content=details_content).send()
 
     await run_simulation()
