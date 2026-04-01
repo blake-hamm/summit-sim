@@ -78,7 +78,7 @@ async def show_scenario_intro(
                 content=image_bytes,
                 name="scenario_image",
                 display="inline",
-                size="medium",
+                size="large",
             )
         )
 

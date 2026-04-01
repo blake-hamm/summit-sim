@@ -371,7 +371,7 @@ async def show_review_screen(state: AuthorState) -> None:
                 content=image_bytes,
                 name="scenario_preview",
                 display="inline",
-                size="medium",
+                size="large",
             )
         )
 
