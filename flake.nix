@@ -18,9 +18,9 @@
                 pkgs.mkShell rec {
                     buildInputs = with pkgs; [
                         uv
-                        python312
-                        python312Packages.jupyterlab
-                        python312Packages.pip
+                        python313
+                        python313Packages.jupyterlab
+                        python313Packages.pip
                         ruff
                     ];
 
@@ -30,7 +30,7 @@
                     # We do not want them to be in PYTHONPATH.
                     # Therefore, in ./.envrc PYTHONPATH is set to the _PYTHONPATH defined below
                     # and also in shellHooks (direnv does not load shellHook exports, always).
-                    _PYTHONPATH = "${pkgs.python312}/lib/python3.12/site-packages";
+                    _PYTHONPATH = "${pkgs.python313}/lib/python3.13/site-packages";
 
                     shellHook = ''
                         # Setup pre-commit

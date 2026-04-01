@@ -1,5 +1,5 @@
 # Dockerfile for Summit-Sim Chainlit Application
-FROM ghcr.io/astral-sh/uv:python3.12-trixie-slim
+FROM ghcr.io/astral-sh/uv:python3.13-trixie-slim
 
 # Set working directory
 WORKDIR /app
