@@ -231,7 +231,8 @@ async def save_scenario(state: AuthorState, config: RunnableConfig) -> dict:  # 
     return {}
 
 
-async def generate_image_node(state: AuthorState, config: RunnableConfig) -> dict:  # noqa: ARG001
+@mlflow.trace(span_type=SpanType.AGENT)
+async def generate_image_node(state: AuthorState, config: RunnableConfig) -> dict:
     """Generate scenario image before review.
 
     Non-blocking - if generation fails, scenario is still usable.
@@ -248,6 +249,24 @@ async def generate_image_node(state: AuthorState, config: RunnableConfig) -> dic
     # Generate image - returns None on failure (non-blocking)
     image_data = await generate_scenario_image(scenario, scenario_config)
 
+    # Get current trace info for session correlation
+    active_span = mlflow.get_current_active_span()
+    current_trace_id = active_span.trace_id if active_span else None
+
+    # Tag trace with session ID for correlation
+    thread_id = config.get("configurable", {}).get("thread_id")
+    if thread_id and current_trace_id:
+        mlflow.update_current_trace(
+            metadata={"mlflow.trace.session": thread_id},
+            tags={
+                "session_id": thread_id,
+                "scenario_id": state.scenario_id,
+                "graph_type": "author",
+                "agent_name": "image-generator",
+                "mlflow_env": settings.mlflow_env,
+            },
+        )
+
     if image_data:
         # Update scenario with image (in state only, not persisted yet)
         scenario.image_data = image_data
@@ -256,11 +275,54 @@ async def generate_image_node(state: AuthorState, config: RunnableConfig) -> dic
             state.scenario_id,
             len(image_data),
         )
+
+        # Set span attributes for successful generation
+        if active_span:
+            active_span.set_attributes(
+                {
+                    "image.generated": True,
+                    "image.size_bytes": len(image_data),
+                }
+            )
+
+        # Log success to MLflow as trace feedback
+        if current_trace_id:
+            mlflow.log_feedback(
+                trace_id=current_trace_id,
+                name="image_generated",
+                value=True,
+                rationale="Scenario image successfully generated",
+                source=AssessmentSource(
+                    source_type=AssessmentSourceType.CODE,
+                    source_id=state.scenario_id,
+                ),
+            )
     else:
         logger.warning(
             "Image generation failed (non-blocking): scenario_id=%s",
             state.scenario_id,
         )
+
+        # Set span attributes for failed generation
+        if active_span:
+            active_span.set_attributes(
+                {
+                    "image.generated": False,
+                }
+            )
+
+        # Log failure to MLflow as trace feedback
+        if current_trace_id:
+            mlflow.log_feedback(
+                trace_id=current_trace_id,
+                name="image_generated",
+                value=False,
+                rationale="Scenario image generation failed (non-blocking)",
+                source=AssessmentSource(
+                    source_type=AssessmentSourceType.CODE,
+                    source_id=state.scenario_id,
+                ),
+            )
 
     return {"scenario_draft": scenario.model_dump()}
 

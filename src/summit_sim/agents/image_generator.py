@@ -4,6 +4,7 @@ import logging
 
 import httpx
 import mlflow
+from mlflow.entities import SpanType
 
 from summit_sim.schemas import ScenarioConfig, ScenarioDraft
 from summit_sim.settings import settings
@@ -55,7 +56,7 @@ def build_image_prompt(
     )
 
 
-@mlflow.trace(span_type="AGENT")
+@mlflow.trace(span_type=SpanType.AGENT)
 async def generate_scenario_image(
     scenario: ScenarioDraft,
     config: ScenarioConfig,
@@ -85,9 +86,15 @@ async def generate_scenario_image(
         model,
     )
 
-    # Log metadata for debugging and cost tracking
-    # mlflow.log_param("image_model", model)
-    # mlflow.log_param("prompt_length", len(prompt))
+    # Set span attributes for cost tracking
+    active_span = mlflow.get_current_active_span()
+    if active_span:
+        active_span.set_attributes(
+            {
+                "image.model": model,
+                "image.prompt_length": len(prompt),
+            }
+        )
 
     try:
         async with httpx.AsyncClient(
@@ -137,15 +144,57 @@ async def generate_scenario_image(
                 # Strip prefix and return base64 string
                 base64_data = image_url.split(",")[1]
                 logger.info("Successfully generated image: %d bytes", len(base64_data))
+
+                # Set span attributes for successful generation
+                if active_span:
+                    active_span.set_attributes(
+                        {
+                            "image.size_bytes": len(base64_data),
+                            "image.success": True,
+                        }
+                    )
+
                 return base64_data
+
             logger.warning("Unexpected image URL format")
+
+            # Set span attributes for unexpected format
+            if active_span:
+                active_span.set_attributes(
+                    {
+                        "image.success": False,
+                        "image.error": "unexpected_format",
+                    }
+                )
+
             return None
 
     except httpx.TimeoutException:
         logger.warning(
             "Image generation timed out after %ds", settings.image_generation_timeout
         )
+
+        # Set span attributes for timeout
+        if active_span:
+            active_span.set_attributes(
+                {
+                    "image.success": False,
+                    "image.error": "timeout",
+                }
+            )
+
         return None
+
     except Exception as e:
         logger.warning("Image generation failed: %s", e)
+
+        # Set span attributes for general failure
+        if active_span:
+            active_span.set_attributes(
+                {
+                    "image.success": False,
+                    "image.error": str(e),
+                }
+            )
+
         return None
