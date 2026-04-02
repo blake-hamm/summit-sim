@@ -379,9 +379,6 @@ async def show_review_screen(state: AuthorState) -> None:
 
     # Message 2: Scenario details
     content_parts = [
-        "#### 🎯 Learning Objectives",
-        learning_obj_text,
-        "",
         "#### 🏔️ Environment",
         f"**Setting:** {scenario.setting}",
         "",
@@ -393,6 +390,8 @@ async def show_review_screen(state: AuthorState) -> None:
         f"**Opening Narrative:** {scenario.initial_narrative}",
         "",
         "#### 🔒 Instructor Only",
+        f"**Learning Objectives:** {learning_obj_text}",
+        "",
         f"**Hidden Truth:** {scenario.hidden_truth}",
         "",
         f"**Hidden State:** {scenario.hidden_state}",
