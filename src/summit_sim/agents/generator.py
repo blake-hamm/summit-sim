@@ -222,7 +222,9 @@ async def generate_scenario(
         assert previous_draft is not None  # for type checker
         prompt = REVISION_PROMPT_TEMPLATE.format(
             feedback=revision_feedback,
-            previous_draft=previous_draft.model_dump_json(indent=2),
+            previous_draft=previous_draft.model_dump_json(
+                indent=2, exclude={"image_data"}
+            ),
         )
     else:
         # Use standard generation prompt

@@ -95,6 +95,14 @@ async def generate_scenario_node(state: AuthorState, config: RunnableConfig) -> 
         revision_feedback=state.revision_feedback,
     )
 
+    # Preserve existing image on revision to avoid regeneration costs
+    if is_revision and previous_draft and previous_draft.image_data:
+        scenario.image_data = previous_draft.image_data
+        logger.info(
+            "Preserving existing image on revision: scenario_id=%s",
+            state.scenario_id,
+        )
+
     active_span = mlflow.get_current_active_span()
     current_trace_id = active_span.trace_id if active_span else None
 
@@ -236,12 +244,20 @@ async def generate_image_node(state: AuthorState, config: RunnableConfig) -> dic
     """Generate scenario image before review.
 
     Non-blocking - if generation fails, scenario is still usable.
-    Regenerates image on revision (new scenario draft).
+    Skips generation on revision to preserve existing image (cost optimization).
     Image is stored in state.scenario_draft for review, then persisted on save.
 
     Assumes scenario_draft exists (fails fast if None).
     """
     scenario = ScenarioDraft.model_validate(state.scenario_draft)
+
+    # Skip generation on revision - image already preserved in scenario_draft
+    if state.retry_count > 0 and scenario.image_data:
+        logger.info(
+            "Skipping image generation on revision (cost optimization): scenario_id=%s",
+            state.scenario_id,
+        )
+        return {"scenario_draft": scenario.model_dump()}
 
     # Get config from state for image generation context
     scenario_config = ScenarioConfig.model_validate(state.scenario_config)
