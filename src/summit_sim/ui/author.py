@@ -390,7 +390,7 @@ async def show_review_screen(state: AuthorState) -> None:
         f"**Opening Narrative:** {scenario.initial_narrative}",
         "",
         "#### 🔒 Instructor Only",
-        f"**Learning Objectives:** {learning_obj_text}",
+        f"**Learning Objectives:**\n{learning_obj_text}",
         "",
         f"**Hidden Truth:** {scenario.hidden_truth}",
         "",

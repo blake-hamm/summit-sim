@@ -34,7 +34,7 @@ or messy AI-art artifacts like fused bodies or extra limbs. \
 Do not depict hidden medical details, open wounds, or anything that reveals \
 the correct diagnosis. Do not include any text in the image.
 
-Optimize for mobile viewing: strong central focal point, simple uncluttered \
+Ensure strong central focal point, simple uncluttered \
 composition, wide camera angle, and clear readability on small screens.
 """
 

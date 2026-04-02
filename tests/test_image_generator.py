@@ -30,10 +30,6 @@ class TestImagePromptConstants:
         """Test that prompt mentions wilderness for context."""
         assert "wilderness" in IMAGE_PROMPT_TEMPLATE.lower()
 
-    def test_prompt_template_mentions_mobile(self):
-        """Test that prompt mentions mobile viewing optimization."""
-        assert "mobile" in IMAGE_PROMPT_TEMPLATE.lower()
-
 
 class TestBuildImagePrompt:
     """Tests for build_image_prompt function."""
