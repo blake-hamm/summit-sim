@@ -26,6 +26,15 @@ spec:
                 property: OPENROUTER_API_KEY
         dragonfly:
           enabled: true
+          snapshot:
+            enabled: true
+            cron: "* */3 * * *"
+            pvc:
+              accessModes:
+                - ReadWriteOnce
+              resources:
+                requests:
+                  storage: 4Gi
         ingressRoutes:
           - name: summit-sim
             ingressClass: traefik-external

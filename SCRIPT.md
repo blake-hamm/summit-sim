@@ -1,33 +1,31 @@
 ### Show the main Chainlit UI
-- For the Weber State Hackathon, I created this app called Summit-Sim.
-- I collaborated with Ogden Avalanche Center President Keenan Grady for professional validation.
 - Currently, Wilderness First Responder courses rely on pre-canned scenarios from textbooks.
-- Summit-Sim creates infinitely many, AI-generated scenarios.
-- It provides dynamic gameplay to prep students for their WFR exams.
+- To solve this, I collaborated with the Ogden Avalanche Center President to build Summit-Sim—an AI-generated simulator that creates infinitely many dynamic medical emergencies to prepare students for exam
 
 ### Click "Create Scenario," pick parameters, and submit
-- While this builds, let me explain what's happening under the hood.
-- Our LangGraph architecture is orchestrating multiple steps.
-- Instead of just asking an LLM for a story, we use PydanticAI to force the model into strict data structures.
-- The AI is simultaneously building the physical environment, baseline vitals, and the "Hidden Truth" patient state.
+- The instructor sets the parameters, and our generator agent creates a WFR-aligned scenario.
+- With multimodal AI, it generates a unique image per scenario
+- Here are all the other ouptus, leveraging pydantic AI to enforce strict input/output types
 
 ### Type "add a rattlesnake in the hidden state. do not reveal it in any other fields."
-- We use LangGraph's interrupt feature for a Human-in-the-Loop experience.
-- This lets instructors easily tweak the scenario before publishing.
-- Approve is logging with agent traces to mlflow
+- Using langgraph interupt, Teacher is able to revise the scenario, for example 'add a rattlesnake'
+- Hidden information is presented only to the teacher and will be dynamically revealed in the action agent based on student actions
 
 ### Open the shareable URL and open the Student View
+- Shareable URL so multiple students can work on same scenario
 - The student sees a clean interface where the hidden truth is completely concealed.
   
 ### Type "Assess surroundings for safety"
-- In this multi-agent Simulation Graph, students use open-text input.
-- The agent evaluates their real-time medical decisions against the hidden state and WFR curriculum, dynamically updating the scene.
+- Different action agent used to assess the students action in free text
+- Student types an action, aligned to wfr curriculum which reveals hidden information (rattlesnake)
+
+### Switch to mlflow UI with gepa optimzation
+- SMEs warned me the action agent was too generous and simulations ended too quickly
+- To fix this, I used 4 LLM judges and GEPA optimization in MLflow to align the agent's prompt to expert feedback
 
 ### Switch to a tab with a pre-completed scenario
-- To save time, here is a completed scenario.
-- Once the student finishes, the final LangGraph node generates a comprehensive debrief report.
-- We also track all LLM spans and feedback via MLflow for full observability. 
+- Final debrief agent provides actionable feedback to student to prep them for the exam
 
 ### Conclusion
-- Our goal was to hide sophisticated AI orchestration behind an intuitive UI.
-- Summit-Sim delivers a unique training tool to prep students for the WFR exam or brush up on stale skills.
+- Tech stack is chainlit UI, langgraph orchestration, pydantic AI, mlflow tracing/optimization and openrouter for inference
+- Summit sim is multi-agent Ai system with HITL to build infinitely many WFR scenarios and provide interactive gameplay for students to prep for WFR exams
