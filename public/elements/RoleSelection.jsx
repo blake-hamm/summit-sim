@@ -4,8 +4,8 @@ import { Button } from "@/components/ui/button"
 
 export default function RoleSelection() {
     return (
-        <div className="grid grid-cols-2 gap-6 w-full max-w-4xl">
-            <Card className="flex flex-col">
+        <div className="flex flex-wrap gap-6 w-full max-w-4xl">
+            <Card className="flex flex-col flex-1" style={{ minWidth: '250px' }}>
                 <CardHeader className="text-center">
                     <div className="text-5xl mb-3">🎓</div>
                     <CardTitle className="text-xl">Instructor</CardTitle>
@@ -19,7 +19,7 @@ export default function RoleSelection() {
                         <li>Provide feedback to refine scenarios</li>
                         <li>Share scenarios with students when ready</li>
                     </ul>
-                    <Button 
+                    <Button
                         onClick={() => submitElement({ role: "instructor" })}
                         className="w-full mt-4"
                         size="lg"
@@ -30,7 +30,7 @@ export default function RoleSelection() {
                 </CardContent>
             </Card>
 
-            <Card className="flex flex-col">
+            <Card className="flex flex-col flex-1" style={{ minWidth: '250px' }}>
                 <CardHeader className="text-center">
                     <div className="text-5xl mb-3">👤</div>
                     <CardTitle className="text-xl">Student</CardTitle>
@@ -44,7 +44,7 @@ export default function RoleSelection() {
                         <li>Discover medical details through assessment</li>
                         <li>Configure and play scenarios instantly</li>
                     </ul>
-                    <Button 
+                    <Button
                         onClick={() => submitElement({ role: "student" })}
                         className="w-full mt-4"
                         size="lg"
