@@ -101,7 +101,7 @@ async def generate_scenario() -> None:
         f"{config.evac_distance}\n**Complexity:** {config.complexity}"
     )
     loading_msg = await cl.Message(
-        content=f"⏳ *Generating your scenario and image...*\n\n{params_text}"
+        content=f"⏳ *Generating your scenario...*\n\n{params_text}"
     ).send()
 
     graph = AppState.author_graph
@@ -119,13 +119,24 @@ async def generate_scenario() -> None:
     )
 
     try:
-        result = await graph.ainvoke(
-            initial_state,
-            config=config_dict,
-        )
+        final_result = None
+        async for event in graph.astream_events(initial_state, config=config_dict):
+            if event["event"] == "on_chain_end" and event["name"] == "generate":
+                retry_count = event["data"]["output"].get("retry_count", 0)
+                if retry_count == 0:
+                    loading_msg.content = (
+                        f"⏳ *Generating your image...*\n\n{params_text}"
+                    )
+                else:
+                    loading_msg.content = (
+                        f"⏳ *Finalizing revision...*\n\n{params_text}"
+                    )
+                await loading_msg.update()
+            elif event["event"] == "on_chain_end":
+                final_result = event["data"]["output"]
 
-        if result.get("scenario_draft"):
-            state = AuthorState.from_graph_result(result)
+        if final_result and final_result.get("scenario_draft"):
+            state = AuthorState.from_graph_result(final_result)
             mode = cl.user_session.get("mode", "instructor")
             is_student = mode == "student"
             params_text = (
