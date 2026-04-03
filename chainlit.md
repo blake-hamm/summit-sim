@@ -19,7 +19,7 @@ Traditional WFR training relies on static paper scenarios. **Summit-Sim reimagin
 - **Human-in-the-loop (HITL):** Instructors review and approve scenarios before students engage
 - **Cumulative PAS scoring:** Tracks progress across 5 WFR milestones (0-100% completion)
 - **Progressive revelation:** Hidden information revealed only through proper assessment
-- **GEPA optimization:** MLflow-based prompt optimization using expert judges for continuous improvement
+- **GEPA (genetic pareto) optimization:** MLflow-based prompt optimization using expert judges for continuous improvement
 
 **Real impact:** Provides a dynamic, engaging interface for WFR exam preparation with infinite scenario variety.
 

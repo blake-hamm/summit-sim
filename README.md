@@ -73,7 +73,7 @@ Four specialized PydanticAI agents power the system:
 - **Medical Judge:** Treatment gate validation (was_correct accuracy)
 - **Continuity Judge:** Progressive revelation, score monotonicity
 
-Note: Judges are implemented but currently disabled in production due to MLflow bug #20782. They are used for offline GEPA (GenAI Evaluation and Prompt Alignment) optimization in Jupyter notebooks.
+Note: Judges are implemented but currently disabled in production due to MLflow bug #20782. They are used for offline GEPA (Genetic Pareto) optimization in Jupyter notebooks.
 
 **GEPA Optimization:** Uses the judge framework with reflection models to iteratively improve agent prompts based on expert feedback. See notebooks/action-responder-prompt.ipynb.
 
