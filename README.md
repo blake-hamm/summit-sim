@@ -1,57 +1,87 @@
 # 🏔️ Summit-Sim
 
-**An AI-powered wilderness rescue simulator.**
+**An AI-powered wilderness rescue simulator with human-in-the-loop validation.**
 
 https://summit-sim.bhamm-lab.com/
 
-Summit-Sim uses human-in-the-loop review to generate curriculum-informed, interactive backcountry emergencies for dynamic Wilderness First Responder (WFR) training.
+Summit-Sim generates curriculum-informed, interactive backcountry emergencies for Wilderness First Responder (WFR) training. Instructors review and approve AI-generated scenarios before students engage with them, ensuring medical accuracy and pedagogical value.
 
 <img src="public/favicon.png" alt="summit-sim" width="200"/>
 
+*Built for the [Weber State AI Hackathon](https://hackathon.weber.edu/)* 🐾
+
+**Acknowledgments:** Thanks to **Keenan Grady** at the [Ogden Avalanche Center](https://ogdenavalanche.org/) for domain expertise in wilderness safety and WFR curriculum.
+
 ## 💡 The Problem
-Wilderness First Responder (WFR) training relies heavily on static paper scenarios or expensive live-action roleplay. Students rarely get enough dynamic, unpredictable repetitions to truly test their decision-making under pressure. When the unexpected happens in the backcountry, textbook memorization isn't enough—responders need dynamic critical thinking.
+
+Wilderness First Responder (WFR) training relies heavily on static paper scenarios or expensive live-action roleplay. Students rarely get enough dynamic, unpredictable repetitions to truly test their decision-making under pressure. When emergencies happen in the backcountry, textbook memorization isn't enough—responders need dynamic critical thinking developed through varied practice.
 
 ## 🚀 The Solution
-Summit-Sim provides infinite, medically accurate WFR scenarios through a dynamic AI game loop. Instead of multiple-choice questions, responders use natural language to evaluate scenes, check vitals, and apply treatments. The system evaluates every action against a hidden medical "truth," evolving the scenario exactly as a real patient's condition would change in the wild.
+
+Summit-Sim provides infinite, medically accurate WFR scenarios through a dynamic AI game loop. Instead of multiple-choice questions, students use natural language to evaluate scenes, check vitals, and apply treatments. The system evaluates every action against a hidden medical "truth," evolving the scenario exactly as a real patient's condition would change.
 
 ### Key Features
-*   **Infinite Scenario Authoring:** Generate highly specific emergencies based on environment, group size, and difficulty level.
-*   **Dynamic State Machine:** The patient's condition evolves realistically based on the responder's timeline and medical interventions (or lack thereof).
-*   **Human-In-The-Loop (HITL) Validation:** Instructors review and approve scenarios before publication, with all feedback logged to MLflow for continuous improvement.
-*   **Objective Debriefing:** Post-simulation evaluation scores the responder's actions against established WFR protocols.
+
+*   **Infinite Scenario Generation:** Create highly specific emergencies based on environment, group size, difficulty, and complexity. Each scenario includes a unique AI-generated atmospheric image.
+*   **Human-In-The-Loop (HITL) Validation:** Instructors review scenarios before publication, with all feedback logged to MLflow for continuous improvement.
+*   **Natural Language Interaction:** Students type free-text actions (no multiple choice). The AI evaluates against WFR protocols and reveals information progressively.
+*   **Cumulative PAS Scoring:** Tracks student progress (0-100%) across 5 Patient Assessment System milestones: Scene Size-up, Primary Assessment, Secondary Assessment, Treatment, and Evacuation Plan.
+*   **Intelligent Debriefing:** Post-simulation analysis with clinical reasoning assessment, key mistakes identification, and personalized recommendations.
+*   **Shareable Scenarios:** Students join via unique URLs—multiple students can work on the same scenario in different sessions.
+*   **Solo Practice Mode:** Students can also generate their own scenarios for independent practice. The scenario auto-generates and immediately starts the simulation without instructor review. **Students never see hidden information** (learning objectives, hidden truth, or hidden state)—they must discover medical details through proper assessment, just like in the instructor-led flow.
 
 ---
 
-## 🏗️ Technical Architecture 
+## 🏗️ Technical Architecture
 
-Summit-Sim is built with a sophisticated, production-ready AI stack focused on latency, strict output schemas, and agentic orchestration. 
+Summit-Sim is built with a sophisticated AI stack focused on medical safety, strict output schemas, and comprehensive observability.
 
 ### Core Tech Stack
-*   **Orchestration (LangGraph):** Manages the complex state flows of the simulation. Utilizes `StateGraph` for the core loops, `interrupt()` for instructor HITL injections, and checkpointing for state persistence.
-*   **Agent Framework (PydanticAI):** Ensures absolute medical safety and system stability by strictly enforcing all LLM inputs and outputs via Pydantic `BaseModel` schemas.
-*   **Frontend UI (Chainlit):** A fully asynchronous, reactive Python UI tailored for conversational AI, providing seamless UX for both scenario authoring and active gameplay.
-*   **Observability (MLflow):** Comprehensive LLM span tracing, variable logging, and feedback tracking to monitor agent reasoning and model performance.
+
+| Component | Technology | Purpose |
+|-----------|------------|---------|
+| **Orchestration** | LangGraph | Complex state flows, HITL interrupts via interrupt(), checkpointing for persistence |
+| **Agent Framework** | PydanticAI | Strict medical safety via enforced Pydantic schemas for all LLM I/O |
+| **UI Framework** | Chainlit | Async, reactive Python UI for conversational flows |
+| **Observability** | MLflow | LLM span tracing, human feedback tracking, prompt versioning, GEPA optimization |
+| **State Storage** | Redis (local) / DragonflyDB (prod) | LangGraph checkpoint persistence and scenario storage |
+| **Image Generation** | OpenRouter (Gemini Flash Image) | Unique atmospheric scenario images (16:9, non-blocking) |
 
 ### System Flow
-The application is cleanly divided into two interconnected graphs joined by a shared Scenario ID:
 
-1.  **The Authoring Graph:** Takes environmental parameters and dynamically generates the baseline blueprint (Setting, Patient vitals, Hidden Medical Truth, and Turn 0). Instructors review via HITL interrupt before scenarios go live.
-2.  **The Simulation Graph:** A continuous game loop where the AI evaluates open-ended student actions against the hidden truth, dynamically updating the active scene state and generating the next narrative frame.
+The application runs two interconnected LangGraph workflows:
+
+1.  **The Authoring Graph:** Generates scenarios from environmental parameters, creates atmospheric images, and presents them for instructor review via HITL interrupt before publication. When students generate their own scenarios, this graph auto-approves and bypasses the review interrupt, jumping directly to simulation.
+2.  **The Simulation Graph:** A continuous game loop where students type actions, the AI evaluates against hidden medical truth, and the patient state evolves dynamically. Completes at 80% PAS milestone completion or max turns. **All students** (whether joining via instructor link or generating solo) see only observable information—hidden medical data is never revealed without proper assessment.
 
 ### Agent Architecture
-Three specialized PydanticAI agents power the system:
-- **Generator:** Creates wilderness rescue scenarios from minimal configuration
-- **Action Responder:** Evaluates student free-text actions and provides cumulative scoring (0-100%)
-- **Debrief:** Generates post-simulation performance analysis against WFR protocols
 
-*Planned: MLflow automatic validation judges (Safety, Realism, Pedagogy) for medical accuracy assessment.*
+Four specialized PydanticAI agents power the system:
+
+| Agent | Purpose | Output Schema |
+|-------|---------|---------------|
+| **Generator** | Creates wilderness rescue scenarios from configuration | ScenarioDraft with visible/hidden separation |
+| **Image Generator** | Produces unique scenario images | Base64-encoded 16:9 image |
+| **Action Responder** | Evaluates student actions, reveals information, updates PAS score | ActionResponse with narrative and feedback |
+| **Debrief** | Generates post-simulation performance analysis | DebriefReport with teaching points |
+
+### Validation and Optimization
+
+**MLflow Judges (Implemented):** Four specialized judges evaluate simulation quality:
+- **Structure Judge:** Score range validation, narrative length, feedback tone
+- **Scoring Judge:** Milestone justification, monotonic progress, acknowledgment
+- **Medical Judge:** Treatment gate validation (was_correct accuracy)
+- **Continuity Judge:** Progressive revelation, score monotonicity
+
+Note: Judges are implemented but currently disabled in production due to MLflow bug #20782. They are used for offline GEPA (Genetic Pareto) optimization in Jupyter notebooks.
+
+**GEPA Optimization:** Uses the judge framework with reflection models to iteratively improve agent prompts based on expert feedback. See notebooks/action-responder-prompt.ipynb.
 
 ---
 
-*Built for the Weber State AI Hackathon* 🐾
+## 📚 Resources
 
-
-#### Resources:
+WFR Curriculum references used to ensure medical accuracy:
 
 - https://www.scribd.com/document/38484292/Wilderness-First-Responder-Course
 - https://wildsafe.org/wp-content/uploads/2021/11/CWS-%E2%80%93-WFR-Partcipant-Workbook-2021.pdf

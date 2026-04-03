@@ -30,8 +30,6 @@ spec:
               value: "redis://summit-sim-dragonfly:6379"
             - name: MLFLOW_TRACKING_URI
               value: "http://llm-models-mlflow.models.svc.cluster.local:80"
-            - name: DEFAULT_MODEL
-              value: "google/gemini-3.1-flash-lite-preview"
             - name: MLFLOW_ENV
               value: "prod"
             - name: BASE_URL
@@ -43,10 +41,10 @@ spec:
                   key: OPENROUTER_API_KEY
           resources:
             requests:
-              memory: "256Mi"
+              memory: "512Mi"
               cpu: "250m"
             limits:
-              memory: "512Mi"
+              memory: "1024Mi"
               cpu: "500m"
           livenessProbe:
             httpGet:

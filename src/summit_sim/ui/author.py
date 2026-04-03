@@ -359,46 +359,45 @@ async def show_review_screen(state: AuthorState) -> None:
         scenario.scene_state if scenario.scene_state else "*No special conditions*"
     )
 
-    # Build content with image below title
-    content_parts = [f"## 🏔️ {scenario.title}{attempt_text}"]
-
-    # Add image if available
-    elements = []
+    # Message 1: Title + Image (image appears immediately below title)
+    title_elements = []
     if scenario.image_data:
         image_bytes = base64.b64decode(scenario.image_data)
-        elements.append(
+        title_elements.append(
             cl.Image(
                 content=image_bytes,
                 name="scenario_preview",
                 display="inline",
-                size="medium",
+                size="large",
             )
         )
 
-    content_parts.extend(
-        [
-            "",
-            "#### 🎯 Learning Objectives",
-            learning_obj_text,
-            "",
-            "#### 🏔️ Environment",
-            f"**Setting:** {scenario.setting}",
-            "",
-            f"**Scene State:** {scene_display}",
-            "",
-            "#### 🏥 Patient",
-            f"**Summary:** {scenario.patient_summary}",
-            "",
-            f"**Opening Narrative:** {scenario.initial_narrative}",
-            "",
-            "#### 🔒 Instructor Only",
-            f"**Hidden Truth:** {scenario.hidden_truth}",
-            "",
-            f"**Hidden State:** {scenario.hidden_state}",
-        ]
-    )
+    await cl.Message(
+        content=f"## 🏔️ {scenario.title}{attempt_text}",
+        elements=title_elements,
+    ).send()
 
-    await cl.Message(content="\n".join(content_parts), elements=elements).send()
+    # Message 2: Scenario details
+    content_parts = [
+        "#### 🏔️ Environment",
+        f"**Setting:** {scenario.setting}",
+        "",
+        f"**Scene State:** {scene_display}",
+        "",
+        "#### 🏥 Patient",
+        f"**Summary:** {scenario.patient_summary}",
+        "",
+        f"**Opening Narrative:** {scenario.initial_narrative}",
+        "",
+        "#### 🔒 Instructor Only",
+        f"**Learning Objectives:**\n{learning_obj_text}",
+        "",
+        f"**Hidden Truth:** {scenario.hidden_truth}",
+        "",
+        f"**Hidden State:** {scenario.hidden_state}",
+    ]
+
+    await cl.Message(content="\n".join(content_parts)).send()
 
     res = await cl.AskActionMessage(
         content=get_review_content(),

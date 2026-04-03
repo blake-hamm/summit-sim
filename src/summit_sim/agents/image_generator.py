@@ -12,26 +12,31 @@ from summit_sim.settings import settings
 logger = logging.getLogger(__name__)
 
 IMAGE_PROMPT_TEMPLATE = """\
-Create a realistic cinematic wilderness scene for a wilderness first responder \
-training scenario titled "{title}".
+Create a high-quality, cinematic digital painting of a wilderness first responder \
+rescue in progress, representing a scenario titled "{title}". Use a serious, \
+atmospheric concept art style (similar to a survival video game).
 
 Setting: {setting}
 
 Scenario Context:
 - Environment Type: {environment}
-- Group Size: {available_personnel}
+- Group Size: {available_personnel} (Ensure distinct figures)
 - Evacuation Distance: {evac_distance}
 - Complexity Level: {complexity}
 - Primary Focus: {primary_focus}
 
-The image should feel immersive, grounded, and educational, with natural \
-lighting, clear environment cues, and a strong sense of place. Avoid text, \
-labels, logos, gore, exaggerated fantasy elements, or obvious AI-art artifacts. \
-Do not depict hidden medical details or anything that reveals the correct diagnosis.
-Do not include any text in the image.
+Action: Show one patient on the ground being assessed by the rescuers. \
+The image should feel immersive, grounded, and educational, featuring atmospheric \
+lighting, painterly brushstrokes, clear environment cues, and a strong sense of place.
 
-Optimize for mobile viewing: strong focal point, simple composition, clear \
-readability on small screens."""
+Avoid photorealism, text, labels, logos, gore, exaggerated fantasy elements, \
+or messy AI-art artifacts like fused bodies or extra limbs. \
+Do not depict hidden medical details, open wounds, or anything that reveals \
+the correct diagnosis. Do not include any text in the image.
+
+Ensure strong central focal point, simple uncluttered \
+composition, wide camera angle, and clear readability on small screens.
+"""
 
 
 def build_image_prompt(

@@ -9,13 +9,12 @@ from langgraph.types import Command
 
 from summit_sim.agents.action_responder import ActionResponse
 from summit_sim.graphs.simulation import (
-    COMPLETION_THRESHOLD,
     SimulationState,
 )
 from summit_sim.graphs.utils import AppState
 from summit_sim.schemas import DebriefReport, ScenarioDraft
 from summit_sim.settings import settings
-from summit_sim.ui.utils import format_scenario_details
+from summit_sim.ui.utils import format_student_scenario_details
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +77,7 @@ async def show_scenario_intro(
                 content=image_bytes,
                 name="scenario_image",
                 display="inline",
-                size="medium",
+                size="large",
             )
         )
 
@@ -89,8 +88,8 @@ async def show_scenario_intro(
 
     await cl.Message(content=f"## 🏔️ {scenario.title}", elements=title_elements).send()
 
-    # Message 2: Scenario details
-    details_content = format_scenario_details(scenario)
+    # Message 2: Scenario details (use student view to hide learning objectives)
+    details_content = format_student_scenario_details(scenario)
     await cl.Message(content=details_content).send()
 
     await run_simulation()
@@ -225,16 +224,8 @@ async def show_debrief(state: SimulationState) -> None:
 
     debrief = DebriefReport.model_validate(state.debrief_report)
 
-    # Pull progressive completion_score from LangGraph state
-    action_response = state.action_response or {}
-    completion_score = action_response.get("completion_score", 0)
-    score_percent = completion_score * 100
-    score_emoji = "✅" if completion_score >= COMPLETION_THRESHOLD else "❌"
-
     content_parts = [
-        f"## 🏁 Simulation Complete\n\n"
-        f"**Score:** {score_emoji} **{score_percent:.0f}%**\n\n"
-        f"**Summary:**\n{debrief.summary}",
+        f"## 🏁 Simulation Complete\n\n**Summary:**\n{debrief.summary}",
         f"**Clinical Reasoning Analysis:**\n{debrief.clinical_reasoning}",
     ]
 
