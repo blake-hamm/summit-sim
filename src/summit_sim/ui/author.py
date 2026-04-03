@@ -304,44 +304,45 @@ async def handle_revision(state: AuthorState) -> None:
     config_dict: RunnableConfig = {"configurable": {"thread_id": thread_id}}
 
     try:
-        # Resume graph with revision feedback
-        result = await graph.ainvoke(
+        new_retry_count = (state.retry_count or 0) + 1
+
+        loading_msg = await cl.Message(
+            content=(
+                f"🔄 Revising scenario based on your feedback "
+                f"(attempt {new_retry_count}/{MAX_RETRY_ATTEMPTS})..."
+            ),
+        ).send()
+
+        hit_save_node = False
+        async for event in graph.astream_events(
             Command(resume={"action": "revise", "feedback": feedback}),
             config=config_dict,
-        )
+        ):
+            if event["event"] == "on_chain_end":
+                node_name = event["name"]
+                if node_name == "generate":
+                    loading_msg.content = "🔄 Finalizing revision..."
+                    await loading_msg.update()
+                elif node_name == "save":
+                    hit_save_node = True
 
-        final_state = AuthorState.from_graph_result(result)
-        new_retry_count = final_state.retry_count or 0
+        final_state = await graph.aget_state(config_dict)
+        state_values = final_state.values
 
-        if new_retry_count >= MAX_RETRY_ATTEMPTS:
-            await cl.Message(
-                content=(
-                    f"⚠️ Maximum revision attempts reached ({MAX_RETRY_ATTEMPTS}/"
-                    f"{MAX_RETRY_ATTEMPTS}). Proceeding with current scenario."
-                ),
-            ).send()
-            await show_completion(final_state)
-        else:
-            await cl.Message(
-                content=(
-                    f"🔄 Revising scenario based on your feedback "
-                    f"(attempt {new_retry_count}/{MAX_RETRY_ATTEMPTS})..."
-                ),
-            ).send()
-
-            # Continue graph to regenerate
-            result = await graph.ainvoke(
-                None,
-                config=config_dict,
-            )
-
-            if result.get("scenario_draft"):
-                new_state = AuthorState.from_graph_result(result)
-                await show_review_screen(new_state)
+        if state_values and state_values.get("scenario_draft"):
+            new_state = AuthorState.from_graph_result(state_values)
+            if hit_save_node:
+                await loading_msg.remove()
+                await show_completion(new_state)
             else:
-                await cl.Message(
-                    content="❌ Error: Revision failed. Please try again.",
-                ).send()
+                loading_msg.content = "✅ Revision complete! Ready for review."
+                await loading_msg.update()
+                await show_review_screen(new_state)
+        else:
+            await loading_msg.remove()
+            await cl.Message(
+                content="❌ Error: Revision failed. Please try again.",
+            ).send()
 
     except Exception as e:
         await cl.Message(
