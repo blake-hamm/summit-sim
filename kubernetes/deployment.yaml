@@ -39,6 +39,12 @@ spec:
                 secretKeyRef:
                   name: summit-sim-external-secret
                   key: OPENROUTER_API_KEY
+            - name: GOOGLE_APPLICATION_CREDENTIALS
+              value: /app/secrets/gcp-service-account.json
+          volumeMounts:
+            - name: gcp-sa
+              mountPath: /app/secrets
+              readOnly: true
           resources:
             requests:
               memory: "512Mi"
@@ -62,3 +68,10 @@ spec:
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 3
+      volumes:
+        - name: gcp-sa
+          secret:
+            secretName: summit-sim-external-secret
+            items:
+              - key: gcp-service-account.json
+                path: gcp-service-account.json
