@@ -172,3 +172,65 @@ def setup_agent_and_prompts(  # noqa: PLR0913
 
     agent, user_prompt = _agent_container[agent_name]
     return agent, user_prompt
+
+
+def initialize_agents() -> None:
+    """Eagerly initialize all agents at server startup.
+
+    This eliminates cold-start latency and race conditions from lazy initialization.
+    Called once from on_app_startup().
+
+    Imports are local to avoid circular dependencies at module load time.
+    """
+    # ruff: noqa: I001, PLC0415
+    from summit_sim.agents.action_responder import (
+        AGENT_NAME as ACTION_AGENT_NAME,
+        SYSTEM_PROMPT as ACTION_SYSTEM_PROMPT,
+        USER_PROMPT_TEMPLATE as ACTION_USER_PROMPT,
+        ActionResponse,
+    )
+    from summit_sim.agents.debrief import (
+        AGENT_NAME as DEBRIEF_AGENT_NAME,
+        SYSTEM_PROMPT as DEBRIEF_SYSTEM_PROMPT,
+        USER_PROMPT_TEMPLATE as DEBRIEF_USER_PROMPT,
+    )
+    from summit_sim.agents.generator import (
+        AGENT_NAME as GENERATOR_AGENT_NAME,
+        SYSTEM_PROMPT as GENERATOR_SYSTEM_PROMPT,
+        USER_PROMPT_TEMPLATE as GENERATOR_USER_PROMPT,
+    )
+    from summit_sim.schemas import DebriefReport, ScenarioDraft
+
+    logger.info("Initializing agents...")
+
+    # Generator agent - high reasoning for scenario creation
+    setup_agent_and_prompts(
+        agent_name=GENERATOR_AGENT_NAME,
+        output_type=ScenarioDraft,
+        system_prompt=GENERATOR_SYSTEM_PROMPT,
+        user_prompt_template=GENERATOR_USER_PROMPT,
+        reasoning_effort="high",
+    )
+    logger.debug("Generator agent initialized")
+
+    # Debrief agent - medium reasoning for post-simulation analysis
+    setup_agent_and_prompts(
+        agent_name=DEBRIEF_AGENT_NAME,
+        output_type=DebriefReport,
+        system_prompt=DEBRIEF_SYSTEM_PROMPT,
+        user_prompt_template=DEBRIEF_USER_PROMPT,
+        reasoning_effort="medium",
+    )
+    logger.debug("Debrief agent initialized")
+
+    # Action responder - default reasoning, no MLflow registration (uses register=False)
+    setup_agent_and_prompts(
+        agent_name=ACTION_AGENT_NAME,
+        output_type=ActionResponse,
+        system_prompt=ACTION_SYSTEM_PROMPT,
+        user_prompt_template=ACTION_USER_PROMPT,
+        register=False,
+    )
+    logger.debug("Action responder agent initialized")
+
+    logger.info("All agents initialized successfully")

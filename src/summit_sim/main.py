@@ -3,13 +3,11 @@
 Entry point for the Chainlit application.
 """
 
-import asyncio
 import logging
 from urllib.parse import parse_qs, urlparse
 
-import chainlit as cl  # noqa: E402
+import chainlit as cl
 import mlflow
-from chainlit import on_chat_start, on_message  # noqa: E402
 from langgraph.checkpoint.redis.aio import AsyncRedisSaver
 from langgraph.store.redis.aio import AsyncRedisStore
 from redis.asyncio import Redis
@@ -23,72 +21,55 @@ from summit_sim.ui import author, simulation
 logger = logging.getLogger(__name__)
 
 
-class ApplicationLifecycle:
-    """Manages server-lifespan initialization safely without global variables."""
+@cl.on_app_startup
+async def on_app_startup() -> None:
+    """Initialize global services once at server start."""
+    # 1. MLflow first - agents depend on it for prompt registry
+    mlflow.set_tracking_uri(settings.mlflow_tracking_uri)
+    mlflow.set_experiment(settings.mlflow_experiment_name)
+    mlflow.pydantic_ai.autolog()  # type: ignore[attr-defined]
+    logger.info("MLflow initialized")
 
-    _initialized: bool = False
-    _lock: asyncio.Lock | None = None
+    # 2. Redis persistence for LangGraph
+    redis_client = Redis.from_url(settings.redis_url)
+    AppState.redis_client = redis_client
 
-    @classmethod
-    async def setup_once(cls) -> None:
-        """Initialize global services exactly once per server lifespan."""
-        if cls._initialized:
-            return
+    AppState.store = AsyncRedisStore(
+        redis_client=redis_client,
+        ttl={"default_ttl": 10080, "refresh_on_read": True},  # 7 Days
+    )
+    AppState.checkpointer = AsyncRedisSaver(
+        redis_client=redis_client,
+        ttl={"default_ttl": 1440, "refresh_on_read": True},  # 24 Hours
+    )
 
-        # Initialize lock lazily to ensure it binds to the running event loop
-        if cls._lock is None:
-            cls._lock = asyncio.Lock()
+    await AppState.store.setup()
+    await AppState.checkpointer.setup()
+    logger.info("Redis persistence initialized")
 
-        async with cls._lock:
-            if cls._initialized:
-                return
+    # 3. Compile LangGraph graphs
+    AppState.author_graph = create_author_graph(AppState.checkpointer, AppState.store)
+    AppState.simulation_graph = create_simulation_graph(AppState.checkpointer)
+    logger.info("Graphs compiled")
 
-            # 1. Initialize MLflow
-            mlflow.set_tracking_uri(settings.mlflow_tracking_uri)
-            mlflow.set_experiment(settings.mlflow_experiment_name)
-            mlflow.pydantic_ai.autolog()  # type: ignore[attr-defined]
-            logger.debug("MLflow initialized")
+    # 4. Eagerly initialize agents (eliminates cold-start latency)
+    from summit_sim.agents.utils import initialize_agents  # noqa: PLC0415
 
-            # 2. Initialize judges for automatic evaluation
-            # DISABLED: MLflow bug #20782 - automated scoring fails
-            # TODO: Re-enable once MLflow PR #20784 is merged (v3.10.2+)
-            # initialize_judges()
-            # logger.debug("Judges initialized")
-
-            # 3. Safe async init inside the active event loop
-            redis_client = Redis.from_url(settings.redis_url)
-
-            # 4. Attach Database singletons to AppState
-            AppState.store = AsyncRedisStore(
-                redis_client=redis_client,
-                ttl={"default_ttl": 10080, "refresh_on_read": True},  # 7 Days
-            )
-            AppState.checkpointer = AsyncRedisSaver(
-                redis_client=redis_client,
-                ttl={"default_ttl": 1440, "refresh_on_read": True},  # 24 Hours
-            )
-
-            # 5. Setup database indices
-            await AppState.store.setup()
-            await AppState.checkpointer.setup()
-            logger.debug("Redis persistence initialized")
-
-            # 6. Compile our globally shared, thread-safe graphs once
-            assert AppState.checkpointer is not None
-            assert AppState.store is not None
-            AppState.author_graph = create_author_graph(
-                AppState.checkpointer, AppState.store
-            )
-            AppState.simulation_graph = create_simulation_graph(AppState.checkpointer)
-            logger.debug("Graphs compiled")
-
-            cls._initialized = True
+    initialize_agents()
+    logger.info("All services initialized")
 
 
-@on_chat_start
+@cl.on_app_shutdown
+async def on_app_shutdown() -> None:
+    """Cleanup resources on server shutdown."""
+    if AppState.redis_client:
+        await AppState.redis_client.aclose()
+        logger.info("Redis connection closed")
+
+
+@cl.on_chat_start
 async def start() -> None:
     """Initialize chat session - routes to author or player flow."""
-    await ApplicationLifecycle.setup_once()
     logger.info("New chat session started")
     query_string = ""
     environ = cl.context.session.environ if hasattr(cl.context, "session") else {}
@@ -184,7 +165,7 @@ async def show_student_welcome() -> None:
     ).send()
 
 
-@on_message
+@cl.on_message
 async def on_message_handler(_message: cl.Message) -> None:
     """Handle incoming messages (fallback handler)."""
     mode = cl.user_session.get("mode")
