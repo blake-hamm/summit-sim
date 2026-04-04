@@ -163,6 +163,7 @@ def setup_agent_and_prompts(  # noqa: PLR0913
             output_type=output_type,
             system_prompt=cast(str, system_prompt_obj.template),
             model_settings=OpenRouterModelSettings(
+                timeout=settings.llm_timeout,
                 openrouter_reasoning={"effort": reasoning_effort},
                 openrouter_usage={"include": True},
             ),

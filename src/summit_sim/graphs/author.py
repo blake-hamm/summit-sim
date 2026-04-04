@@ -16,7 +16,7 @@ from mlflow.entities import AssessmentSource, AssessmentSourceType, SpanType
 from summit_sim.agents.generator import AGENT_NAME as GENERATOR_AGENT_NAME
 from summit_sim.agents.generator import generate_scenario
 from summit_sim.agents.image_generator import generate_scenario_image
-from summit_sim.graphs.utils import AppState
+from summit_sim.graphs.utils import AppState, retry_policy
 from summit_sim.schemas import (
     ScenarioConfig,
     ScenarioDraft,
@@ -351,8 +351,8 @@ def create_author_graph(
     workflow = StateGraph(AuthorState)
 
     workflow.add_node("initialize", initialize_author)
-    workflow.add_node("generate", generate_scenario_node)
-    workflow.add_node("generate_image", generate_image_node)
+    workflow.add_node("generate", generate_scenario_node, retry_policy=retry_policy)
+    workflow.add_node("generate_image", generate_image_node, retry_policy=retry_policy)
     workflow.add_node("review", present_for_author)
     workflow.add_node("save", save_scenario)
 

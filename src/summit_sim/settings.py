@@ -32,8 +32,16 @@ class Settings(BaseSettings):
         description="OpenRouter model for scenario image generation",
     )
     image_generation_timeout: int = Field(
-        default=120,
+        default=45,
         description="Timeout in seconds for image generation",
+    )
+    llm_timeout: int = Field(
+        default=45,
+        description="Timeout in seconds for LLM model calls",
+    )
+    llm_max_retries: int = Field(
+        default=3,
+        description="Maximum retry attempts for LLM calls (1 original + N retries)",
     )
 
     model_config = SettingsConfigDict(

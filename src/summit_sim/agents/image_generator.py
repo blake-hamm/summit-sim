@@ -121,8 +121,10 @@ async def generate_scenario_image(
                     ],
                     "modalities": ["image"],
                     "image_config": {
-                        "aspect_ratio": "16:9"  # 1344×768 landscape, mobile-optimized
+                        "aspect_ratio": "16:9",  # 1344×768 landscape, mobile-optimized
+                        "image_size": "1K",
                     },
+                    "reasoning": {"effort": "none"},  # Disables reasoning entirely
                 },
             )
             response.raise_for_status()
