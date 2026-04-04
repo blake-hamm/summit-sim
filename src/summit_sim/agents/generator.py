@@ -214,7 +214,6 @@ async def generate_scenario(
         output_type=ScenarioDraft,
         system_prompt=SYSTEM_PROMPT,
         user_prompt_template=USER_PROMPT_TEMPLATE,
-        reasoning_effort="high",
     )
 
     if is_revision:

@@ -66,7 +66,6 @@ async def generate_debrief(
         output_type=DebriefReport,
         system_prompt=SYSTEM_PROMPT,
         user_prompt_template=USER_PROMPT_TEMPLATE,
-        reasoning_effort="medium",
     )
 
     prompt = _build_debrief_prompt(transcript, scenario_draft, scenario_id, user_prompt)
