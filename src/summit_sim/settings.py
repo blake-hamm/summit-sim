@@ -11,7 +11,7 @@ class Settings(BaseSettings):
 
     mlflow_tracking_uri: str = "http://localhost:5000"
     openrouter_api_key: str = ""
-    default_model: str = "google/gemini-3.1-flash-lite-preview"
+    default_model: str = "google/gemini-3.1-flash-lite-preview:nitro"
     mlflow_experiment_name: str = "summit-sim"
     base_url: str = "http://localhost:8000"
     log_level: str = "INFO"
@@ -28,12 +28,20 @@ class Settings(BaseSettings):
         description="Deployment environment for MLflow traces: local or prod",
     )
     image_generation_model: str = Field(
-        default="google/gemini-3.1-flash-image-preview",
+        default="google/gemini-3.1-flash-image-preview:nitro",
         description="OpenRouter model for scenario image generation",
     )
     image_generation_timeout: int = Field(
-        default=120,
+        default=45,
         description="Timeout in seconds for image generation",
+    )
+    llm_timeout: int = Field(
+        default=45,
+        description="Timeout in seconds for LLM model calls",
+    )
+    llm_max_retries: int = Field(
+        default=3,
+        description="Maximum retry attempts for LLM calls (1 original + N retries)",
     )
 
     model_config = SettingsConfigDict(

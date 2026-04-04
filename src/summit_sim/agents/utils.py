@@ -144,7 +144,7 @@ def setup_agent_and_prompts(  # noqa: PLR0913
     output_type: type,
     system_prompt: str,
     user_prompt_template: str,
-    reasoning_effort: Literal["low", "medium", "high"] = "medium",
+    reasoning_effort: Literal["low", "medium", "high", "minimal", "none"] = "minimal",
     register: bool = True,
 ) -> tuple[Agent[Any, Any], PromptVersion]:
     """Create/configure agent with versioned prompts."""
@@ -163,6 +163,7 @@ def setup_agent_and_prompts(  # noqa: PLR0913
             output_type=output_type,
             system_prompt=cast(str, system_prompt_obj.template),
             model_settings=OpenRouterModelSettings(
+                timeout=settings.llm_timeout,
                 openrouter_reasoning={"effort": reasoning_effort},
                 openrouter_usage={"include": True},
             ),
@@ -209,7 +210,6 @@ def initialize_agents() -> None:
         output_type=ScenarioDraft,
         system_prompt=GENERATOR_SYSTEM_PROMPT,
         user_prompt_template=GENERATOR_USER_PROMPT,
-        reasoning_effort="high",
     )
     logger.debug("Generator agent initialized")
 
@@ -219,7 +219,6 @@ def initialize_agents() -> None:
         output_type=DebriefReport,
         system_prompt=DEBRIEF_SYSTEM_PROMPT,
         user_prompt_template=DEBRIEF_USER_PROMPT,
-        reasoning_effort="medium",
     )
     logger.debug("Debrief agent initialized")
 

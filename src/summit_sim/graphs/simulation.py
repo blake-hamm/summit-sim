@@ -27,6 +27,7 @@ from summit_sim.agents.debrief import (
 from summit_sim.agents.debrief import (
     generate_debrief,
 )
+from summit_sim.graphs.utils import retry_policy
 from summit_sim.schemas import (
     ScenarioDraft,
     TranscriptEntry,
@@ -348,9 +349,13 @@ def create_simulation_graph(
 
     workflow.add_node("initialize", initialize_simulation)
     workflow.add_node("present_prompt", present_prompt)
-    workflow.add_node("process_student_action", process_student_action)
+    workflow.add_node(
+        "process_student_action", process_student_action, retry_policy=retry_policy
+    )
     workflow.add_node("update_simulation_state", update_simulation_state)
-    workflow.add_node("generate_debrief", generate_debrief_report)
+    workflow.add_node(
+        "generate_debrief", generate_debrief_report, retry_policy=retry_policy
+    )
 
     workflow.set_entry_point("initialize")
     workflow.add_edge("initialize", "present_prompt")

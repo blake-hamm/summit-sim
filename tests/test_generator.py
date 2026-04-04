@@ -269,7 +269,6 @@ class TestGeneratorAgent:
             # Verify setup was called with high reasoning effort
             mock_setup.assert_called_once()
             call_kwargs = mock_setup.call_args.kwargs
-            assert call_kwargs["reasoning_effort"] == "high"
             assert call_kwargs["agent_name"] == "generator-draft"
 
     @pytest.mark.asyncio
