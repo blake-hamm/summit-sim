@@ -144,7 +144,7 @@ def setup_agent_and_prompts(  # noqa: PLR0913
     output_type: type,
     system_prompt: str,
     user_prompt_template: str,
-    reasoning_effort: Literal["low", "medium", "high", "minimal", "none"] = "none",
+    reasoning_effort: Literal["low", "medium", "high", "minimal", "none"] = "minimal",
     register: bool = True,
 ) -> tuple[Agent[Any, Any], PromptVersion]:
     """Create/configure agent with versioned prompts."""
