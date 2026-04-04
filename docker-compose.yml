@@ -28,6 +28,8 @@ services:
       - ./public:/app/public
       - ./chainlit.md:/app/chainlit.md
       - ./chainlit_en-US.md:/app/chainlit_en-US.md
+      # GCP credentials for Vertex AI
+      - ./secrets:/app/secrets:ro
       # Mount dependency files for updates
       - ./pyproject.toml:/app/pyproject.toml
       - ./uv.lock:/app/uv.lock

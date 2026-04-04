@@ -7,19 +7,17 @@ from functools import lru_cache
 from typing import Any, Literal, cast
 
 import mlflow
+from google.genai import types
+from google.oauth2 import service_account
 from mlflow.entities.model_registry.prompt_version import PromptVersion
 from pydantic_ai import Agent
-from pydantic_ai.models.openrouter import (
-    OpenRouterModel,
-    OpenRouterModelSettings,
-)
-from pydantic_ai.providers.openrouter import OpenRouterProvider
+from pydantic_ai.models.google import GoogleModel, GoogleModelSettings
+from pydantic_ai.providers.google import GoogleProvider
 
 from summit_sim.settings import settings
 
 logger = logging.getLogger(__name__)
 
-# WFR Curriculum Learning Objectives - organized by category
 WFR_LEARNING_OBJECTIVES = {
     "patient_assessment": [
         "Execute systematic scene size-up identifying mechanism of injury, "
@@ -95,20 +93,31 @@ WFR_LEARNING_OBJECTIVES = {
     ],
 }
 
-# Flattened list for easy validation
 ALL_WFR_OBJECTIVES = [
     obj for category in WFR_LEARNING_OBJECTIVES.values() for obj in category
 ]
 
+REASONING_TO_THINKING: dict[Literal["low", "medium", "high"], types.ThinkingLevel] = {
+    "low": types.ThinkingLevel.MINIMAL,
+    "medium": types.ThinkingLevel.LOW,
+    "high": types.ThinkingLevel.HIGH,
+}
+
 
 @lru_cache(maxsize=1)
-def get_provider() -> OpenRouterProvider:
-    """Get singleton OpenRouter provider instance."""
-    return OpenRouterProvider(api_key=settings.openrouter_api_key)
+def get_provider() -> GoogleProvider:
+    """Get singleton Google Provider instance for Vertex AI."""
+    credentials = service_account.Credentials.from_service_account_file(
+        str(settings.google_application_credentials),
+        scopes=["https://www.googleapis.com/auth/cloud-platform"],
+    )
+    return GoogleProvider(
+        credentials=credentials,
+        project=settings.gcp_project_id,
+        location=settings.gcp_location,
+    )
 
 
-# Module-level agent container for lazy initialization
-# Stores tuple of (agent, user_prompt) to avoid repeated MLflow calls
 _agent_container: dict[str, tuple[Agent[Any, Any], PromptVersion]] = {}
 
 
@@ -155,19 +164,20 @@ def setup_agent_and_prompts(  # noqa: PLR0913
         user_prompt_obj = _get_or_register_prompt(
             f"{agent_name}-user", user_prompt_template, register=register
         )
+        thinking_level = REASONING_TO_THINKING.get(
+            reasoning_effort, types.ThinkingLevel.LOW
+        )
+        model_settings = GoogleModelSettings(
+            google_thinking_config=types.ThinkingConfigDict(
+                thinking_level=thinking_level
+            )
+        )
         agent = Agent(
-            OpenRouterModel(
-                settings.default_model,
-                provider=get_provider(),
-            ),
+            GoogleModel(settings.default_model, provider=get_provider()),
             output_type=output_type,
             system_prompt=cast(str, system_prompt_obj.template),
-            model_settings=OpenRouterModelSettings(
-                openrouter_reasoning={"effort": reasoning_effort},
-                openrouter_usage={"include": True},
-            ),
+            model_settings=model_settings,
         )
-        # Cache both the agent and the prompt to eliminate network overhead
         _agent_container[agent_name] = (agent, user_prompt_obj)
 
     agent, user_prompt = _agent_container[agent_name]

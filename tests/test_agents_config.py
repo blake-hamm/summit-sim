@@ -69,9 +69,9 @@ def test_get_or_register_prompt_new():
 def test_setup_agent_and_prompts_creates_new():
     """Test that setup_agent_and_prompts creates a new agent when not cached."""
     with (
-        patch("summit_sim.agents.utils.OpenRouterProvider"),
-        patch("summit_sim.agents.utils.OpenRouterModel"),
-        patch("summit_sim.agents.utils.OpenRouterModelSettings"),
+        patch("summit_sim.agents.utils.GoogleProvider"),
+        patch("summit_sim.agents.utils.GoogleModel"),
+        patch("summit_sim.agents.utils.GoogleModelSettings"),
         patch("summit_sim.agents.utils._get_or_register_prompt") as mock_get_prompt,
         patch("summit_sim.agents.utils.Agent") as mock_agent_class,
     ):

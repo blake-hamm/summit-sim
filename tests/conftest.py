@@ -1,6 +1,7 @@
 """Pytest configuration and shared fixtures for summit-sim tests."""
 
 import os
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -29,9 +30,18 @@ class MockPrompt:
 
 
 @pytest.fixture(autouse=True)
-def mock_api_key():
-    """Mock the API key to avoid errors during agent creation."""
-    with patch("summit_sim.agents.utils.settings.openrouter_api_key", "test-api-key"):
+def mock_gcp_credentials():
+    """Mock the GCP credentials to avoid errors during agent creation."""
+    with (
+        patch(
+            "summit_sim.agents.utils.settings.google_application_credentials",
+            Path("/tmp/test-sa.json"),
+        ),
+        patch("summit_sim.agents.utils.settings.gcp_project_id", "test-project"),
+        patch("summit_sim.agents.utils.settings.gcp_location", "us-central1"),
+        patch("summit_sim.agents.utils.service_account.Credentials") as mock_creds,
+    ):
+        mock_creds.from_service_account_file.return_value = MagicMock()
         yield
 
 

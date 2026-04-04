@@ -1,8 +1,8 @@
 """Tests for the scenario image generator agent."""
 
+import base64
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import httpx
 import pytest
 
 from summit_sim.agents.image_generator import (
@@ -134,295 +134,185 @@ class TestGenerateScenarioImage:
 
     @pytest.mark.asyncio
     async def test_generate_image_success(self, sample_scenario, sample_config):
-        """Test successful image generation with base64 response."""
+        """Test successful image generation with Vertex AI response."""
+        mock_inline_data = MagicMock()
+        mock_inline_data.data = b"test_imagedata"
+
+        mock_part = MagicMock()
+        mock_part.inline_data = mock_inline_data
+
+        mock_content = MagicMock()
+        mock_content.parts = [mock_part]
+
+        mock_candidate = MagicMock()
+        mock_candidate.content = mock_content
+
         mock_response = MagicMock()
-        mock_response.json.return_value = {
-            "choices": [
-                {
-                    "message": {
-                        "images": [
-                            {
-                                "image_url": {
-                                    "url": (
-                                        "data:image/jpeg;base64,"
-                                        "/9j/4AAQSkZJRgABAQAAAQABAA"
-                                    )
-                                }
-                            }
-                        ]
-                    }
-                }
-            ]
-        }
-        mock_response.raise_for_status.return_value = None
+        mock_response.candidates = [mock_candidate]
 
-        mock_client = AsyncMock()
-        mock_client.post.return_value = mock_response
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=None)
+        mock_models = MagicMock()
+        mock_models.generate_content = MagicMock(return_value=mock_response)
 
-        with (
-            patch("httpx.AsyncClient", return_value=mock_client),
-            patch(
-                "summit_sim.agents.image_generator.settings.openrouter_api_key",
-                "test-api-key",
-            ),
-            patch(
-                "summit_sim.agents.image_generator.settings.image_generation_model",
-                "test-model",
-            ),
-            patch(
-                "summit_sim.agents.image_generator.settings.image_generation_timeout",
-                60,
-            ),
+        mock_aio_models = AsyncMock()
+        mock_aio_models.generate_content = AsyncMock(return_value=mock_response)
+
+        mock_client = MagicMock()
+        mock_client.aio.models = mock_aio_models
+
+        mock_provider = MagicMock()
+        mock_provider.client = mock_client
+
+        with patch(
+            "summit_sim.agents.image_generator.get_provider",
+            return_value=mock_provider,
         ):
             result = await generate_scenario_image(sample_scenario, sample_config)
 
-        assert result == "/9j/4AAQSkZJRgABAQAAAQABAA"
-        mock_client.post.assert_called_once()
+        assert result == base64.b64encode(b"test_imagedata").decode("ascii")
+        mock_aio_models.generate_content.assert_called_once()
+        call_args = mock_aio_models.generate_content.call_args
+        assert call_args.kwargs["model"] == "gemini-3.1-flash-image-preview"
+        assert call_args.kwargs["config"].response_modalities == ["IMAGE"]
 
     @pytest.mark.asyncio
     async def test_generate_image_uses_custom_model(
         self, sample_scenario, sample_config
     ):
         """Test that custom model parameter is respected."""
-        mock_response = MagicMock()
-        mock_response.json.return_value = {
-            "choices": [
-                {
-                    "message": {
-                        "images": [
-                            {"image_url": {"url": "data:image/jpeg;base64,test123"}}
-                        ]
-                    }
-                }
-            ]
-        }
-        mock_response.raise_for_status.return_value = None
+        mock_inline_data = MagicMock()
+        mock_inline_data.data = b"testimagedata"
 
-        mock_client = AsyncMock()
-        mock_client.post.return_value = mock_response
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=None)
+        mock_part = MagicMock()
+        mock_part.inline_data = mock_inline_data
+
+        mock_content = MagicMock()
+        mock_content.parts = [mock_part]
+
+        mock_candidate = MagicMock()
+        mock_candidate.content = mock_content
+
+        mock_response = MagicMock()
+        mock_response.candidates = [mock_candidate]
+
+        mock_aio_models = AsyncMock()
+        mock_aio_models.generate_content = AsyncMock(return_value=mock_response)
+
+        mock_client = MagicMock()
+        mock_client.aio.models = mock_aio_models
+
+        mock_provider = MagicMock()
+        mock_provider.client = mock_client
 
         custom_model = "custom-image-model"
 
-        with (
-            patch("httpx.AsyncClient", return_value=mock_client),
-            patch(
-                "summit_sim.agents.image_generator.settings.openrouter_api_key",
-                "test-api-key",
-            ),
+        with patch(
+            "summit_sim.agents.image_generator.get_provider",
+            return_value=mock_provider,
         ):
-            result = await generate_scenario_image(
+            await generate_scenario_image(
                 sample_scenario, sample_config, model=custom_model
             )
 
-        # Verify the model was passed in the request
-        call_args = mock_client.post.call_args
-        json_payload = call_args.kwargs["json"]
-        assert json_payload["model"] == custom_model
-        assert result == "test123"
+        call_args = mock_aio_models.generate_content.call_args
+        assert call_args.kwargs["model"] == custom_model
 
     @pytest.mark.asyncio
-    async def test_generate_image_no_choices_in_response(
-        self, sample_scenario, sample_config
-    ):
-        """Test handling of response with no choices."""
+    async def test_generate_image_no_candidates(self, sample_scenario, sample_config):
+        """Test handling of response with no candidates."""
         mock_response = MagicMock()
-        mock_response.json.return_value = {"choices": []}
-        mock_response.raise_for_status.return_value = None
+        mock_response.candidates = None
 
-        mock_client = AsyncMock()
-        mock_client.post.return_value = mock_response
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=None)
+        mock_aio_models = AsyncMock()
+        mock_aio_models.generate_content = AsyncMock(return_value=mock_response)
 
-        with (
-            patch("httpx.AsyncClient", return_value=mock_client),
-            patch(
-                "summit_sim.agents.image_generator.settings.openrouter_api_key",
-                "test-api-key",
-            ),
+        mock_client = MagicMock()
+        mock_client.aio.models = mock_aio_models
+
+        mock_provider = MagicMock()
+        mock_provider.client = mock_client
+
+        with patch(
+            "summit_sim.agents.image_generator.get_provider",
+            return_value=mock_provider,
         ):
             result = await generate_scenario_image(sample_scenario, sample_config)
 
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_generate_image_no_images_in_message(
-        self, sample_scenario, sample_config
-    ):
-        """Test handling of response with no images in message."""
+    async def test_generate_image_no_content(self, sample_scenario, sample_config):
+        """Test handling of response with no content."""
+        mock_candidate = MagicMock()
+        mock_candidate.content = None
+
         mock_response = MagicMock()
-        mock_response.json.return_value = {"choices": [{"message": {"images": []}}]}
-        mock_response.raise_for_status.return_value = None
+        mock_response.candidates = [mock_candidate]
 
-        mock_client = AsyncMock()
-        mock_client.post.return_value = mock_response
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=None)
+        mock_aio_models = AsyncMock()
+        mock_aio_models.generate_content = AsyncMock(return_value=mock_response)
 
-        with (
-            patch("httpx.AsyncClient", return_value=mock_client),
-            patch(
-                "summit_sim.agents.image_generator.settings.openrouter_api_key",
-                "test-api-key",
-            ),
+        mock_client = MagicMock()
+        mock_client.aio.models = mock_aio_models
+
+        mock_provider = MagicMock()
+        mock_provider.client = mock_client
+
+        with patch(
+            "summit_sim.agents.image_generator.get_provider",
+            return_value=mock_provider,
         ):
             result = await generate_scenario_image(sample_scenario, sample_config)
 
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_generate_image_unexpected_url_format(
-        self, sample_scenario, sample_config
-    ):
-        """Test handling of unexpected image URL format (not base64)."""
+    async def test_generate_image_no_inline_data(self, sample_scenario, sample_config):
+        """Test handling of response with no inline_data in parts."""
+        mock_part = MagicMock()
+        mock_part.inline_data = None
+
+        mock_content = MagicMock()
+        mock_content.parts = [mock_part]
+
+        mock_candidate = MagicMock()
+        mock_candidate.content = mock_content
+
         mock_response = MagicMock()
-        mock_response.json.return_value = {
-            "choices": [
-                {
-                    "message": {
-                        "images": [
-                            {"image_url": {"url": "https://example.com/image.jpg"}}
-                        ]
-                    }
-                }
-            ]
-        }
-        mock_response.raise_for_status.return_value = None
+        mock_response.candidates = [mock_candidate]
 
-        mock_client = AsyncMock()
-        mock_client.post.return_value = mock_response
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=None)
+        mock_aio_models = AsyncMock()
+        mock_aio_models.generate_content = AsyncMock(return_value=mock_response)
 
-        with (
-            patch("httpx.AsyncClient", return_value=mock_client),
-            patch(
-                "summit_sim.agents.image_generator.settings.openrouter_api_key",
-                "test-api-key",
-            ),
+        mock_client = MagicMock()
+        mock_client.aio.models = mock_aio_models
+
+        mock_provider = MagicMock()
+        mock_provider.client = mock_client
+
+        with patch(
+            "summit_sim.agents.image_generator.get_provider",
+            return_value=mock_provider,
         ):
             result = await generate_scenario_image(sample_scenario, sample_config)
 
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_generate_image_timeout(self, sample_scenario, sample_config):
-        """Test handling of HTTP timeout."""
-        mock_client = AsyncMock()
-        mock_client.post.side_effect = httpx.TimeoutException("Connection timed out")
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=None)
+    async def test_generate_image_exception(self, sample_scenario, sample_config):
+        """Test handling of exceptions during image generation."""
+        mock_aio_models = MagicMock()
+        mock_aio_models.generate_content = MagicMock(side_effect=Exception("API error"))
 
-        with (
-            patch("httpx.AsyncClient", return_value=mock_client),
-            patch(
-                "summit_sim.agents.image_generator.settings.openrouter_api_key",
-                "test-api-key",
-            ),
-            patch(
-                "summit_sim.agents.image_generator.settings.image_generation_timeout",
-                30,
-            ),
+        mock_client = MagicMock()
+        mock_client.aio.models = mock_aio_models
+
+        mock_provider = MagicMock()
+        mock_provider.client = mock_client
+
+        with patch(
+            "summit_sim.agents.image_generator.get_provider",
+            return_value=mock_provider,
         ):
             result = await generate_scenario_image(sample_scenario, sample_config)
 
         assert result is None
-
-    @pytest.mark.asyncio
-    async def test_generate_image_http_error(self, sample_scenario, sample_config):
-        """Test handling of HTTP error response."""
-        mock_client = AsyncMock()
-        mock_client.post.side_effect = httpx.HTTPStatusError(
-            "500 Server Error",
-            request=MagicMock(),
-            response=MagicMock(status_code=500),
-        )
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=None)
-
-        with (
-            patch("httpx.AsyncClient", return_value=mock_client),
-            patch(
-                "summit_sim.agents.image_generator.settings.openrouter_api_key",
-                "test-api-key",
-            ),
-        ):
-            result = await generate_scenario_image(sample_scenario, sample_config)
-
-        assert result is None
-
-    @pytest.mark.asyncio
-    async def test_generate_image_general_exception(
-        self, sample_scenario, sample_config
-    ):
-        """Test handling of general exceptions."""
-        mock_client = AsyncMock()
-        mock_client.post.side_effect = Exception("Unexpected error")
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=None)
-
-        with (
-            patch("httpx.AsyncClient", return_value=mock_client),
-            patch(
-                "summit_sim.agents.image_generator.settings.openrouter_api_key",
-                "test-api-key",
-            ),
-        ):
-            result = await generate_scenario_image(sample_scenario, sample_config)
-
-        assert result is None
-
-    @pytest.mark.asyncio
-    async def test_generate_image_request_structure(
-        self, sample_scenario, sample_config
-    ):
-        """Test that the HTTP request has correct structure."""
-        mock_response = MagicMock()
-        mock_response.json.return_value = {
-            "choices": [
-                {
-                    "message": {
-                        "images": [
-                            {"image_url": {"url": "data:image/jpeg;base64,testdata"}}
-                        ]
-                    }
-                }
-            ]
-        }
-        mock_response.raise_for_status.return_value = None
-
-        mock_client = AsyncMock()
-        mock_client.post.return_value = mock_response
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=None)
-
-        with (
-            patch("httpx.AsyncClient", return_value=mock_client),
-            patch(
-                "summit_sim.agents.image_generator.settings.openrouter_api_key",
-                "test-api-key",
-            ),
-            patch(
-                "summit_sim.agents.image_generator.settings.image_generation_model",
-                "openai/gpt-image-1",
-            ),
-        ):
-            await generate_scenario_image(sample_scenario, sample_config)
-
-        # Verify request structure
-        call_args = mock_client.post.call_args
-        assert call_args.args[0] == "https://openrouter.ai/api/v1/chat/completions"
-        assert "Authorization" in call_args.kwargs["headers"]
-        assert "Bearer test-api-key" in call_args.kwargs["headers"]["Authorization"]
-
-        json_payload = call_args.kwargs["json"]
-        assert "model" in json_payload
-        assert "messages" in json_payload
-        assert json_payload["modalities"] == ["image"]
-        assert json_payload["image_config"]["aspect_ratio"] == "16:9"
-        assert len(json_payload["messages"]) == 1
-        assert json_payload["messages"][0]["role"] == "user"

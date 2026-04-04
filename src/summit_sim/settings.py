@@ -1,6 +1,7 @@
 """Application settings configuration."""
 
 import logging
+from pathlib import Path
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -10,8 +11,10 @@ class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
     mlflow_tracking_uri: str = "http://localhost:5000"
-    openrouter_api_key: str = ""
-    default_model: str = "google/gemini-3.1-flash-lite-preview"
+    gcp_project_id: str = ""
+    google_application_credentials: Path = Path("secrets/gcp-sa.json")
+    gcp_location: str = Field(default="global", description="GCP region for Vertex AI")
+    default_model: str = "gemini-3.1-flash-lite-preview"
     mlflow_experiment_name: str = "summit-sim"
     base_url: str = "http://localhost:8000"
     log_level: str = "INFO"
@@ -28,8 +31,8 @@ class Settings(BaseSettings):
         description="Deployment environment for MLflow traces: local or prod",
     )
     image_generation_model: str = Field(
-        default="google/gemini-3.1-flash-image-preview",
-        description="OpenRouter model for scenario image generation",
+        default="gemini-3.1-flash-image-preview",
+        description="Vertex AI model for scenario image generation",
     )
     image_generation_timeout: int = Field(
         default=120,
