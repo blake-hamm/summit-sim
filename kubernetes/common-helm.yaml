@@ -24,6 +24,10 @@ spec:
               remoteRef:
                 key: /default/summit-sim
                 property: OPENROUTER_API_KEY
+            - secretKey: gcp-service-account.json
+              remoteRef:
+                key: /default/summit-sim
+                property: gcp-service-account.json
         dragonfly:
           enabled: true
           snapshot:
