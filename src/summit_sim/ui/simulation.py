@@ -115,14 +115,16 @@ async def run_simulation() -> None:
     # Retrieve authoring trace_id for correlation if this is student E2E flow
     authoring_trace_id = cl.user_session.get("authoring_trace_id")
 
+    # Note: scenario data is loaded from Store by the graph nodes
+    # We don't pass the full scenario here to avoid checkpointing image data
     initial_state = SimulationState(
-        scenario=scenario,
+        scenario_id=scenario_id,
         transcript=[],
         turn_count=0,
         is_complete=False,
         action_response=None,
-        scenario_id=scenario_id,
-        hidden_state=scenario.hidden_state,
+        debrief_report=None,
+        hidden_state="",  # Will be loaded from Store in initialize_simulation
         current_trace_id=authoring_trace_id,
     )
 
