@@ -36,11 +36,11 @@ async def on_app_startup() -> None:
 
     AppState.store = AsyncRedisStore(
         redis_client=redis_client,
-        ttl={"default_ttl": 10080, "refresh_on_read": True},  # 7 Days
+        ttl={"default_ttl": 1440, "refresh_on_read": True},  # 1 Day
     )
     AppState.checkpointer = AsyncRedisSaver(
         redis_client=redis_client,
-        ttl={"default_ttl": 1440, "refresh_on_read": True},  # 24 Hours
+        ttl={"default_ttl": 30, "refresh_on_read": True},  # 30 Minutes
     )
 
     await AppState.store.setup()

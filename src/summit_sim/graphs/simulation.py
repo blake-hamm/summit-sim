@@ -27,7 +27,7 @@ from summit_sim.agents.debrief import (
 from summit_sim.agents.debrief import (
     generate_debrief,
 )
-from summit_sim.graphs.utils import retry_policy
+from summit_sim.graphs.utils import AppState, retry_policy
 from summit_sim.schemas import (
     ScenarioDraft,
     TranscriptEntry,
@@ -38,6 +38,28 @@ logger = logging.getLogger(__name__)
 
 # Completion threshold - scenario ends when score reaches this value
 COMPLETION_THRESHOLD = 0.8
+
+
+async def load_scenario_from_store(scenario_id: str) -> ScenarioDraft:
+    """Load scenario from LangGraph Store by ID.
+
+    Fails fast if scenario not found or invalid.
+    """
+    store = AppState.store
+    if store is None:
+        msg = "Store not initialized"
+        raise RuntimeError(msg)
+
+    result = await store.aget(("scenarios",), scenario_id)
+    if result is None:
+        msg = f"Scenario not found: {scenario_id}"
+        raise ValueError(msg)
+
+    scenario_data = result.value
+    return ScenarioDraft.model_validate(
+        scenario_data.get("scenario_draft", scenario_data)
+    )
+
 
 if TYPE_CHECKING:
     from langgraph.checkpoint.base import BaseCheckpointSaver
@@ -50,14 +72,16 @@ class SimulationState:
     Maintains all state needed for the free-text simulation graph,
     including scenario context and accumulated history.
     Uses transcript as single source of truth for turn history.
+
+    Note: Scenario data is loaded from Store on-demand rather than stored
+    in graph state to avoid checkpointing large image data.
     """
 
-    scenario: ScenarioDraft | None
+    scenario_id: str = ""
     transcript: list[TranscriptEntry] = field(default_factory=list)
     turn_count: int = 0
     is_complete: bool = False
     action_response: dict | None = None
-    scenario_id: str = ""
     debrief_report: dict | None = None
     hidden_state: str = ""  # Ground truth for AI to reveal from
     current_trace_id: str | None = None  # MLflow trace ID for session correlation
@@ -70,39 +94,39 @@ class SimulationState:
         return cls(**filtered)
 
 
-def initialize_simulation(state: SimulationState) -> SimulationState:
-    """Initialize simulation state from scenario."""
+async def initialize_simulation(state: SimulationState) -> SimulationState:
+    """Initialize simulation state by loading scenario from Store."""
     logger.info(
         "Initializing dynamic simulation: scenario_id=%s",
         state.scenario_id,
     )
 
-    # Initialize states from scenario
+    scenario = await load_scenario_from_store(state.scenario_id)
+
+    # Initialize state with hidden_state from scenario (needed for ground truth)
     return SimulationState(
-        scenario=state.scenario,
+        scenario_id=state.scenario_id,
         transcript=[],
         turn_count=0,
         is_complete=False,
         action_response=None,
-        scenario_id=state.scenario_id,
         debrief_report=None,
-        hidden_state=state.scenario.hidden_state,
+        hidden_state=scenario.hidden_state,
+        current_trace_id=state.current_trace_id,
     )
 
 
-def present_prompt(state: SimulationState) -> dict:
+async def present_prompt(state: SimulationState) -> dict:
     """Present current situation to player and wait for free-text action.
 
     Uses LangGraph's interrupt() for human-in-the-loop interaction.
     Displays the narrative and waits for student text input.
     """
-    if state.scenario is None:
-        msg = "Cannot present prompt without scenario"
-        raise ValueError(msg)
-
     # Get current narrative (initial or from last action result)
     if state.turn_count == 0:
-        current_narrative = state.scenario.initial_narrative
+        # Load scenario to get initial narrative
+        scenario = await load_scenario_from_store(state.scenario_id)
+        current_narrative = scenario.initial_narrative
     else:
         result = ActionResponse.model_validate(state.action_response)
         current_narrative = result.narrative_text
@@ -146,10 +170,6 @@ async def process_student_action(
     Calls the ActionResponder agent to evaluate the action,
     generate narrative, and update simulation state.
     """
-    if state.scenario is None:
-        msg = "Cannot process action without scenario"
-        raise ValueError(msg)
-
     max_turns = settings.max_turns
 
     # Get the student action from the last transcript entry
@@ -158,6 +178,9 @@ async def process_student_action(
         raise ValueError(msg)
 
     student_action = state.transcript[-1].student_action
+
+    # Load scenario from Store to get context fields
+    scenario = await load_scenario_from_store(state.scenario_id)
 
     # Extract previous score for progressive tracking
     previous_score = 0.0
@@ -179,11 +202,11 @@ async def process_student_action(
     # Build the clean input model for the agent
     input_data = ActionRequest(
         student_action=student_action,
-        scenario_title=state.scenario.title,
-        scenario_setting=state.scenario.setting,
-        patient_summary=state.scenario.patient_summary,
-        hidden_truth=state.scenario.hidden_truth,
-        learning_objectives=state.scenario.learning_objectives,
+        scenario_title=scenario.title,
+        scenario_setting=scenario.setting,
+        patient_summary=scenario.patient_summary,
+        hidden_truth=scenario.hidden_truth,
+        learning_objectives=scenario.learning_objectives,
         transcript=transcript_dicts,
         previous_score=previous_score,
         turn_count=state.turn_count + 1,
@@ -292,9 +315,12 @@ async def generate_debrief_report(
     Calls the Debrief Agent to analyze the complete simulation transcript
     and generate a structured performance report.
     """
+    # Load scenario from Store for debrief context
+    scenario = await load_scenario_from_store(state.scenario_id)
+
     debrief_report = await generate_debrief(
         transcript=state.transcript,
-        scenario_draft=state.scenario,
+        scenario_draft=scenario,
         scenario_id=state.scenario_id,
     )
 

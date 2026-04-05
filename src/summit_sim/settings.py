@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     max_turns: int = Field(default=5, description="Maximum turns per scenario")
     ui_timeout: int = Field(
-        default=300, description="Timeout in seconds for UI interactions (5 minutes)"
+        default=1800, description="Timeout in seconds for UI interactions (5 minutes)"
     )
     redis_url: str = Field(
         default="redis://localhost:6379",
