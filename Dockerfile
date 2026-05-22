@@ -1,6 +1,9 @@
 # Dockerfile for Summit-Sim Chainlit Application
 FROM ghcr.io/astral-sh/uv:python3.13-trixie-slim
 
+# Upgrade system packages to patch OS-level vulnerabilities
+RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
+
 # Set working directory
 WORKDIR /app
 
